@@ -18,14 +18,19 @@ import numpy as np
 ###############################################################################
 # Load the solar orbiter spice kernel. HelioPy will automatically fetch the
 # latest kernel
-orbiter_kernel = spicedata.get_kernel('solo')
+orbiter_kernel = spicedata.get_kernel("solo")
 spice.furnish(orbiter_kernel)
-orbiter = spice.Trajectory('Solar Orbiter')
+orbiter = spice.Trajectory("Solar Orbiter")
+
+psp_kernel = spicedata.get_kernel("psp")
+spice.furnish(psp_kernel)
+psp = spice.Trajectory("SPP")
 
 ###############################################################################
 # Generate a time for every day between starttime and endtime
-starttime = datetime(2020, 3, 1)
-endtime = datetime(2028, 1, 1)
+starttime = datetime(2020, 9, 1)
+endtime = datetime(2020, 9, 30)
+
 times = []
 while starttime < endtime:
     times.append(starttime)
@@ -33,21 +38,25 @@ while starttime < endtime:
 
 ###############################################################################
 # Generate positions
-orbiter.generate_positions(times, 'Sun', 'ECLIPJ2000')
+orbiter.generate_positions(times, "Sun", "ECLIPJ2000")
 orbiter.change_units(u.au)
+
+psp.generate_positions(times, "Sun", "ECLIPJ2000")
+psp.change_units(u.au)
 
 ###############################################################################
 # Plot the orbit. The orbit is plotted in 3D
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from astropy.visualization import quantity_support
+
 quantity_support()
 
 # Generate a set of timestamps to color the orbits by
 times_float = [(t - orbiter.times[0]).to("s").value for t in orbiter.times]
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-kwargs = {'s': 3, 'c': times_float}
+ax = fig.add_subplot(111, projection="3d")
+kwargs = {"s": 3, "c": times_float}
 ax.scatter(orbiter.x.value, orbiter.y.value, orbiter.z.value, **kwargs)
 ax.set_xlim(-1, 1)
 ax.set_ylim(-1, 1)
@@ -60,9 +69,9 @@ elevation = np.rad2deg(np.arcsin(orbiter.z / orbiter.r))
 fig, axs = plt.subplots(2, 1, sharex=True)
 axs[0].plot(orbiter.times.value, orbiter.r.value)
 axs[0].set_ylim(0, 1.1)
-axs[0].set_ylabel('r (AU)')
+axs[0].set_ylabel("r (AU)")
 
 axs[1].plot(orbiter.times.value, elevation)
-axs[1].set_ylabel('Elevation (deg)')
+axs[1].set_ylabel("Elevation (deg)")
 
 plt.show()

@@ -29,10 +29,11 @@ from matplotlib import rc
 font = {"family": "DejaVu Sans", "weight": "normal", "size": 25}
 rc("font", **font)
 
+
 class Heatmap:
     @staticmethod
     def heatmap(
-        data:np.array,
+        data: np.array,
         row_labels,
         col_labels,
         valid_data=None,
@@ -166,15 +167,19 @@ class Heatmap:
         for i in range(data.shape[0]):
             for j in range(data.shape[1]):
                 kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
-                text = im.axes.text(j, i, valfmt(data[i, j], None), fontsize="large", **kw)
+                text = im.axes.text(
+                    j, i, valfmt(data[i, j], None), fontsize="large", **kw
+                )
                 texts.append(text)
 
         return texts
+
 
 class Signal:
     """
     This class creates a Signal and provides functions to deform and extract it.
     """
+
     def __init__(
         self,
         save_folder=None,
@@ -304,6 +309,7 @@ class Signal:
         :param box_width: WIdth of box used in averaging
         """
         from astropy.convolution import convolve, Box1DKernel
+
         s_conv = convolve(s, Box1DKernel(box_width), boundary="extend")
         s_pdiff = 100 * (s - s_conv) / s_conv
         return s_pdiff  # Can now set self.data to this
@@ -317,9 +323,7 @@ class Signal:
         cad_factor = int(other.cadence / self.cadence)
 
         if self.true_time is not None:
-            self.true_time = self.true_time[
-                ::cad_factor
-            ]  # Lose time information
+            self.true_time = self.true_time[::cad_factor]  # Lose time information
 
         # Get rid of NA values
         _data = self.data
@@ -331,15 +335,14 @@ class Signal:
 
         # Cadence and time
         self.cadence = other.cadence
-        self.time = np.arange(
-            0, len(self.data) * self.cadence, step=self.cadence
-        )
+        self.time = np.arange(0, len(self.data) * self.cadence, step=self.cadence)
 
         # Update name to reflect decimation
         self.name = f"Decimated {self.name}"
 
     def plot(self, save_to=False, labels=("Time (s)", "Data (arb.units)"), show=True):
         from matplotlib import rc
+
         with_noise = None if self.noise_perc == 0 else f"| {self.noise_perc}% noise"
         title = f"{self.name} signal | sampled at {self.cadence}s {with_noise}"
 
@@ -488,9 +491,7 @@ class Signal:
         # In the case where there is a signal peak already
         self.location_signal_peak.append(where)
         if self.number_of_signals == 0:
-            mask = ma.masked_inside(
-                self.time, where, where + len(signal) * 12 - 1
-            )
+            mask = ma.masked_inside(self.time, where, where + len(signal) * 12 - 1)
             mask = ma.getmask(mask)
 
             # Only works if flat signal!
@@ -499,15 +500,11 @@ class Signal:
             self.gaussian_curve = signal
             self.data[mask] = signal
 
-            self.name = (
-                f"Modified {self.name}"  # First time change the title
-            )
+            self.name = f"Modified {self.name}"  # First time change the title
 
         else:
             # This simply replaces and that is not correct. Should build up
-            mask = ma.masked_inside(
-                self.time, where, where + len(signal) * 12 - 1
-            )
+            mask = ma.masked_inside(self.time, where, where + len(signal) * 12 - 1)
             mask = ma.getmask(mask)
 
             # Only works if flat signal!
@@ -515,9 +512,7 @@ class Signal:
 
             self.gaussian_curve = signal
             self.data[mask] = signal + self.data[mask] - self.mean
-            self.name = (
-                f"Duplicated {self.name}"  # First time change the title
-            )
+            self.name = f"Duplicated {self.name}"  # First time change the title
 
         self.number_of_signals += 1
 
@@ -526,9 +521,10 @@ class EMDFunctionality(Signal):
     """
     Class to give functionality to a given signal object. Allows for things like EMD
     """
+
     def __init__(
         self,
-        signal:Signal,
+        signal: Signal,
         filter_imfs=False,
         norm=True,
         P_minmax=[5, 50],
@@ -583,7 +579,7 @@ class EMDFunctionality(Signal):
     def emd_and_save(s, t, save_folder, save_name, plot=False):
         """
         Generate ALL EMDs for a relevant timeseries and save them in a numpy file for later use
-        Checks if the file exists already to not repeat efforts 
+        Checks if the file exists already to not repeat efforts
         Input params:
         :param s: signal (data)
         :param t: time array
@@ -647,7 +643,7 @@ class EMDFunctionality(Signal):
                     Period_valid[i, 1] = np.nan
 
         else:
-            if len(imfs) < (filter_low_high[0]+filter_low_high[1]):
+            if len(imfs) < (filter_low_high[0] + filter_low_high[1]):
                 raise ValueError("Filter larger than IMF length")
 
             Period_valid[:, 0] = False
@@ -656,6 +652,47 @@ class EMDFunctionality(Signal):
             Period_valid[:, 1] = np.nan
 
         return Period_valid
+
+    @staticmethod
+    def corr_coeff_2d(A, B):
+        # Rowwise mean of input arrays & subtract from input arrays themeselves
+        A_mA = A - A.mean(1)[:, None]
+        B_mB = B - B.mean(1)[:, None]
+
+        # Sum of squares across rows
+        ssA = (A_mA ** 2).sum(1)
+        ssB = (B_mB ** 2).sum(1)
+
+        # Finally get corr coeff
+        return np.dot(A_mA, B_mB.T) / np.sqrt(np.dot(ssA[:, None], ssB[None]))
+
+    @staticmethod
+    def find_period(t, extrema):
+        """
+        Determine number of maxima and minima of a length of time t and a number of extrema
+        returns period in same time units as t (default seconds)
+        """
+        if extrema != 0:
+            period = 2 * t / extrema
+            return np.round(
+                period / 60, 2
+            )  # Assume seconds and convert to minutes here
+
+        else:
+            return np.round(t * 2 / 60, 2)  # Very big number
+
+    @staticmethod
+    def determine_periodicities(time, imfs):
+        """
+        Input a two-dimensional array and return an array of periodicities
+        :param imfs: Numpy array with IMF information on rows
+        Converts to minutes
+        """
+        no_extrema = [len(emd.find_extrema(time, imf)[0]) for imf in imfs]
+        periodicities = [
+            EMDFunctionality.find_period(time[-1], extrema) for extrema in no_extrema
+        ]
+        return periodicities
 
     def generate_windows(
         self,
@@ -951,7 +988,11 @@ class EMDFunctionality(Signal):
                         pe_sp_pairs[height, index, 1] = -_number_high_sp
 
             # Only generate heatmap when above threshold
-            if plot_heatmaps and corr_locations[height, relevant_pearson_index, 1] >= 1 and 4600 < height < 6000:
+            if (
+                plot_heatmaps
+                and corr_locations[height, relevant_pearson_index, 1] >= 1
+                and 4600 < height < 6000
+            ):
                 makedirs(f"{self.save_folder}corr_matrix/", exist_ok=True)
 
                 # Reduce the arrays to get rid of the noise
@@ -1041,12 +1082,12 @@ class EMDFunctionality(Signal):
                 plt.close()
 
                 def create_ts_plot(a=self.s, b=other.s, start=height):
-                    c = b[start: start+len(a)]
-                    t = other.t[start: start+len(a)] / 60
+                    c = b[start : start + len(a)]
+                    t = other.t[start : start + len(a)] / 60
 
-                    plt.figure(figsize=(16,12))
-                    plt.plot(t, a, color = "black", label=r"AIA$_{synth}$")
-                    plt.plot(t, c, color = "blue", label=r"WIND$_{synth}$")
+                    plt.figure(figsize=(16, 12))
+                    plt.plot(t, a, color="black", label=r"AIA$_{synth}$")
+                    plt.plot(t, c, color="blue", label=r"WIND$_{synth}$")
                     plt.ylabel("Normalised value")
                     plt.xlabel("Minutes since start")
                     plt.legend()
@@ -1055,7 +1096,7 @@ class EMDFunctionality(Signal):
                     plt.savefig(save_to, bbox_inches="tight", dpi=300)
                     # plt.show()
                     plt.close()
-                
+
                 create_ts_plot()
 
         # Save the hitrates
@@ -1400,4 +1441,3 @@ class EMDFunctionality(Signal):
             bbox_inches="tight",
         )
         plt.close()
-
