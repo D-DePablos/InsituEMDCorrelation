@@ -1,8 +1,6 @@
 from os import makedirs, getcwd
 from os.path import isfile
-from sys import path
-import re
-import h5py
+from sys import path, modules
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
@@ -15,7 +13,6 @@ from PyEMD import EMD, Visualisation
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.dates as mdates
 from datetime import timedelta
-import pprint
 
 # Quick fix for cross-package import
 path.append(f"/mnt/sda5/Python/Proj_1/Scripts/")
@@ -24,10 +21,47 @@ from Imports.Data_analysis import Tools
 emd = EMD()
 vis = Visualisation()
 
+# Multiprocessing
+import ray
+import psutil
+
+num_cpus = psutil.cpu_count(logical=False)
+
 from matplotlib import rc
 
-font = {"family": "DejaVu Sans", "weight": "normal", "size": 25}
+font = {"family": "DejaVu Sans", "weight": "normal", "size": 20}
 rc("font", **font)
+
+
+@ray.remote
+def find_corr_periods(
+    long_data, short_time, short_imfs, short_periods, window_length, pfilter, idx_list
+):
+
+    corr_all = {}
+    period_all = {}
+
+    for idx in idx_list:
+        _long_data = long_data[idx : window_length + idx]
+
+        # Can reference time with a single digit = tstart of ts
+        _long_imfs = emd.emd(S=_long_data, T=short_time)[:-1]  # Ignore trend here
+        _long_periods = EMDFunctionality.determine_periodicities(
+            time=short_time, imfs=_long_imfs
+        )
+
+        # Find correlation and periodicity matrices
+        corr_results = EMDFunctionality.corr_coeff_2d(short_imfs, _long_imfs)
+        period_matrix = EMDFunctionality.create_period_matrix(
+            short_periods,
+            _long_periods,
+            pfilter=pfilter,
+        )
+
+        corr_all[idx] = corr_results
+        period_all[idx] = period_matrix
+
+    return corr_all, period_all
 
 
 class Heatmap:
@@ -44,7 +78,7 @@ class Heatmap:
         **kwargs,
     ):
         """
-        Create a heatmap from a numpy array and two lists of labels.
+        Create a heatmap from a numpy areay and two lists of labels.
 
         Parameters
         ----------
@@ -525,16 +559,17 @@ class EMDFunctionality(Signal):
     def __init__(
         self,
         signal: Signal,
-        filter_imfs=False,
         norm=True,
-        P_minmax=[5, 50],
+        pfilter=(0, 1000),
         saveformat="pdf",
     ):
         self.signalObject = signal
+        self.name = signal.name
+        self.save_folder = signal.save_folder
+
         self.cadence = signal.cadence
         self.base_signal = signal.data
-        self.pmin = signal.pmin
-        self.pmax = signal.pmax
+        self.pfilter = pfilter
         self.saveformat = saveformat
 
         if norm:
@@ -544,21 +579,6 @@ class EMDFunctionality(Signal):
 
         self.t = signal.time
         self.true_time = signal.true_time
-        if filter_imfs:
-            self.filtered = True
-            self.pmin = P_minmax[0]
-            self.pmax = P_minmax[1]
-
-        else:
-            self.filtered = False
-
-        self.name = signal.name
-        self.save_folder = signal.save_folder
-
-        self.filter_low_high = None
-        self.path_to_signal = None
-        self.path_to_corr_matrix = None
-        self.window_displacement = None
 
         self.hitrate = 0
         self.table = None
@@ -679,6 +699,7 @@ class EMDFunctionality(Signal):
             )  # Assume seconds and convert to minutes here
 
         else:
+            print("Number too large")
             return np.round(t * 2 / 60, 2)  # Very big number
 
     @staticmethod
@@ -688,13 +709,232 @@ class EMDFunctionality(Signal):
         :param imfs: Numpy array with IMF information on rows
         Converts to minutes
         """
-        no_extrema = [len(emd.find_extrema(time, imf)[0]) for imf in imfs]
+        no_extrema = [len(emd.find_extrema(T=time, S=imf)[0]) for imf in imfs]
+
         periodicities = [
-            EMDFunctionality.find_period(time[-1], extrema) for extrema in no_extrema
+            EMDFunctionality.find_period(time[-1], extrema + 1)
+            for extrema in no_extrema
         ]
         return periodicities
 
-    def generate_windows(
+    @staticmethod
+    def create_period_matrix(pA, pB, pfilter):
+        """
+        Based on two lists of periodicities, make matrix with information of which periods are good
+        """
+
+        period_m = np.zeros(shape=(len(pA), len(pB)))
+
+        # Probably the fastest possible solution :(
+        for i, p_a in enumerate(pA):
+            if pfilter[0] < p_a < pfilter[1]:
+                for j, p_b in enumerate(pB):
+                    if pfilter[0] < p_b < pfilter[1]:
+                        period_m[i, j] = 1
+
+        return period_m
+
+    def generate_windows(self, other):
+        """
+        Generates the windows and stores in array
+        Assumes dt of 1 timestep
+        self must be the short array
+        other is the long array
+        """
+        # Do I need to store IMF actual values? Maybe not?
+        # Assume we will use window disp. Of 1 dt
+        # TODO: Could maybe use a generator (yield keyword) to save memory?
+        assert len(self.s) > len(
+            other.s
+        ), "Please alter order of call such that len(self) < len(other)"
+
+        long = self
+        short = other
+
+        self.window_length = len(short.s)  # Length of the window used for long dataset
+        short_imfs = emd.emd(S=short.s, T=short.t)[:-1]  # Ignore residual here as well
+        short_periods = EMDFunctionality.determine_periodicities(
+            time=short.t,
+            imfs=short_imfs,
+        )  # First determine periodicities and then use them
+
+        # TODO: For some reason ray only works if imported at around the same folder
+
+        # Prepare and apply multiprocessing for faster calculations
+        long_data = ray.put(long.s)  # The values
+        short_time = ray.put(short.t)  # The time information
+
+        # Multiprocessing now
+        no_displacements = len(long.s) - self.window_length
+        start_idx = np.arange(no_displacements + 1)
+        split_array = np.array_split(start_idx, num_cpus)
+
+        all_dicts = ray.get(
+            [
+                find_corr_periods.remote(
+                    long_data,
+                    short_time,
+                    short_imfs,
+                    short_periods,
+                    window_length=self.window_length,
+                    pfilter=self.pfilter,
+                    idx_list=split_array[i],
+                )
+                for i in range(num_cpus)
+            ]
+        )
+
+        # Put dictionaries together and into a list (accessed by index)
+        corr_matrix_all = list(
+            {
+                **all_dicts[0][0],
+                **all_dicts[1][0],
+                **all_dicts[2][0],
+                **all_dicts[3][0],
+            }.values()
+        )
+
+        period_matrix_all = list(
+            {
+                **all_dicts[0][1],
+                **all_dicts[1][1],
+                **all_dicts[2][1],
+                **all_dicts[3][1],
+            }.values()
+        )
+
+        # Returns lists with all relevant arrays of Corr and Periodicities
+        self.correlation_matrix_all = corr_matrix_all
+        self.period_matrix_all = period_matrix_all
+
+        return corr_matrix_all, period_matrix_all
+
+    def plot_all_results(
+        self, other, corr_thr_list, expected_location_list=None, save_folder=None
+    ):
+
+        """
+        Does this from memory. Might be ok? There could be issues with not storing long information
+        Assumes that you have true_time
+        """
+
+        corr_locations = np.zeros(
+            shape=(len(self.correlation_matrix_all), len(corr_thr_list))
+        )
+
+        mid_times = []
+
+        for height, (corr_matrix, period_matrix) in enumerate(
+            zip(self.correlation_matrix_all, self.period_matrix_all)
+        ):
+            mid_index = int(np.round(self.window_length / 2 + height))
+            if self.true_time is not None:
+                _rel_time = self.true_time[mid_index]
+            else:
+                _rel_time = self.t[mid_index]
+
+            mid_times.append(_rel_time)
+
+            # Make temporary copies to change parameters
+            _corr_matrix = corr_matrix.copy()
+            _corr_matrix[period_matrix == 0] = np.nan
+
+            for index, corr_thr in enumerate(corr_thr_list):
+                nhits = len(_corr_matrix[np.abs(_corr_matrix) > corr_thr])
+                corr_locations[height, index] = nhits
+
+                # Plot some just to see it's working!
+                # if nhits > 0:
+                #     print(_rel_time, corr_thr, nhits)
+
+            # TODO: Add Heatmap information
+
+        # TODO: Summary bar chart
+        short_duration = self.true_time[self.window_length] - self.true_time[0]
+        fig, axs = plt.subplots(2, sharex=True, figsize=(20, 10))
+
+        ax = axs[0]
+        ax.plot(self.true_time, self.s, color="black", label=self.name)
+        ax.set_title(f"Filter {self.pfilter} | Correlated against {other.name}")
+        ax.set_ylabel(f"Normalised Detrended {self.name}")
+
+        ax.set_xlim(
+            self.true_time[0] - timedelta(hours=3),
+            self.true_time[-1] + timedelta(hours=3),
+        )
+        ax.xaxis.grid(True)
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=3))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %H:%M"))
+        ax.xaxis.set_tick_params(rotation=60)
+
+        # SECOND AXIS
+        ax2 = axs[1]
+        possibleColors = {
+            "1": "green",
+            "2": "blue",
+            "3": "red",
+        }
+
+        for height in range(len(corr_locations)):
+            midpoint = mid_times[height]
+            pearson_corrs = corr_locations[height, :]
+
+            for index, corr_label in enumerate(corr_thr_list):
+                if pearson_corrs[index] != 0:
+                    try:
+                        _color = possibleColors[f"{int(pearson_corrs[index])}"]
+                    except KeyError:
+                        _color = "red"
+
+                    _alpha = 0.35
+                    ax2.bar(
+                        midpoint,
+                        corr_label,
+                        width=short_duration,
+                        color=_color,
+                        edgecolor="white",
+                        alpha=_alpha,
+                        zorder=1,
+                    )
+
+        if expected_location_list is not None:
+            for expected_location in expected_location_list:
+                start_expected = expected_location["start"]
+                end_expected = expected_location["end"]
+                color = expected_location["color"]
+                label = expected_location["label"]
+
+                ax2.axvspan(
+                    xmin=start_expected,
+                    xmax=end_expected,
+                    ymin=0,
+                    ymax=1,
+                    alpha=0.3,
+                    color=color,
+                )
+
+                ax2.text(
+                    x=start_expected + timedelta(minutes=15),
+                    y=0.95,
+                    s=f"Bmapped {label}",
+                )
+
+        ax2.set_ylim(corr_thr_list[0], 1.01)
+        ax2.set_ylabel("Highest corr.found")
+        ax2.grid(True)
+        ax2.set_xlabel("Date (dd HH:MM)")
+
+        # Save or show the plot
+        if save_folder:
+            plt.savefig(f"{save_folder}{self.name}_{other.name}.png")
+            print(f"Saved summary plot to {save_folder}")
+
+        else:
+            plt.show()
+
+        plt.close()
+
+    def generate_windows_old(
         self,
         other,
         window_displacement,
@@ -862,7 +1102,7 @@ class EMDFunctionality(Signal):
         np.save(self.path_to_corr_matrix, corr_matrix)  # IMF corrs
         return None
 
-    def plot_all_results(
+    def plot_all_results_old(
         self,
         other,
         Label_long_ts="No name",
@@ -971,6 +1211,7 @@ class EMDFunctionality(Signal):
             for index, corr_thr in enumerate(corr_thr_list):
                 _number_high_pe = len(pvalid[np.abs(pvalid) >= corr_thr])
                 corr_locations[height, index, 1] = _number_high_pe
+
                 _number_high_sp = len(rvalid[np.abs(rvalid) >= corr_thr])
                 corr_locations[height, index, 2] = _number_high_sp
 
