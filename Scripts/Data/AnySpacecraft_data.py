@@ -1,10 +1,14 @@
 #%%
 from datetime import datetime, timedelta
-from helpers import resample_and_rename
+
+# from helpers import resample_and_rename
+from helpers import backmap_calculation
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+
+# import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
+import astropy.units as u
 
 # TODO: Add positional information
 
@@ -13,6 +17,9 @@ units_dic = {
     "density": r"#/$cm^{3}$",
     "temperature": r"$K$",
     "velocity": r"$km/s$",
+    "velocity_x": r"$km/s$",
+    "velocity_y": r"$km/s$",
+    "velocity_z": r"$km/s$",
     "btotal": r"$T$",
 }
 
@@ -35,9 +42,10 @@ class Spacecraft:
         :param name: Spacecraft name from one of [WIND, PSP, ST-A]
         :param mid_time: Time at centre of timeseries
         :param margin: Timemargin (Timedelta object) at either side of mid_time
+        :param cadence_obj: Objective cadence
         """
-
         self.name = name
+        self.add_extra = True  # Flag: Whether to add 'extra' measurements to dataframe
 
         # Time information for specific spacecraft
         if mid_time:
@@ -122,63 +130,114 @@ class Spacecraft:
             """
             self.df = pd.append(df_mag, df_swe)
 
+        elif self.name == "SOLOpub":
+            from heliopy.data import solo
+
+            # Public solar Orbiter data TODO
+            pass
+
+        elif self.name == "SOLOpriv":
+            import cdflib
+
+            cdf_path = "/mnt/sda5/Python/InsituEMDCorrelation/unsafe/Resources/SolO Data/pasMoments/"
+            cdf = cdflib.CDF(f"{cdf_path}solo_L1_swa-pas-mom_20200914_V00.cdf")
+            epoch = cdflib.cdfepoch.encode(cdf["Epoch"])
+            epoch = [i[:-10] for i in epoch]
+            time = [
+                datetime.strptime(epoch[i], "%Y-%m-%dT%H:%M:%S")
+                for i in range(len(epoch))
+            ]
+            self.df = pd.DataFrame({}, index=time)
+
+            for i in ("velocity", "density"):
+                if i == "velocity":
+                    for n, arg in zip((0, 1, 2), ("", "_y", "_z")):
+                        self.df[f"velocity{arg}"] = cdf[i][:, n]
+                else:
+                    self.df[i] = cdf[i]
+
+            # self.df["velocity"] -> Has to be in X
+            self.df[self.df["density"] < 0] = np.nan
+            # print(self.df[self.df["density"] > 0])
+            self.add_extra = False
+
         else:
             raise NotImplementedError(f"{self.name} not implemented")
 
-        for parameter in self.rel_vars:
-            if parameter not in list(self.df):
-                _data = self.data.to_dataframe()[self.rel_vars[parameter]]
-                _data[_data < 0.001] = np.nan  # Does this hold for all parameters?
-
-                self.df[parameter] = _data
-
-                # TODO: Resample the data to objective cadence as well
+        if self.add_extra:  # Add more parameters only if add_extra flag is true
+            for parameter in self.rel_vars:
+                if parameter not in list(self.df) and self.add_extra:
+                    _data = self.data.to_dataframe()[self.rel_vars[parameter]]
+                    _data[_data < 0.001] = np.nan  # Does this hold for all parameters?
+                    self.df[parameter] = _data
+                    # TODO: Resample the data to objective cadence as well
 
     def plot_df_values(self):
-        for parameter in self.rel_vars:
+        # Plot all the available values
+        for parameter in list(self.df):
             data = self.df[parameter]
             data[data < 0.001] = np.nan
 
             plt.figure(figsize=(8, 6))
-            ax = plt.gca()
             plt.scatter(data.index, data, color="black", linestyle="--")
 
+            # Labels and titles
             plt.title(f"{self.name} {parameter.capitalize()}")
             plt.xlabel("Date")
             plt.ylabel(units_dic[parameter])
 
+            # X-axis reformatting
+            # ax = plt.gca()
             # ax.xaxis.set_major_formatter(mdates.DateFormatter('%y-%m-%d'))
             # ax.xaxis.set_major_locator(mdates.HourLocator(interval=12))
 
             plt.show()
 
+    def calculate_time_at_sun(self, r=None):
+        """
+        Calculate ballistic time to e.g., Sun
+        """
+
+        rf = 1 * u.AU  # SolO Radius at the time
+        r0 = 0.4 * u.AU  # ~PSP Radius during peri
+
+        rf = rf.to(u.km)
+        r0 = r0.to(u.km)
+
+        vmean = mean(self.df["velocity"])  # This is the velocity vector
+
+        dt = (rf - r0) / vmean
+
 
 # %%
-# PSP conjunction
-stereo_a = {
-    "name": "ST-A",
-    "mid_time": datetime(2019, 11, 4, 12, 0),
+
+# Solar Orbiter velocity
+solo_conf = {
+    "name": "SOLOpriv",
+    "mid_time": datetime(2020, 9, 14),
     "margin": timedelta(days=3),
 }
 
-parker_sta = {
-    "name": "PSP",
-    "mid_time": stereo_a["mid_time"],
-    "margin": timedelta(days=2),
-}
+SolO = Spacecraft(**solo_conf)
+SolO.calculate_time_at_sun()
+SolO.plot_df_values()
 
-psp = Spacecraft(**parker_sta)
-psp.plot_df_values()
 
-sta = Spacecraft(**stereo_a)
-sta.plot_df_values()
+# PSP conjunction with STEREO-A
+# stereo_a = {
+#     "name": "ST-A",
+#     "mid_time": datetime(2019, 11, 4, 12, 0),
+#     "margin": timedelta(days=3),
+# }
+# sta = Spacecraft(**stereo_a)
+# sta.plot_df_values()
 
-# %%
-# Other random tests
-# wind = Spacecraft(
-#     name="WIND",
-#     mid_time=stereo_a_PSP_conjuction["mid_time"]-timedelta(days=1),
-#     margin=timedelta(days=1),
-#     )
+# Parker
+# parker_sta = {
+#     "name": "PSP",
+#     "mid_time": stereo_a["mid_time"],
+#     "margin": timedelta(days=2),
+# }
 
-# wind.plot_df_values()
+# psp = Spacecraft(**parker_sta)
+# psp.plot_df_values()

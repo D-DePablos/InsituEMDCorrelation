@@ -36,3 +36,17 @@ def resample_and_rename(df, srate: str, name):
         raise ValueError(f"Cadence of df : {cadence} Cannot be resampled to {obj_cad}")
 
     return (df, f"{name}_{flag}")
+
+
+def backmap_calculation(vel_x: float, r0: float, rf: float):
+    """
+    Perform simple time taken to get to X position
+    Everything should be in km
+
+    Returnd dt and accelerated dt
+    """
+    # Should have vel_x in km/s to get seconds in the end
+    dt = (rf - r0) / vel_x
+    acc_dt = 4 / 3 * dt
+
+    return (dt, acc_dt)
