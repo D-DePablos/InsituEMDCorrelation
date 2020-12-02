@@ -1,6 +1,8 @@
 from os import makedirs, getcwd
 from os.path import isfile
-from sys import path, modules
+from sys import path
+import re
+import h5py
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
@@ -13,6 +15,7 @@ from PyEMD import EMD, Visualisation
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.dates as mdates
 from datetime import timedelta
+import pprint
 
 # Quick fix for cross-package import
 path.append(f"/mnt/sda5/Python/Proj_1/Scripts/")
@@ -21,47 +24,10 @@ from Imports.Data_analysis import Tools
 emd = EMD()
 vis = Visualisation()
 
-# Multiprocessing
-import ray
-import psutil
-
-num_cpus = psutil.cpu_count(logical=False)
-
 from matplotlib import rc
 
-font = {"family": "DejaVu Sans", "weight": "normal", "size": 20}
+font = {"family": "DejaVu Sans", "weight": "normal", "size": 25}
 rc("font", **font)
-
-
-@ray.remote
-def find_corr_periods(
-    long_data, short_time, short_imfs, short_periods, window_length, pfilter, idx_list
-):
-
-    corr_all = {}
-    period_all = {}
-
-    for idx in idx_list:
-        _long_data = long_data[idx : window_length + idx]
-
-        # Can reference time with a single digit = tstart of ts
-        _long_imfs = emd.emd(S=_long_data, T=short_time)[:-1]  # Ignore trend here
-        _long_periods = EMDFunctionality.determine_periodicities(
-            time=short_time, imfs=_long_imfs
-        )
-
-        # Find correlation and periodicity matrices
-        corr_results = EMDFunctionality.corr_coeff_2d(short_imfs, _long_imfs)
-        period_matrix = EMDFunctionality.create_period_matrix(
-            short_periods,
-            _long_periods,
-            pfilter=pfilter,
-        )
-
-        corr_all[idx] = corr_results
-        period_all[idx] = period_matrix
-
-    return corr_all, period_all
 
 
 class Heatmap:
@@ -78,7 +44,7 @@ class Heatmap:
         **kwargs,
     ):
         """
-        Create a heatmap from a numpy areay and two lists of labels.
+        Create a heatmap from a numpy array and two lists of labels.
 
         Parameters
         ----------
@@ -559,17 +525,16 @@ class EMDFunctionality(Signal):
     def __init__(
         self,
         signal: Signal,
+        filter_imfs=False,
         norm=True,
-        pfilter=(0, 1000),
+        P_minmax=[5, 50],
         saveformat="pdf",
     ):
         self.signalObject = signal
-        self.name = signal.name
-        self.save_folder = signal.save_folder
-
         self.cadence = signal.cadence
         self.base_signal = signal.data
-        self.pfilter = pfilter
+        self.pmin = signal.pmin
+        self.pmax = signal.pmax
         self.saveformat = saveformat
 
         if norm:
@@ -579,6 +544,21 @@ class EMDFunctionality(Signal):
 
         self.t = signal.time
         self.true_time = signal.true_time
+        if filter_imfs:
+            self.filtered = True
+            self.pmin = P_minmax[0]
+            self.pmax = P_minmax[1]
+
+        else:
+            self.filtered = False
+
+        self.name = signal.name
+        self.save_folder = signal.save_folder
+
+        self.filter_low_high = None
+        self.path_to_signal = None
+        self.path_to_corr_matrix = None
+        self.window_displacement = None
 
         self.hitrate = 0
         self.table = None
@@ -693,7 +673,6 @@ class EMDFunctionality(Signal):
             )  # Assume seconds and convert to minutes here
 
         else:
-            print("Number too large")
             return np.round(t * 2 / 60, 2)  # Very big number
 
     @staticmethod
@@ -703,14 +682,13 @@ class EMDFunctionality(Signal):
         :param imfs: Numpy array with IMF information on rows
         Converts to minutes
         """
-        no_extrema = [len(emd.find_extrema(T=time, S=imf)[0]) for imf in imfs]
-
+        no_extrema = [len(emd.find_extrema(time, imf)[0]) for imf in imfs]
         periodicities = [
-            EMDFunctionality.find_period(time[-1], extrema + 1)
-            for extrema in no_extrema
+            EMDFunctionality.find_period(time[-1], extrema) for extrema in no_extrema
         ]
         return periodicities
 
+<<<<<<< HEAD
     @staticmethod
     def create_period_matrix(
         pA, pB, pfilter
@@ -944,6 +922,9 @@ class EMDFunctionality(Signal):
         plt.close()
 
     def generate_windows_old(
+=======
+    def generate_windows(
+>>>>>>> parent of fb035f9 (Added Ray Multiprocessing)
         self,
         other,
         window_displacement,
@@ -1111,7 +1092,7 @@ class EMDFunctionality(Signal):
         np.save(self.path_to_corr_matrix, corr_matrix)  # IMF corrs
         return None
 
-    def plot_all_results_old(
+    def plot_all_results(
         self,
         other,
         Label_long_ts="No name",
@@ -1220,7 +1201,6 @@ class EMDFunctionality(Signal):
             for index, corr_thr in enumerate(corr_thr_list):
                 _number_high_pe = len(pvalid[np.abs(pvalid) >= corr_thr])
                 corr_locations[height, index, 1] = _number_high_pe
-
                 _number_high_sp = len(rvalid[np.abs(rvalid) >= corr_thr])
                 corr_locations[height, index, 2] = _number_high_sp
 
