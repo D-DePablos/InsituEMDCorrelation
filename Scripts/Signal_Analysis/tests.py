@@ -4,9 +4,9 @@
 # Try to stretch / Contract and check that maintained
 # ???
 
+from os import makedirs
 from numpy.core.fromnumeric import size
 from helpers import Signal, EMDFunctionality
-import array
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import pearsonr
@@ -14,15 +14,20 @@ from PyEMD import EMD
 
 emd = EMD()
 
+import ray
+import psutil
+
+num_cpus = psutil.cpu_count(logical=False)
+ray.init(num_cpus=num_cpus, ignore_reinit_error=True)
+
 
 def test_signal():
 
-    window_displacement = 12
     noise = 0.05  # Percentage of noise
     gauss_std = 10
+    corr_thr_list = np.round(np.arange(0.5, 1.0, 0.05), 2)
 
     short_sig = Signal(
-        save_folder="/mnt/sda5/Python/InsituEMDCorrelation/Scripts/Signal_Analysis/tests/short/",
         duration=1000,
         cadence=12,
         mean=30,
@@ -30,7 +35,6 @@ def test_signal():
     )
 
     long_sig = Signal(
-        save_folder="/mnt/sda5/Python/InsituEMDCorrelation/Scripts/Signal_Analysis/tests/long/",
         duration=5000,
         cadence=12,
         mean=10,
@@ -56,16 +60,17 @@ def test_signal():
     long_sig.data = Signal.normalize_signal(long_sig.data)
 
     # Add EMD functionality to either signal
-    short = EMDFunctionality(short_sig, filter_imfs=False)
-    long = EMDFunctionality(long_sig, filter_imfs=False)
+    short = EMDFunctionality(short_sig)
+    long = EMDFunctionality(long_sig)
 
-    arr, periods = long.generate_windows(short)
-
-    return arr, periods
+    long.generate_windows(short)
+    long.plot_all_results(
+        other=short,
+        corr_thr_list=corr_thr_list,
+    )
 
 
 # Rows are for short IMFs, columns for LONG
-arr, periods = test_signal()
-print(arr, periods)
+test_signal()
 
 # print(arr, periods, sep="\n")

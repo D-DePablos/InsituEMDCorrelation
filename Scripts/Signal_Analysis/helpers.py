@@ -583,12 +583,6 @@ class EMDFunctionality(Signal):
         self.hitrate = 0
         self.table = None
 
-    def __str__(self):
-        """
-        What to return when asking for string description
-        """
-        return f"{self.name} Signal. Filtering outside of {self.pmin}:{self.pmax}"
-
     def __repr__(self):
         """
         Representation of Signal Object
@@ -718,7 +712,9 @@ class EMDFunctionality(Signal):
         return periodicities
 
     @staticmethod
-    def create_period_matrix(pA, pB, pfilter):
+    def create_period_matrix(
+        pA, pB, pfilter
+    ):  # Must make static method to work with Ray
         """
         Based on two lists of periodicities, make matrix with information of which periods are good
         """
@@ -757,8 +753,6 @@ class EMDFunctionality(Signal):
             time=short.t,
             imfs=short_imfs,
         )  # First determine periodicities and then use them
-
-        # TODO: For some reason ray only works if imported at around the same folder
 
         # Prepare and apply multiprocessing for faster calculations
         long_data = ray.put(long.s)  # The values
@@ -818,6 +812,8 @@ class EMDFunctionality(Signal):
         Assumes that you have true_time
         """
 
+        # TODO: Add functionality for test scenarios -> Just need to add new, non pfilter based filtering
+
         corr_locations = np.zeros(
             shape=(len(self.correlation_matrix_all), len(corr_thr_list))
         )
@@ -830,6 +826,7 @@ class EMDFunctionality(Signal):
             mid_index = int(np.round(self.window_length / 2 + height))
             if self.true_time is not None:
                 _rel_time = self.true_time[mid_index]
+
             else:
                 _rel_time = self.t[mid_index]
 
@@ -847,25 +844,37 @@ class EMDFunctionality(Signal):
                 # if nhits > 0:
                 #     print(_rel_time, corr_thr, nhits)
 
-            # TODO: Add Heatmap information
+            # TODO: Add Heatmap plotting
 
-        # TODO: Summary bar chart
-        short_duration = self.true_time[self.window_length] - self.true_time[0]
+        if self.true_time is not None:
+            short_duration = self.true_time[self.window_length] - self.true_time[0]
+            time_axis = self.true_time
+        else:
+            short_duration = self.t[self.window_length] - self.t[0]
+            time_axis = self.t
+
         fig, axs = plt.subplots(2, sharex=True, figsize=(20, 10))
 
         ax = axs[0]
-        ax.plot(self.true_time, self.s, color="black", label=self.name)
+        ax.plot(time_axis, self.s, color="black", label=self.name)
         ax.set_title(f"Filter {self.pfilter} | Correlated against {other.name}")
         ax.set_ylabel(f"Normalised Detrended {self.name}")
-
-        ax.set_xlim(
-            self.true_time[0] - timedelta(hours=3),
-            self.true_time[-1] + timedelta(hours=3),
-        )
         ax.xaxis.grid(True)
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=3))
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %H:%M"))
-        ax.xaxis.set_tick_params(rotation=60)
+
+        if self.true_time is not None:
+            ax.set_xlim(
+                self.true_time[0] - timedelta(hours=3),
+                self.true_time[-1] + timedelta(hours=3),
+            )
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=3))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %H:%M"))
+            ax.xaxis.set_tick_params(rotation=60)
+
+        else:  # For test cases
+            ax.set_xlim(
+                self.t[0] - 600,
+                self.t[-1] + 600,
+            )
 
         # SECOND AXIS
         ax2 = axs[1]

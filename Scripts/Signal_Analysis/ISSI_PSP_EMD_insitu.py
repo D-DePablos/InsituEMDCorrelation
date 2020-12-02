@@ -164,69 +164,22 @@ def compare_rs_to_insitu(
             )
 
 
-# # Setup for in situ observations  TODO: Make into a class maybe(...)
-# case_study_1 = {
-#     "start": datetime(2018, 10, 31, 12, 0),
-#     "end": datetime(2018, 10, 31, 22, 0),
-#     # "bmapped_start": datetime(2018, 10, 30, 2, 0),
-#     # "bmapped_end": datetime(2018, 10, 30, 19, 0),
-#     "data": df_is,
-#     "df_rs": df_171,
-#     "remote_label": "171",
-#     "corr_thr_list": np.round(np.arange(0.6, 1, 0.05), 2),
-#     "period_limits": (5, 200),
-#     "expected_location_list": [],
-# }
-
-# case_study_1 = extract_smp(case_study_1)
-# acc = {
-#     "start": datetime(2018, 10, 30, 2),
-#     "end": datetime(2018, 10, 30, 19),
-#     "label": "Acc. Vsw",
-#     "color": "blue",
-#     "height": 1,
-# }
-
-# con = {
-#     "start": datetime(2018, 10, 30, 11),
-#     "end": datetime(2018, 10, 31, 2),
-#     "label": "Con. Vsw",
-#     "color": "yellow",
-#     "height": 1,
-# }
-
-# case_study_1["expected_location_list"].append(acc)
-# case_study_1["expected_location_list"].append(con)
-
-# # plot_all(case_study_1)
-# compare_rs_to_insitu(
-#     df_insitu=case_study_1["smp_data"],
-#     df_remote=case_study_1["df_rs"],
-#     rs_cad=60,
-#     is_cad=60,
-#     remote_label=case_study_1["remote_label"],
-#     corr_thr_list=case_study_1["corr_thr_list"],
-#     pfilter=(30, 215),
-#     over_folder=f"{save_folder}{case_study_1['remote_label']}/",
-#     expected_location_list=case_study_1["expected_location_list"],
-# )
-
 # Setup for in situ observations  TODO: Make into a class maybe(...)
 case_study_1 = {
-    "start": datetime(2018, 10, 31, 15, 0),
-    "end": datetime(2018, 11, 1, 1, 0),
+    "start": datetime(2018, 10, 31, 12, 0),
+    "end": datetime(2018, 10, 31, 22, 0),
     # "bmapped_start": datetime(2018, 10, 30, 2, 0),
     # "bmapped_end": datetime(2018, 10, 30, 19, 0),
     "data": df_is,
     "df_rs": df_171,
-    "remote_label": "171_hours_later",
+    "remote_label": "171",
+    "over_folder_subfolder": "171_sb",
     "corr_thr_list": np.round(np.arange(0.6, 1, 0.05), 2),
     "period_limits": (5, 200),
     "expected_location_list": [],
 }
 
 case_study_1 = extract_smp(case_study_1)
-
 acc = {
     "start": datetime(2018, 10, 30, 2),
     "end": datetime(2018, 10, 30, 19),
@@ -254,7 +207,7 @@ compare_rs_to_insitu(
     is_cad=60,
     remote_label=case_study_1["remote_label"],
     corr_thr_list=case_study_1["corr_thr_list"],
-    pfilter=(30, 215),
-    over_folder=f"{save_folder}{case_study_1['remote_label']}/",
+    pfilter=case_study_1["period_limits"],
+    over_folder=f"{save_folder}{case_study_1['over_folder_subfolder']}/",
     expected_location_list=case_study_1["expected_location_list"],
 )
