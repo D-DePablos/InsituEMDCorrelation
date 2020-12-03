@@ -4,15 +4,9 @@
 # Try to stretch / Contract and check that maintained
 # ???
 
-<<<<<<< HEAD
 from os import makedirs
 from numpy.core.fromnumeric import size
 from helpers import Signal, EMDFunctionality
-=======
-from numpy.core.fromnumeric import size
-from helpers import Signal, EMDFunctionality
-import array
->>>>>>> fb035f9d7f89f5a4a85e60af9b8a67adcde11627
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import pearsonr
@@ -20,15 +14,12 @@ from PyEMD import EMD
 
 emd = EMD()
 
-<<<<<<< HEAD
 import ray
 import psutil
 
 num_cpus = psutil.cpu_count(logical=False)
 ray.init(num_cpus=num_cpus, ignore_reinit_error=True)
 
-=======
->>>>>>> fb035f9d7f89f5a4a85e60af9b8a67adcde11627
 
 def test_signal():
 
@@ -69,7 +60,6 @@ def test_signal():
     long_sig.data = Signal.normalize_signal(long_sig.data)
 
     # Add EMD functionality to either signal
-<<<<<<< HEAD
     short = EMDFunctionality(short_sig)
     long = EMDFunctionality(long_sig)
 
@@ -142,27 +132,12 @@ test_signal()
             periods.append(period_matrix)
 
         return arr, periods
-=======
-    short = EMDFunctionality(short_sig, filter_imfs=False)
-    long = EMDFunctionality(long_sig, filter_imfs=False)
 
-    arr, periods = long.generate_windows(short)
+    return gen_wind()
 
-    return arr, periods
->>>>>>> fb035f9d7f89f5a4a85e60af9b8a67adcde11627
-
-
-<<<<<<< HEAD
 
 # Rows are for short IMFs, columns for LONG
 arr, periods = test_signal()
 >>>>>>> parent of fb035f9 (Added Ray Multiprocessing)
 
 # print(arr)
-=======
-# Rows are for short IMFs, columns for LONG
-arr, periods = test_signal()
-print(arr, periods)
-
-# print(arr, periods, sep="\n")
->>>>>>> fb035f9d7f89f5a4a85e60af9b8a67adcde11627

@@ -132,10 +132,4 @@ dmypy.json
 # CUSTOm
 **unsafe
 **.npy
-<<<<<<< HEAD
 **.csv
-=======
-**.png
->>>>>>> fb035f9d7f89f5a4a85e60af9b8a67adcde11627
-
-Scripts/ISSI/Data/small_ch_in_situ.csv
