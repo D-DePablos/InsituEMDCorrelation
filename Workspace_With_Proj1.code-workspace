@@ -7,5 +7,9 @@
 			"path": "../Proj_1"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"python.analysis.extraPaths": [
+			"/mnt/sda5/Python/InsituEMDCorrelation/Scripts"
+		]
+	}
 }

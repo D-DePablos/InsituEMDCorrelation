@@ -1,8 +1,14 @@
 #%%
-from datetime import datetime, timedelta
+
+from sys import path
+
+path.append("/mnt/sda5/Python/InsituEMDCorrelation/Scripts")
 
 # from helpers import resample_and_rename
-from helpers import backmap_calculation
+from Data.helpers import backmap_calculation
+from decorators_utils import trace
+
+from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
 # import matplotlib.dates as mdates
@@ -271,12 +277,15 @@ class Spacecraft:
                     _data = self.data.to_dataframe()[self.rel_vars[parameter]]
                     _data[_data < 0.001] = np.nan  # Does this hold for all parameters?
                     self.df[parameter] = _data
-                    # TODO: Resample the data to objective cadence as well
+
+        # After loading it breaks datetime format
+        self.df.index = pd.to_datetime(self.df["Time"])
+        del self.df["Time"]
+        self.df.interpolate(inplace=True)
+        self.df = self.df.resample(f"{self.obj_cad}s").mean()
 
     def plot_df_values(self):
         # Plot all the available values
-
-        self.fix_dataframe() if ("Time" in list(self.df)) else None
 
         for parameter in list(self.df):
             if parameter not in ["validity"]:
@@ -313,8 +322,7 @@ class Spacecraft:
                         f"/mnt/sda5/Python/InsituEMDCorrelation/Figures/{self.name}_{parameter.capitalize()}.png"
                     )
 
-    def extract_orbit_data(self):
-        # TODO: Use PSP spice kernels to extract orbital information
+    def extract_orbit_data(self, from_data=False):
         import heliopy.data.spice as spicedata
         import heliopy.spice as spice
 
@@ -336,17 +344,28 @@ class Spacecraft:
         quantity_support()
 
         # Generate a time for every day between starttime and endtime
-        starttime = self.start_time
-        endtime = self.end_time
+        if from_data == False:
+            starttime = self.start_time
+            endtime = self.end_time
+        else:
+            starttime = self.df.index[0].to_pydatetime()
+            endtime = self.df.index[len(self.df.index) - 1].to_pydatetime()
+
         times = []
         while starttime < endtime:
             times.append(starttime)
             starttime += timedelta(hours=1)
 
         # Generate positions
-        sp_traj.generate_positions(times, "Sun", "ECLIPJ2000")
+        sp_traj.generate_positions(times, "Sun", "IAU_SUN")
         sp_traj.change_units(u.au)
         self.sp_traj = sp_traj
+
+        from sunpy.coordinates import frames
+
+        self.sp_coords = sp_traj.coords.transform_to(
+            frame=frames.HeliographicCarrington
+        )
 
     def plot_orbit(self):
         """
@@ -395,21 +414,26 @@ class Spacecraft:
         """
         import matplotlib.dates as dates
 
-        nsubplots = 6
+        nsubplots = 7
 
         fig, axs = plt.subplots(nsubplots, 1, sharex=True, figsize=(20, 10))
         colors = ["red", "blue"]
         labels = ["solo", "psp"]
 
         for i, Spacecraft_ins in enumerate([self, other]):
-            Spacecraft_ins.fix_dataframe() if (
-                "Time" in list(Spacecraft_ins.df)
-            ) else None
             sp_traj = Spacecraft_ins.sp_traj
             plot_times = sp_traj.times.to_datetime()
 
             # Plot radial distance and elevation as a function of time
             elevation = np.rad2deg(np.arcsin(sp_traj.z / sp_traj.r))
+            # Sunpy coordinates how?
+            theta = np.rad2deg(
+                2
+                * np.arctan(
+                    sp_traj.y / (sp_traj.x + np.sqrt(sp_traj.x ** 2 + sp_traj.y ** 2))
+                )
+            )
+
             axs[0].set_title("Orbital measurements")
             axs[0].plot(plot_times, sp_traj.r, color=colors[i], label=labels[i])
             axs[0].set_ylim(0, 1.1)
@@ -418,8 +442,13 @@ class Spacecraft:
             axs[1].plot(plot_times, elevation, color=colors[i], label=labels[i])
             axs[1].set_ylabel("Elevation (deg)")
 
-            axs[2].plot(plot_times, elevation, color=colors[i], label=labels[i])
-            axs[2].set_ylabel("Elevation (deg)")
+            axs[2].plot(
+                plot_times,
+                Spacecraft_ins.sp_coords.lon,
+                color=colors[i],
+                label=labels[i],
+            )
+            axs[2].set_ylabel("Longitude (deg)")
 
             # Plot the different parameters
             for parameter in list(Spacecraft_ins.df):
@@ -441,58 +470,161 @@ class Spacecraft:
                         label=f"{labels[i]}{parameter}",
                     )
 
-            if i == 1 and project_into_other:
-                # When required to plot more information
-                vmean = np.mean(self.df["velocity"]) * u.km / u.s
-                rf = self.sp_traj.r.mean().to(u.km)
-                r0 = other.sp_traj.r.mean().to(u.km)
+            # Here we plot the original values and such
+            if self.backmap_df is not None:
+                """
+                "solo_rad": df_rf["r"].values,
+                "solo_lat": df_rf["lat"].values,
+                "solo_long": df_rf["lon"].values,
+                "solo_v": df_rf["v"].values,
+                "dt_psp": dt_list,
+                "long_psp": long_list,
+                "accdt_psp": accdt_list,
+                "acclong_psp": acclong_list,
+                """
+                bar_width = 3600 / 2
+                for index, row in enumerate(self.backmap_df.itertuples()):
+                    start_end_calc = lambda t, halfwidth_s: [
+                        t - timedelta(seconds=halfwidth_s),
+                        t + timedelta(seconds=halfwidth_s),
+                    ]
+                    time = row.Index
+                    dt_psp = row.dt_psp
+                    st_dt, ed_dt = start_end_calc(dt_psp, bar_width)
+                    long_psp = row.long_psp
 
-                dt, dtacc = backmap_calculation(vmean, r0, rf)
+                    # Accelerated
+                    accdt_psp = row.accdt_psp
+                    accst_dt, acced_dt = start_end_calc(accdt_psp, bar_width)
+                    acc_long_psp = row.acclong_psp
 
-                tmean = (
-                    self.df.index[int(np.round(len(self.df.index) / 2))]
-                ).to_pydatetime()
+                    axs[6].hlines(index, xmin=st_dt, xmax=ed_dt, color="blue")
+                    axs[6].text(x=st_dt, y=index + 0.2, s=index)
 
-                tstart, tstartacc = (
-                    self.start_time - timedelta(seconds=dt.value),
-                    self.start_time - timedelta(seconds=dtacc.value),
-                )
-                tend, tendacc = (
-                    self.end_time - timedelta(seconds=dt.value),
-                    self.end_time - timedelta(seconds=dtacc.value),
-                )
+                    axs[6].hlines(index, xmin=st_dt, xmax=ed_dt, color="yellow")
+                    axs[6].text(x=accst_dt, y=index + 0.2, s=index)
 
-            for j, ax in enumerate(axs):
-                ax.legend()
+            # # Average backmapped time
+            # if i == 1 and project_into_other:
+            #     # When required to plot more information
+            #     vmean = np.mean(self.df["velocity"]) * u.km / u.s
+            #     rf = self.sp_traj.r.mean().to(u.km)
+            #     r0 = other.sp_traj.r.mean().to(u.km)
 
-                if j == 0 and project_into_other and i == 1:
-                    ax.axvspan(tstart, tend, color="yellow", alpha=0.3)
-                    ax.axvspan(tstartacc, tendacc, color="green", alpha=0.3)
+            #     dt, dtacc = backmap_calculation(vmean, r0, rf)
 
-                # Fix the labels
-                # ax.xaxis.set_major_locator(dates.DayLocator(interval=1))
-                # ax.xaxis.set_major_formatter(dates.DateFormatter(fmt="%H:%M %d"))
-                # ax.xaxis.set_minor_locator(dates.HourLocator(interval=4))
+            #     tmean = (
+            #         self.df.index[int(np.round(len(self.df.index) / 2))]
+            #     ).to_pydatetime()
+
+            #     tstart, tstartacc = (
+            #         self.start_time - timedelta(seconds=dt.value),
+            #         self.start_time - timedelta(seconds=dtacc.value),
+            #     )
+            #     tend, tendacc = (
+            #         self.end_time - timedelta(seconds=dt.value),
+            #         self.end_time - timedelta(seconds=dtacc.value),
+            #     )
+
+            # for j, ax in enumerate(axs):
+            #     ax.legend()
+
+            #     if j == 0 and project_into_other and i == 1:
+            #         ax.axvspan(tstart, tend, color="yellow", alpha=0.3)
+            #         ax.axvspan(tstartacc, tendacc, color="green", alpha=0.3)
+
+            # Fix the labels
+            # ax.xaxis.set_major_locator(dates.DayLocator(interval=1))
+            # ax.xaxis.set_major_formatter(dates.DateFormatter(fmt="%H:%M %d"))
+            # ax.xaxis.set_minor_locator(dates.HourLocator(interval=4))
 
         plt.show()
 
-    def fix_dataframe(self):
-        # After loading it breaks datetime format
-        self.df.index = pd.to_datetime(self.df["Time"])
-        del self.df["Time"]
-        self.df = self.df.resample(f"{self.obj_cad}s").mean()
-
-    def backmap_to_other(self, other):
+    def backmap_to_other(self, other, time_period=None):
         """
         Backmaps one spacecraft to the other given that self.df has velocity data
         """
-        rf = (self.sp_traj.r).to(u.km)
-        r0 = (other.sp_traj.r).to(u.km)
+        if time_period == None:
+            start_time = self.start_time
+            end_time = self.end_time
+        else:
+            start_time, end_time = time_period
 
-        vmean = np.mean(self.df["velocity"]) * u.km / u.s
-        dt, acc_dt = backmap_calculation(vmean, r0, rf)  # Time in seconds
+        def df_gen(spc_trajs, variable_list):
+            _df = pd.DataFrame({})
 
-        return dt, acc_dt
+            for variable in variable_list:
+                _df[variable] = spc_trajs.variable
+
+        assert (
+            self.sp_traj.r.value.mean() > other.sp_traj.r.value.mean()
+        ), "Please use Further spacecraft as first one"
+
+        _hour_df = (self.df.resample("3600s").mean()).copy()
+        _hour_df.interpolate(inplace=True)
+        # Use dataframes for easier splicing
+        df_rf = pd.DataFrame(
+            {
+                "r": (self.sp_traj.r).to(u.km),
+                "lon": self.sp_coords.lon,
+                "lat": self.sp_coords.lat,
+                "v": _hour_df["velocity"] * u.km / u.s,
+            },
+            index=_hour_df.index,
+        )
+
+        df_r0 = pd.DataFrame(
+            {
+                "r": (other.sp_traj.r).to(u.km),
+                "lon": other.sp_coords.lon,
+                "lat": other.sp_coords.lat,
+            },
+            index=other.sp_traj.times,
+        )
+
+        df_rf.interpolate(inplace=True)
+        df_rf.dropna(inplace=True)
+        df_r0.dropna(inplace=True)
+
+        r_list = []
+        dt_list, accdt_list = [], []
+        long_list, acclong_list = [], []
+
+        # TODO: Dinamically get radius
+        r0 = df_r0["r"].mean()
+        find_stamp = lambda time, dt: time - timedelta(
+            seconds=dt
+        )  # Calculate the time taken
+
+        for row in df_rf.itertuples():
+            _rf = row.r
+            _long = row.lon
+            _v = row.v
+            _time = (row.Index).to_pydatetime()
+
+            _dt, _acc_dt, _long, _acc_long = backmap_calculation(
+                _v, r0=r0, rf=_rf, spcf_coords=_long
+            )  # Time in seconds
+
+            r_list.append(_rf)
+            dt_list.append(find_stamp(_time, _dt))
+            accdt_list.append(find_stamp(_time, _acc_dt))
+            long_list.append(_long)
+            acclong_list.append(_acc_long)
+
+        self.backmap_df = pd.DataFrame(
+            {
+                "solo_rad": df_rf["r"].values,
+                "solo_lat": df_rf["lat"].values,
+                "solo_long": df_rf["lon"].values,
+                "solo_v": df_rf["v"].values,
+                "dt_psp": dt_list,
+                "long_psp": long_list,
+                "accdt_psp": accdt_list,
+                "acclong_psp": acclong_list,
+            },
+            index=df_rf.index,
+        )
 
         # For PSP and SolO It is approximately 1 day less than Sun-Earth, as PSP is at around 0.2 AU
         # How to do a good ballistic backmapping? -> Start by selecting less data!
@@ -506,6 +638,7 @@ class Spacecraft:
         self.extract_orbit_data()
 
         self.df = self.df[self.start_time : self.end_time]
+        pass
 
 
 # %%
@@ -526,7 +659,7 @@ def psp_e6():
     psp_e6_overview = {
         "name": "PSPpriv_e6",
         "mid_time": datetime(2020, 10, 2),
-        "margin": timedelta(days=5),
+        # "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
         "show": True,
     }
@@ -534,7 +667,7 @@ def psp_e6():
     solo_e6_overview = {
         "name": "SolOpriv_e6",
         "mid_time": datetime(2020, 10, 3),
-        "margin": timedelta(days=10),
+        "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
         "show": True,
     }
@@ -542,69 +675,51 @@ def psp_e6():
     # Prepare the objects with measurements inside DF
     psp = Spacecraft(**psp_e6_overview)
     solo = Spacecraft(**solo_e6_overview)
-    # Extract orbital data for entire duration
-    psp.extract_orbit_data()
-    solo.extract_orbit_data()
-    # Fix Time column in the dataframe, change cadence, put in index
-    psp.fix_dataframe()
-    solo.fix_dataframe()
-    solo.multi_orbits(psp)
 
-    # SOLO data small pocket 40 minutes
-    # Solar Orbiter data zoomed on time of latitude lineup
-    # solo_zoomed_1 = {
-    #     "start_time": datetime(2020, 10, 2, 11, 13),
-    #     "end_time": datetime(2020, 10, 3, 11, 53),
+    # # Solar orbiter lines up with latitude?
+    # solo_zoomed = {
+    #     "start_time": datetime(2020, 10, 3, 16, 27),
+    #     "end_time": datetime(2020, 10, 4, 23, 52),
     # }
-    # psp_zoomed_1 = {
-    #     "start_time": datetime(2020, 9, 27, 0),
-    #     "end_time": datetime(2020, 10, 3, 13, 7),
-    # }
-
     # Solar orbiter lines up with latitude?
     solo_zoomed = {
-        "start_time": datetime(2020, 10, 6, 12, 0),
-        "end_time": datetime(2020, 10, 7, 12, 0),
+        "start_time": datetime(2020, 10, 3, 12, 0),
+        "end_time": datetime(2020, 10, 4, 0, 30),
     }
+
     psp_zoomed = {
         "start_time": datetime(2020, 9, 27),
         "end_time": datetime(2020, 10, 3, 13, 7),
     }
     solo.zoom_in(**solo_zoomed)
     psp.zoom_in(**psp_zoomed)
-    solo.multi_orbits(psp, project_into_other=True)
+    print(solo.df)
 
-    # solo_zoomed_2 = {
-    #     "start_time": datetime(2020, 10, 3, 16, 27),
-    #     "end_time": datetime(2020, 10, 4, 23, 52),
-    # }
-
-
-# SolO = Spacecraft(**solo_pub)
-# SolO.calculate_time_at_sun()
-# SolO.plot_df_values()
+    # Do the backmapping
+    solo.backmap_to_other(psp, time_period=(solo.start_time, solo.end_time))
+    solo.multi_orbits(psp)
 
 
-def psp_sta():
-    # PSP conjunction with STEREO-A
-    # ST-A
-    stereo_a = {
-        "name": "ST-A",
-        "mid_time": datetime(2019, 11, 4, 12, 0),
-        "margin": timedelta(days=3),
-    }
-    sta = Spacecraft(**stereo_a)
-    sta.plot_df_values()
+# def psp_sta():
+#     # PSP conjunction with STEREO-A
+#     # ST-A
+#     stereo_a = {
+#         "name": "ST-A",
+#         "mid_time": datetime(2019, 11, 4, 12, 0),
+#         "margin": timedelta(days=3),
+#     }
+#     sta = Spacecraft(**stereo_a)
+#     sta.plot_df_values()
 
-    # Parker
-    parker_sta = {
-        "name": "PSP",
-        "mid_time": stereo_a["mid_time"],
-        "margin": timedelta(days=2),
-    }
+#     # Parker
+#     parker_sta = {
+#         "name": "PSP",
+#         "mid_time": stereo_a["mid_time"],
+#         "margin": timedelta(days=2),
+#     }
 
-    psp = Spacecraft(**parker_sta)
-    psp.plot_df_values()
+#     psp = Spacecraft(**parker_sta)
+#     psp.plot_df_values()
 
 
 # %%

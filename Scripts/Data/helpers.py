@@ -1,3 +1,8 @@
+from decorators_utils import trace
+
+SidRotRate = 24.47 / 86400  # In seconds
+
+
 def resample_and_rename(df, srate: str, name):
     """
     Simple resampling function that renames dataframes
@@ -38,7 +43,10 @@ def resample_and_rename(df, srate: str, name):
     return (df, f"{name}_{flag}")
 
 
-def backmap_calculation(vel_x: float, r0: float, rf: float):
+# @trace
+def backmap_calculation(
+    vel_x: float, r0: int = None, rf: float = None, spcf_coords=None
+):
     """
     Perform simple time taken to get to X position
     Everything should be in km
@@ -49,4 +57,12 @@ def backmap_calculation(vel_x: float, r0: float, rf: float):
     dt = (rf - r0) / vel_x
     acc_dt = 4 / 3 * dt
 
-    return (dt, acc_dt)
+    if spcf_coords:
+        lon_spcf = spcf_coords
+        lon_spc0 = lon_spcf + (SidRotRate / 86400 * dt)
+        lon_spc0_acc = lon_spcf + (SidRotRate / 86400 * acc_dt)
+
+        return (dt, acc_dt, lon_spc0, lon_spc0_acc)
+
+    else:
+        return (dt, acc_dt)

@@ -1,0 +1,19 @@
+"configurations": [
+    {
+        "name": "Python",
+        "type": "python",
+        "stopOnEntry": false,
+        "request": "launch",
+        "python": "${config.python.pythonPath}",
+        "program": "${file}",
+        "cwd": "${workspaceRoot}",
+        "debugOptions": [
+            "WaitOnAbnormalExit",
+            "WaitOnNormalExit",
+            "RedirectOutput"
+        ],
+        "env": {
+            "PYTHONPATH": "/mnt/sda5/Python"
+        }
+    }
+]
