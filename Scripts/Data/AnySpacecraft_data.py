@@ -1,11 +1,12 @@
 #%%
+BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 
 from sys import path
 
-path.append("/mnt/sda5/Python/InsituEMDCorrelation/Scripts")
+path.append(f"{BASE_PATH}Scripts/")
 
 # from helpers import resample_and_rename
-from Data.helpers import backmap_calculation
+from Data.helpers import backmap_calculation, fcl
 from decorators_utils import trace
 
 from datetime import datetime, timedelta
@@ -15,8 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import astropy.units as u
-
-# TODO: Add positional information
+from astropy.coordinates import cartesian_to_spherical, spherical_to_cartesian
 
 # Units
 units_dic = {
@@ -28,6 +28,8 @@ units_dic = {
     "velocity_z": r"$km/s$",
     "btotal": r"$T$",
 }
+
+SOLROTRATE = 24.47 / 86400
 
 
 class Spacecraft:
@@ -57,6 +59,7 @@ class Spacecraft:
 
         # Flag: Whether to add 'extra' measurements to dataframe
         add_all_heliopy_vars = True
+        self.sp_coords_carrington = None
 
         # Time information for specific spacecraft
         if mid_time:
@@ -104,8 +107,12 @@ class Spacecraft:
         elif self.name == "PSPpub":
             from heliopy.data import psp as psp_data
 
+            self.rel_vars = {
+                "btotal": "btotal",
+            }
+
             df_mag_data = psp_data.fields_mag_rtn_1min(self.start_time, self.end_time)
-            sweap_l3 = psp_data.sweap_spc_l2(self.start_time, self.end_time)
+            # sweap_l3 = psp_data.sweap_spc_l2(self.start_time, self.end_time)
 
             # MAG
             Bx = df_mag_data.to_dataframe()["psp_fld_l2_mag_RTN_1min_0"]
@@ -115,6 +122,7 @@ class Spacecraft:
             df_mag = pd.DataFrame({"Bx": Bx, "By": By, "Bz": Bz, "Bt": Bt})
 
             self.df = pd.DataFrame({})
+            self.df["Time"] = df_mag_data.index
             self.df["btotal"] = Bt
 
             # # SWEAP
@@ -151,27 +159,25 @@ class Spacecraft:
             print(mag.columns)
 
         elif self.name == "SolOpriv_e6":
-            import cdflib
-            from glob import glob
-
-            cdf_epoch = cdflib.cdfepoch()
 
             # Not using Heliopy vars
             add_all_heliopy_vars = False
 
             # Load saved file, otherwise generate
             try:
-                df = pd.read_csv(
-                    "/mnt/sda5/Python/InsituEMDCorrelation/Scripts/Data/Prepped_csv/solo_sept.csv"
-                )
+                df = pd.read_csv(f"{BASE_PATH}Scripts/Data/Prepped_csv/solo_sept.csv")
 
                 self.df = df
 
             except FileNotFoundError:
+                import cdflib
+                from glob import glob
+
+                cdf_epoch = cdflib.cdfepoch()
 
                 def SWEAP_prep():
                     # SWEAP data
-                    cdf_path = "/mnt/sda5/Python/InsituEMDCorrelation/unsafe/Resources/Solo_Data/L2/GroundMom/"
+                    cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/GroundMom/"
 
                     """ 
                     Variables within the cdf:
@@ -217,7 +223,7 @@ class Spacecraft:
                 # TODO: Add function for Magnetic field
 
             self.df.to_csv(
-                "/mnt/sda5/Python/InsituEMDCorrelation/Scripts/Data/Prepped_csv/solo_sept.csv",
+                f"{BASE_PATH}Scripts/Data/Prepped_csv/solo_sept.csv",
                 index=False,
             )
 
@@ -235,7 +241,7 @@ class Spacecraft:
                 # Fields data
                 try:
                     self.df = pd.read_csv(
-                        "/mnt/sda5/Python/InsituEMDCorrelation/Scripts/Data/Prepped_csv/psp_sept.csv"
+                        f"{BASE_PATH}Scripts/Data/Prepped_csv/psp_sept.csv"
                     )
 
                 except FileNotFoundError:
@@ -281,8 +287,38 @@ class Spacecraft:
         # After loading it breaks datetime format
         self.df.index = pd.to_datetime(self.df["Time"])
         del self.df["Time"]
-        self.df.interpolate(inplace=True)
+        # TODO: Verify that the interpolation is working!
+        self.df.fillna(method="pad")
         self.df = self.df.resample(f"{self.obj_cad}s").mean()
+
+    @staticmethod
+    def trace_field_lines(lon, lat, r, v_sw, rf=0.0046547454 * u.AU):
+        """
+        For each of the positions in self, track to origin
+        lon, lat in deg
+        r in AU
+        """
+        lon_ss = (
+            lon
+            + (
+                (SOLROTRATE * r.value)
+                / (v_sw["velocity"] * u.km / u.s).to(u.AU / u.s).value
+            )
+            * u.deg
+        )
+
+        lon_x = np.arange(lon.value, lon_ss.value, step=5)
+        lat_x = np.repeat(lat.value, len(lon_x))
+        rad_x = np.arange(rf.value, r.value, step=(r.value - rf.value) / len(lon_x))[
+            ::-1
+        ]
+        fline = (
+            lon_x * u.deg,
+            lat_x * u.deg,
+            rad_x * u.AU,
+        )  # Compose long, lat, rad into fieldlines
+
+        return fline
 
     def plot_df_values(self):
         # Plot all the available values
@@ -363,7 +399,7 @@ class Spacecraft:
 
         from sunpy.coordinates import frames
 
-        self.sp_coords = sp_traj.coords.transform_to(
+        self.sp_coords_carrington = sp_traj.coords.transform_to(
             frame=frames.HeliographicCarrington
         )
 
@@ -401,14 +437,7 @@ class Spacecraft:
 
         plt.show()
 
-    def project_part_into_other(self, other, self_start_end, other_start_end):
-        """
-        Project a portion of one dataset onto the other and save the column
-        """
-
-        self.highlighted_region = None  # Highlight a region with a color, etc.
-
-    def multi_orbits(self, other, project_into_other=False):
+    def multi_orbits(self, other):
         """
         Plot the spacecraft orbit using the initialised data
         """
@@ -444,7 +473,7 @@ class Spacecraft:
 
             axs[2].plot(
                 plot_times,
-                Spacecraft_ins.sp_coords.lon,
+                Spacecraft_ins.sp_coords_carrington.lon,
                 color=colors[i],
                 label=labels[i],
             )
@@ -540,15 +569,66 @@ class Spacecraft:
 
         plt.show()
 
-    def backmap_to_other(self, other, time_period=None):
+    def plot_spherical_coords(self, other):
+        """
+        Plots the longitude and latitude of a given spacecraft object
+        """
+        assert self.sp_traj != None, "Please calculate the spacecraft trajectory"
+
+        lon1 = self.sp_coords_carrington.lon
+        lat1 = self.sp_coords_carrington.lat
+        rad1 = self.sp_coords_carrington.radius
+
+        lon2 = other.sp_coords_carrington.lon
+        lat2 = other.sp_coords_carrington.lat
+        rad2 = other.sp_coords_carrington.radius
+
+        X1, Y1, Z1 = spherical_to_cartesian(rad1, lat1, lon1)
+        X2, Y2, Z2 = spherical_to_cartesian(rad2, lat2, lon2)
+
+        fline_set = []
+
+        for i, t in enumerate(self.sp_coords_carrington.obstime):
+            vsw = fcl(self.df, t.datetime)
+            fline = self.trace_field_lines(lon1[i], lat1[i], rad1[i], v_sw=vsw)
+            fline_set.append(
+                spherical_to_cartesian(r=fline[2], lat=fline[1], lon=fline[0])
+            )
+
+        # Generate a set of timestamps to color the orbits by
+        times_float1 = (
+            self.sp_coords_carrington.obstime - self.sp_coords_carrington.obstime[0]
+        ).value
+        times_float2 = (
+            other.sp_coords_carrington.obstime - other.sp_coords_carrington.obstime[0]
+        ).value
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+        kwargs1 = {"s": 3, "c": times_float1}  # Size and colour
+        kwargs2 = {"s": 3, "c": times_float2}  # Size and colour
+
+        ax.scatter(X1, Y1, Z1, label=self.name, **kwargs1)
+        ax.scatter(X2, Y2, Z2, label=other.name, **kwargs2)
+        for fline in fline_set:
+            ax.scatter(fline[0], fline[1], fline[2])
+
+        # Solar radius 0.0046547454 AU
+        ax.scatter(0, 0, 0, label="Sun", c="orange", s=100)
+
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+        ax.set_zlim(-1, 1)
+
+        plt.legend()
+
+        plt.show()
+
+    def backmap_to_other(self, other):
         """
         Backmaps one spacecraft to the other given that self.df has velocity data
+        The time period is the amount of data being backmapped and can be part of the self.df
         """
-        if time_period == None:
-            start_time = self.start_time
-            end_time = self.end_time
-        else:
-            start_time, end_time = time_period
 
         def df_gen(spc_trajs, variable_list):
             _df = pd.DataFrame({})
@@ -558,30 +638,33 @@ class Spacecraft:
 
         assert (
             self.sp_traj.r.value.mean() > other.sp_traj.r.value.mean()
-        ), "Please use Further spacecraft as first one"
+        ), "Please use spacecraft furhter from sun as first one"
 
         _hour_df = (self.df.resample("3600s").mean()).copy()
         _hour_df.interpolate(inplace=True)
-        # Use dataframes for easier splicing
+
+        # dataframes for easier splicing
         df_rf = pd.DataFrame(
             {
                 "r": (self.sp_traj.r).to(u.km),
-                "lon": self.sp_coords.lon,
-                "lat": self.sp_coords.lat,
+                "lon": self.sp_coords_carrington.lon,
+                "lat": self.sp_coords_carrington.lat,
                 "v": _hour_df["velocity"] * u.km / u.s,
             },
             index=_hour_df.index,
         )
 
+        # r0 is spacecraft that is closest to Sun
         df_r0 = pd.DataFrame(
             {
                 "r": (other.sp_traj.r).to(u.km),
-                "lon": other.sp_coords.lon,
-                "lat": other.sp_coords.lat,
+                "lon": other.sp_coords_carrington.lon,
+                "lat": other.sp_coords_carrington.lat,
             },
             index=other.sp_traj.times,
         )
 
+        # We interpolate values which are missing and drop missing
         df_rf.interpolate(inplace=True)
         df_rf.dropna(inplace=True)
         df_r0.dropna(inplace=True)
@@ -651,17 +734,17 @@ def psp_e6():
     - TODO: Make relevant case studies (e.g., a couple of hours of obs on SolO to more time in PSP)
     - TODO: apply algo
     - TODO: Show all relevant results at the same time (similar to P1 but with same variables?)
-    - TODO: how to make statistically sound?
+    - TODO: how to make statistically sound? -> Use significance through P-values?
     """
     # Parker Encounter 6
     # psp_fld_l2_mag_RTN_4_Sa_per_Cyc_20201002_v01
-    OBJ_CADENCE = 60
+    OBJ_CADENCE = 60  # To one minute resolution
     psp_e6_overview = {
-        "name": "PSPpriv_e6",
+        "name": "PSPpub",
         "mid_time": datetime(2020, 10, 2),
         # "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
-        "show": True,
+        "show": False,
     }
 
     solo_e6_overview = {
@@ -676,27 +759,24 @@ def psp_e6():
     psp = Spacecraft(**psp_e6_overview)
     solo = Spacecraft(**solo_e6_overview)
 
-    # # Solar orbiter lines up with latitude?
-    # solo_zoomed = {
-    #     "start_time": datetime(2020, 10, 3, 16, 27),
-    #     "end_time": datetime(2020, 10, 4, 23, 52),
-    # }
     # Solar orbiter lines up with latitude?
     solo_zoomed = {
-        "start_time": datetime(2020, 10, 3, 12, 0),
+        "start_time": datetime(2020, 10, 3, 20, 0),
         "end_time": datetime(2020, 10, 4, 0, 30),
     }
 
     psp_zoomed = {
         "start_time": datetime(2020, 9, 27),
-        "end_time": datetime(2020, 10, 3, 13, 7),
+        "end_time": datetime(2020, 10, 1, 13, 7),
     }
     solo.zoom_in(**solo_zoomed)
     psp.zoom_in(**psp_zoomed)
     print(solo.df)
 
+    solo.plot_spherical_coords(psp)
+
     # Do the backmapping
-    solo.backmap_to_other(psp, time_period=(solo.start_time, solo.end_time))
+    solo.backmap_to_other(psp)
     solo.multi_orbits(psp)
 
 

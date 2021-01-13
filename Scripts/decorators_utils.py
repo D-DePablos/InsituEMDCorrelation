@@ -12,10 +12,3 @@ def trace(func):
         return original_result
 
     return wrapper
-
-
-def nan_helper(numpy_arr):
-    """
-    Removes all nans and interpolates missing values
-    """
-    pass
