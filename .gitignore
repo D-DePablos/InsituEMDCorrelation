@@ -133,3 +133,4 @@ dmypy.json
 **unsafe
 **.npy
 **.csv
+**.png

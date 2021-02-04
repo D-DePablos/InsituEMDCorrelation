@@ -1,6 +1,6 @@
 def trace(func):
     """
-    Print out trace information from a function
+    Print out trace information from a function: Inputs and outputs
     """
 
     def wrapper(*args, **kwargs):
