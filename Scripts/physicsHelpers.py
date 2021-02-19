@@ -1,4 +1,4 @@
-from decorators_utils import trace
+# from decorators_utils import trace
 import numpy as np
 
 SidRotRate = 24.47 / 86400  # In seconds

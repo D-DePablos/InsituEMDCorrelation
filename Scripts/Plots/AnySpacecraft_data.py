@@ -1,14 +1,14 @@
-#%%
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 
 from sys import path
-from os import makedirs
 
 path.append(f"{BASE_PATH}Scripts/")
 
 # from helpers import resample_and_rename
-from Data.helpers import backmap_calculation, fcl
-from decorators_utils import trace
+from os import makedirs
+from physicsHelpers import fcl
+from signalHelpers import normalize_signal as norm
+from EMD.applyEMD import comparePSPtoSolo
 
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
@@ -17,8 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import astropy.units as u
-from astropy.coordinates import cartesian_to_spherical, spherical_to_cartesian, SkyCoord
-from scipy.spatial.distance import cdist
+from astropy.coordinates import spherical_to_cartesian, SkyCoord
 
 # To add a cycle to colours
 from itertools import cycle
@@ -26,7 +25,7 @@ from itertools import cycle
 # Units
 units_dic = {
     "density": r"#/$cm^{3}$",
-    "temperature": r"$K$",
+    "T": r"$K$",
     "velocity": r"$km/s$",
     "velocity_x": r"$km/s$",
     "velocity_y": r"$km/s$",
@@ -170,9 +169,12 @@ class Spacecraft:
 
             # Load saved file, otherwise generate
             try:
-                df = pd.read_csv(f"{BASE_PATH}Scripts/Data/Prepped_csv/solo_sept.csv")
+                swedf = pd.read_csv(f"{BASE_PATH}Data/Prepped_csv/solo_sept_plasma.csv")
+                magdf = pd.read_csv(f"{BASE_PATH}Data/Prepped_csv/solo_sept_mag.csv")
 
-                self.df = df
+                self.swedf = swedf
+                self.magdf = magdf
+                self.df = None
 
             except FileNotFoundError:
                 import cdflib
@@ -180,7 +182,7 @@ class Spacecraft:
 
                 cdf_epoch = cdflib.cdfepoch()
 
-                def SWEAP_prep():
+                def SWE_prep():
                     # SWEAP data
                     cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/GroundMom/"
 
@@ -202,12 +204,13 @@ class Spacecraft:
                             'T'
                         ] 
                     """
+                    # Need to separate into different relevant csv
                     for day, file in enumerate(sorted(glob(f"{cdf_path}*.cdf"))):
                         cdf = cdflib.CDF(file)
                         time = cdf_epoch.to_datetime(cdf["Epoch"])
                         _df = pd.DataFrame({}, index=time)
 
-                        for i in ("V_RTN", "N", "validity"):
+                        for i in ("V_RTN", "N", "T", "validity"):
                             if i == "V_RTN":  # Allow for multidimensional
                                 for n, arg in zip(
                                     (0, 1, 2), ("", "_T", "_N")
@@ -216,19 +219,75 @@ class Spacecraft:
                             else:
                                 _df[i] = cdf[i]
 
-                        # Join the dataframes
+                        # Join the dataframes only after the first instance
                         if day == 0:
-                            self.df = _df
+                            _swe_df = _df
                         else:
-                            self.df = self.df.append(_df)
+                            _swe_df = _swe_df.append(_df)
 
-                    self.df["Time"] = self.df.index
+                    _swe_df["Time"] = _swe_df.index
+                    return _swe_df
 
-                SWEAP_prep()
+                def MAG_prep():
+                    # SWEAP data
+                    cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/Mag/"
+
+                    """ 
+                    Variables within the cdf:
+                        [
+
+                            'EPOCH'
+                            'B_RTN'
+                            'LBL1_B_RTN'
+                            'REP1_B_RTN'
+                            'SCET'
+                            'B_SRF'
+                            'LBL1_B_SRF'
+                            'REP1_B_SRF'
+                            'QUALITY_FLAG'
+                            'PRIMARY_SENSOR_FLAG'
+                            'VECTOR_RANGE'
+                            
+                        ] 
+                    """
+                    # Need to separate into different relevant csv
+                    for day, file in enumerate(sorted(glob(f"{cdf_path}*.cdf"))):
+                        cdf = cdflib.CDF(file)
+                        time = cdf_epoch.to_datetime(cdf["EPOCH"])
+                        _df = pd.DataFrame({}, index=time)
+
+                        for i in ("B_RTN", "QUALITY_FLAG"):
+                            if i == "B_RTN":  # Allow for multidimensional
+                                for n, arg in zip(
+                                    (0, 1, 2), ("_R", "_T", "_N")
+                                ):  # R is radial velocity
+                                    _df[f"B{arg}"] = cdf[i][:, n]
+                            else:
+                                _df[i] = cdf[i]
+
+                        # Join the dataframes only after the first instance
+                        if day == 0:
+                            _mag_df = _df
+                        else:
+                            _mag_df = _mag_df.append(_df)
+
+                    _mag_df["Time"] = _mag_df.index
+                    return _mag_df
+
+                self.swedf = SWE_prep()
+                self.magdf = MAG_prep()
+                self.df = None
+
                 # TODO: Add function for Solar Orbiter Magnetic field
 
-            self.df.to_csv(
-                f"{BASE_PATH}Scripts/Data/Prepped_csv/solo_sept.csv",
+            # SWEAP and MAG csv save at highest cadence
+            self.swedf.to_csv(
+                f"{BASE_PATH}Data/Prepped_csv/solo_sept_plasma.csv",
+                index=False,
+            )
+
+            self.magdf.to_csv(
+                f"{BASE_PATH}Data/Prepped_csv/solo_sept_mag.csv",
                 index=False,
             )
 
@@ -245,9 +304,7 @@ class Spacecraft:
             def FLD_prep():
                 # Fields data
                 try:
-                    self.df = pd.read_csv(
-                        f"{BASE_PATH}Scripts/Data/Prepped_csv/psp_sept.csv"
-                    )
+                    self.df = pd.read_csv(f"{BASE_PATH}Data/Prepped_csv/psp_sept.csv")
 
                 except FileNotFoundError:
                     # When file not available, derive it
@@ -270,7 +327,7 @@ class Spacecraft:
 
                     self.df["Time"] = self.df.index
                     self.df.to_csv(
-                        f"{BASE_PATH}Scripts/Data/Prepped_csv/psp_sept.csv",
+                        f"{BASE_PATH}Data/Prepped_csv/psp_sept.csv",
                         index=False,
                     )
 
@@ -294,27 +351,54 @@ class Spacecraft:
                     _data[_data < 0.001] = np.nan  # Does this hold for all parameters?
                     self.df[parameter] = _data
 
-        # After loading it breaks datetime format
-        self.df.index = pd.to_datetime(self.df["Time"])
-        del self.df["Time"]
-        self.df.fillna(method="pad")
-        self.df = self.df.resample(f"{self.obj_cad}s").mean()
+        if self.df is None:
+            # When we are using the combined solo_sept_mag and solo_sept_plasma
+
+            self.swedf.index = pd.to_datetime(self.swedf["Time"])
+            del self.swedf["Time"]
+            self.swedf.fillna(method="pad")
+            self.swedf = self.swedf.resample(f"{self.obj_cad}s").mean()
+
+            self.magdf.index = pd.to_datetime(self.magdf["Time"])
+            del self.magdf["Time"]
+            self.magdf.fillna(method="pad")
+            self.magdf = self.magdf.resample(f"{self.obj_cad}s").mean()
+
+            df = pd.concat([self.swedf, self.magdf], join="outer", axis=1).fillna(
+                np.nan
+            )
+
+            self.df = df
+
+        else:
+            # After loading it breaks datetime format -> We save as the csv for ease of use
+            self.df.index = pd.to_datetime(self.df["Time"])
+            del self.df["Time"]
+
+            self.df.fillna(method="pad")
+            self.df = self.df.resample(f"{self.obj_cad}s").mean()
+            # self.df.interpolate(inplace=True)
 
     @staticmethod
-    def trace_field_lines(lon, lat, r, v_sw, rf=0.0046547454 * u.AU):
+    def traceFlines(lon, lat, r, vSW, rf=0.0046547454 * u.AU, accelerated=False):
         """
         For each of the positions in self, track to solar surface and return field lines
         lon, lat in deg
         r in AU
         """
 
-        vsw = (v_sw["velocity"] * u.km / u.s).to(u.AU / u.s).value
-        time_spc = v_sw.name.to_pydatetime()
+        # Velocity and Time of observation
+        vsw = (vSW["velocity"] * u.km / u.s).to(u.AU / u.s).value
+        time_spc = vSW.name.to_pydatetime()
+
+        # Calculate dt s/c -> rfinal
         dt = (r - rf).value / vsw
+        dt = (4 / 3) * dt if accelerated else dt
         time_sun = time_spc - timedelta(seconds=dt)
         rotation_deg = (SOLROTRATE * r.value) / vsw
 
         # Steps in longitude. Main ballistic backmapping
+        # First coordinate = SolO?
         lon_ss = lon + rotation_deg * u.deg
         lon_x = np.arange(lon.value, lon_ss.value, step=2)
 
@@ -326,13 +410,18 @@ class Spacecraft:
         rad_x = np.arange(rf.value, r.value, step=step_rad)[::-1]
 
         # Steps in the time
+        # TODO : Check if possible to halve step to 30 minutes
         step_time = (time_spc - time_sun).total_seconds() / len(lon_x)
         fline_times = [
             (time_spc - timedelta(seconds=step_time * timestep))
             for timestep in range(len(lon_x))
         ]
 
+        rad_x = rad_x[:-1] if (len(rad_x) > len(lon_x)) else rad_x
+
         # Field line. Longitude, Latitude, Radius, Timestamp
+        assert len(lon_x) == len(rad_x), "Different lon, lat, r size."
+
         fline = (
             lon_x * u.deg,
             lat_x * u.deg,
@@ -342,43 +431,98 @@ class Spacecraft:
 
         return fline
 
-    def plot_df_values(self):
-        # Plot all the available values
+    def plot_solo_psp_df(self, other, zone1=None, zone2=None):
+        """
+        Plot the dataframe in the style of the previous paper
+        Other must be PSP
+        zone 1 and zone 2 will be highlighted in SolO and PSP respectively
+        """
+        assert "solo" in self.name.lower(), "Please ensure SolO is object with f call"
+        import matplotlib
+        from astropy import constants as c
 
-        for parameter in list(self.df):
-            if parameter not in ["validity"]:
-                if "velocity" in parameter:
-                    units_dic[parameter] = units_dic["velocity"]
+        plt.style.use("seaborn-paper")
 
-                if "N" in parameter:
-                    units_dic[parameter] = units_dic["density"]
+        matplotlib.rcParams["axes.titlesize"] = 18
+        matplotlib.rcParams["axes.labelsize"] = 18
+        matplotlib.rcParams["figure.titlesize"] = 20
+        matplotlib.rcParams["xtick.labelsize"] = 16
+        matplotlib.rcParams["ytick.labelsize"] = 16
 
-                if "B" in parameter:
-                    units_dic[parameter] = units_dic["btotal"]
+        # Figure
+        # Width and marker size
+        fig, axs = plt.subplots(
+            5, 1, figsize=(16, 2 * 5), sharex=True, constrained_layout=True
+        )
 
-                data = self.df[parameter]
-                # data[self.df["validity"] < 3] = np.nan
+        # TODO: Differentiate between SolO and PSP
 
-                plt.figure(figsize=(16, 12))
-                plt.scatter(self.df.index, data, color="black", linestyle="--")
+        Bt = np.sqrt(self.df["B_R"] ** 2 + self.df["B_T"] ** 2 + self.df["B_N"] ** 2)
+        Vx = self.df["velocity"]
+        Np = self.df["N"]
+        T = self.df["T"]
+        Mf = c.m_p.value * Np * 10 ** 15 * (-Vx)
 
-                # Labels and titles
-                plt.title(f"{self.name} {parameter.capitalize()}")
-                plt.xlabel("Date")
-                plt.ylabel(units_dic[parameter])
+        # Magnetic field components
+        ax0 = axs[0]
+        ax0.plot(norm(Bt), "k-", label="Bt", alpha=1, linewidth=0, marker="o")
+        # ax0.set_ylabel(r"$\vec{B}_{T}$ (nT)")
+        ax0.set_ylabel(r"Normalised BTotal")
 
-                # X-axis reformatting
-                # ax = plt.gca()
-                # ax.xaxis.set_major_formatter(mdates.DateFormatter('%y-%m-%d'))
-                # ax.xaxis.set_major_locator(mdates.HourLocator(interval=12))
+        if other is not None:
+            Bt_PSP = np.sqrt(
+                other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
+            )
+            ax0.plot(
+                norm(Bt_PSP),
+                "r-",
+                label="Bt_PSP",
+                alpha=1,
+            )
 
-                if self.show:
-                    plt.show()
+        # Radial velocity
+        ax1 = axs[1]
+        ax1.plot(Vx, color="black", label="Vp [GSE]", linewidth=0, marker="o")
+        ax1.set_ylabel(r"$-{V_x}(km s^{-1})$")
 
-                else:
-                    plt.savefig(
-                        f"{BASE_PATH}Figures/{self.name}_{parameter.capitalize()}.png"
+        # Temperature
+        ax2 = axs[2]
+        ax2.plot(T, color="black", label=r"$T_p$", linewidth=0, marker="o")
+        # ax2.legend([f"T ({(T.index[1]-T.index[0]).total_seconds()}s cadence)"])
+        ax2.set_ylabel(r"$T_p (K)$")
+
+        # Proton Density
+        ax4 = axs[3]
+        ax4.plot(Np, color="black", label="N_p", linewidth=0, marker="o")
+        # ax4.legend([f"Np ({(Np.index[1]-Np.index[0]).total_seconds()}s cadence)"])
+        ax4.set_ylabel(r"$n_p$ (# $cm^{-3}$)")
+
+        # Pressure
+        ax5 = axs[4]
+        ax5.plot(Mf, label="Mass Flux", color="black", linewidth=0, marker="o")
+        # ax5.legend([f"Mf ({(Mf.index[1]-Mf.index[0]).total_seconds()}s cadence)"])
+        ax5.set_ylabel(r"$- m_{p}n_{p} V_x (kg km s^{-1})$")
+
+        # # Plot the relevant columns
+        if zone1 and zone2:
+            for ax in axs:
+                # ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+                for zone, colour in zip((zone1, zone2), ("black", "red")):
+                    ax.axvspan(
+                        zone["start_time"], zone["end_time"], color=colour, alpha=0.3
                     )
+
+        # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
+        # print(f"Saving to {self}")
+        # plt.savefig(f"{save_folder}B_Br_V_sb_matrix_highlighted.pdf")
+        if self.show:
+            plt.show()
+        else:
+            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            makedirs(plotPath, exist_ok=True)
+            plt.savefig(f"{plotPath}summaryPlot.png")
+
+        plt.close()
 
     def extract_orbit_data(self, from_data=False):
         import heliopy.data.spice as spicedata
@@ -425,41 +569,7 @@ class Spacecraft:
             frame=frames.HeliographicCarrington
         )
 
-    def plot_orbit(self):
-        """
-        Plot the spacecraft orbit using the initialised data
-        """
-        sp_traj = self.sp_traj
-        times_float = (sp_traj.times - sp_traj.times[0]).value
-        plot_times = sp_traj.times.to_datetime()
-
-        # Generate a set of timestamps to color the orbits by
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
-        kwargs = {"s": 3, "c": times_float}
-        ax.scatter(sp_traj.x, sp_traj.y, sp_traj.z, **kwargs)
-        ax.set_xlim(-1, 1)
-        ax.set_ylim(-1, 1)
-        ax.set_zlim(-1, 1)
-
-        ###############################################################################
-        # Plot radial distance and elevation as a function of time
-        elevation = np.rad2deg(np.arcsin(sp_traj.z / sp_traj.r))
-
-        fig, axs = plt.subplots(3, 1, sharex=True)
-        axs[0].plot(plot_times, sp_traj.r)
-        axs[0].set_ylim(0, 1.1)
-        axs[0].set_ylabel("r (AU)")
-
-        axs[1].plot(plot_times, elevation)
-        axs[1].set_ylabel("Elevation (deg)")
-
-        axs[2].plot(plot_times, sp_traj.speed)
-        axs[2].set_ylabel("Speed (km/s)")
-
-        plt.show()
-
-    def plot_spherical_coords(self, other):
+    def plot_spherical_coords(self, other, accelerated=False):
         """
         Plots the longitude and latitude of a given spacecraft object
         """
@@ -474,16 +584,23 @@ class Spacecraft:
         lat2 = other.sp_coords_carrington.lat
         rad2 = other.sp_coords_carrington.radius
 
-        X1, Y1, Z1 = spherical_to_cartesian(rad1, lat1, lon1)
-        X2, Y2, Z2 = spherical_to_cartesian(rad2, lat2, lon2)
+        # X1, Y1, Z1 = spherical_to_cartesian(rad1, lat1, lon1)
+        # X2, Y2, Z2 = spherical_to_cartesian(rad2, lat2, lon2)
 
         fline_set = []
 
         for i, t in enumerate(self.sp_coords_carrington.obstime):
             vsw = fcl(self.df, t.datetime)
-            lons, lats, rs, times = self.trace_field_lines(
-                lon1[i], lat1[i], rad1[i], v_sw=vsw
+            lons, lats, rs, times = self.traceFlines(
+                lon1[i],
+                lat1[i],
+                rad1[i],
+                vSW=vsw,
+                accelerated=accelerated,
             )
+
+            if i == 6:
+                pass
             X, Y, Z = spherical_to_cartesian(r=rs, lat=lats, lon=lons)
             # Transform fiels line to cartesian and save timestamps.
             fline_set.append(
@@ -506,7 +623,7 @@ class Spacecraft:
             index=other.sp_traj.times,
         )
 
-        def plot_over_time(scTrajDF, fline_set, marginHours=3):
+        def plot_over_time(scTrajDF, fline_set, marginHours=0.1):
             """
             Plots a time dependent 3d plot
             :param scTrajDF: Sc trajectory dataframe (Index = Datetime, X, Y, Z Cartesian)
@@ -533,7 +650,7 @@ class Spacecraft:
                 ax.scatter(0, 0, 0, label="Sun", c="orange", s=100)
 
                 # Plot the two spacecraft (OVER TIME)
-                ax.scatter(X1, Y1, Z1, label=self.name, s=5, c="blue")
+                # ax.scatter(X1, Y1, Z1, label=self.name, s=5, c="blue")
                 # ax.scatter(X2, Y2, Z2, label=other.name, s=5, c="red")
 
                 # Time for spacecraft coords
@@ -545,39 +662,39 @@ class Spacecraft:
                 print(scCoord[1])
                 Xsc, Ysc, Zsc = scCoord[1]
 
-                ax.scatter(Xsc, Ysc, Zsc, s=7, c="green")
+                ax.scatter(Xsc, Ysc, Zsc, s=25, c="black", label="PSP")
 
                 # For each of the relevant field lines?
                 for index, flDF in enumerate(fline_set):
 
-                    # Set the relevant fied lines with some mask
-                    # TODO : Check that the start - end time can line up with some FLINES
+                    # Set the relevant fied lines with mask
                     flDF_relevant = flDF[end_time:start_time]
 
-                    # TODO: Only give colours (or alpha) when within a time window of e.g., +- 3 hours to relevant time!
-                    # Plot the field line
+                    # Plot points close in time to PSP
                     if not flDF_relevant.empty:
-                        # print(f"Got some field lines at {i}")
+                        solo_time = flDF.index[0]
+                        fl_time = flDF_relevant.index[0]
+                        solo_fl_dt = (solo_time - fl_time).total_seconds() / 3600
+
+                        # TODO: Potentially add a plot of the solar orbiter observations and highlight times which are used
+
                         ax.scatter(
                             flDF_relevant["X"],
                             flDF_relevant["Y"],
                             flDF_relevant["Z"],
-                            s=3,
+                            s=8,
                             c=c[index],
+                            label=f"Fline origin {solo_time} => {fl_time} ({solo_fl_dt:.0f}h)",
                         )
 
                 ax.set_xlim(-0.08, 0.08)
                 ax.set_ylim(-0.08, 0.08)
                 ax.set_zlim(-0.08, 0.08)
 
-                # ax.set_xlim(-1, 1)
-                # ax.set_ylim(-1, 1)
-                # ax.set_zlim(-1, 1)
-
-                # plt.legend()
+                plt.legend()
                 # ax.view_init(elev=90)
                 ax.set_title(
-                    f"PSP Timestamp:{relTime.__str__()} +/- {marginHours} hours"
+                    f"PSP Timestamp: {relTime.__str__()} +/- {marginHours} hours"
                 )
                 plt.savefig(f"{objFolder}{i:02d}.png")
                 plt.show()
@@ -616,7 +733,6 @@ def psp_e6():
         "mid_time": datetime(2020, 10, 2),
         "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
-        "show": False,
     }
 
     solo_e6_overview = {
@@ -624,55 +740,49 @@ def psp_e6():
         "mid_time": datetime(2020, 10, 3),
         "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
-        "show": True,
+        "show": False,
     }
 
     # Prepare the objects with measurements inside DF
     psp = Spacecraft(**psp_e6_overview)
     solo = Spacecraft(**solo_e6_overview)
 
+    # # In October
+    # solo_zoomed = {
+    #     "start_time": datetime(2020, 9, 29, 0, 0),
+    #     "end_time": datetime(2020, 9, 30, 12, 0),
+    # }
+
     # Solar orbiter lines up with latitude?
+    # In september
     solo_zoomed = {
-        "start_time": datetime(2020, 10, 3, 20, 0),
-        "end_time": datetime(2020, 10, 4, 0, 30),
+        "start_time": datetime(2020, 10, 2, 11, 30),
+        "end_time": datetime(2020, 10, 3, 12, 0),
     }
 
     psp_zoomed = {
         "start_time": datetime(2020, 9, 27),
-        "end_time": datetime(2020, 10, 1, 13, 7),
+        "end_time": datetime(2020, 9, 30, 13, 7),
     }
 
+    solo.plot_solo_psp_df(psp, zone1=solo_zoomed, zone2=psp_zoomed)
     solo.zoom_in(**solo_zoomed)
     psp.zoom_in(**psp_zoomed)
     # print(solo.df)
     # print(psp.df)
 
-    solo.plot_spherical_coords(psp)
+    # solo.plot_df()
+
+    # Remove all blanks
+    solo.df.fillna(method="pad")
+    psp.df.fillna(method="pad")
+    soloVars = ["B_R", "B_T", "B_N"]
+    pspVars = ["B_R", "B_T", "B_N"]
+    comparePSPtoSolo(solo, psp, soloVars, pspVars)
+    # solo.plot_spherical_coords(psp, accelerated=True)
 
 
 # %%
 psp_e6()
 
-# def find_closest_pair(flDF, scTrajDF, minRelRadius=0.1):
-#     """
-#     This function takes a set of coordinates(?) and gives them an alpha
-#     """
-#     clSun = flDF.where(
-#         np.sqrt(flDF["X"] ** 2 + flDF["Y"] ** 2) < minRelRadius
-#     ).dropna()
-#     # df.iloc(INDEX)
-
-#     # Plot the lines only if close in time to current PSP measurement
-#     # TODO: Have the information to put together the fline DF and the sc DF
-#     # dist = cdist(clSun, scTrajDF, "euclidean")
-#     # print(dist)
-#     # print(dist.min())
-
-# find_closest_pair(flDF, scTrajDF)
-
-# # Plot each of the field lines
-# start_date, end_date = scTrajDF.index[0].value, scTrajDF.index[-1].value
-
-# # First select close in Time
-# mask = (flDF.index > start_date) & (flDF.index <= end_date)
-# flDF = flDF.loc[mask]
+# %%
