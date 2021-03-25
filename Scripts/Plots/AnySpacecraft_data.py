@@ -354,6 +354,7 @@ class Spacecraft:
         if self.df is None:
             # When we are using the combined solo_sept_mag and solo_sept_plasma
 
+            # Note we use pd.to_datetime when using a CSV as datetimes are saved as str
             self.swedf.index = pd.to_datetime(self.swedf["Time"])
             del self.swedf["Time"]
             self.swedf.fillna(method="pad")
@@ -580,9 +581,10 @@ class Spacecraft:
         lat1 = self.sp_coords_carrington.lat
         rad1 = self.sp_coords_carrington.radius
 
-        lon2 = other.sp_coords_carrington.lon
-        lat2 = other.sp_coords_carrington.lat
-        rad2 = other.sp_coords_carrington.radius
+        # When using 2
+        # lon2 = other.sp_coords_carrington.lon
+        # lat2 = other.sp_coords_carrington.lat
+        # rad2 = other.sp_coords_carrington.radius
 
         # X1, Y1, Z1 = spherical_to_cartesian(rad1, lat1, lon1)
         # X2, Y2, Z2 = spherical_to_cartesian(rad2, lat2, lon2)
@@ -599,8 +601,6 @@ class Spacecraft:
                 accelerated=accelerated,
             )
 
-            if i == 6:
-                pass
             X, Y, Z = spherical_to_cartesian(r=rs, lat=lats, lon=lons)
             # Transform fiels line to cartesian and save timestamps.
             fline_set.append(

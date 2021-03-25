@@ -14,7 +14,7 @@ from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 from glob import glob
 import matplotlib
-from PyEMD import EMD, Visualisation
+from PyEMD import EMD, Visualisation  # This import works so let's just leave it
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.dates as mdates
 from datetime import timedelta
