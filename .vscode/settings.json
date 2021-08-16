@@ -3,5 +3,6 @@
     "python.linting.pylintArgs": [
       "--init-hook",
       "from sys import path; path.append('/mnt/sda5/Python/InsituEMDCorrelation/Scripts')"
-]
+],
+"editor.fontLigatures": null
 }

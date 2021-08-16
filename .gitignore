@@ -129,7 +129,7 @@ dmypy.json
 .pyre/
 
 
-# CUSTOm
+# CUSTOM
 **unsafe
 **.npy
 **.csv

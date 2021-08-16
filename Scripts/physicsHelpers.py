@@ -50,7 +50,7 @@ def resample_and_rename(df, srate: str, name):
 
 # @trace
 def backmap_calculation(
-    vel_x: float, r0: int = None, rf: float = None, spcf_coords=None
+    vel_x: float, r0: float = None, rf: float = None, spcf_coords=None
 ):
     """
     Perform simple time taken to get to X position
