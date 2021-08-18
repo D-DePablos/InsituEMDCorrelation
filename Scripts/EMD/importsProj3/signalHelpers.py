@@ -20,6 +20,9 @@ from copy import deepcopy
 from glob import glob
 from collections import namedtuple
 
+locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+formatter = mdates.ConciseDateFormatter(locator)
+
 Hmin = mdates.DateFormatter("%H:%M")
 # Quick fix for cross-package import
 
@@ -1501,11 +1504,8 @@ class SignalFunctions(Signal):
                 time_axis[-1] + timedelta(hours=margin_hours),
             )
             ax.xaxis.grid(True)
-
-            ax.xaxis.set_minor_locator(mdates.HourLocator(interval=2))
-            ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %H:%M"))
-            ax.xaxis.set_tick_params(rotation=45)
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
 
         else:
             # Set xticks every hour
@@ -1612,7 +1612,8 @@ class SignalFunctions(Signal):
             margin_label = timedelta(hours=1)
             # interval = int((other.t[-1] / 3600) / 10)
             bottom_interval = 6  # Bottom Plot intervals
-
+            ax2.xaxis.set_major_locator(locator)
+            ax2.xaxis.set_major_formatter(formatter)
             ax2.xaxis.set_minor_locator(mdates.HourLocator(1))
             ax2.xaxis.set_major_locator(mdates.HourLocator(interval=bottom_interval))
             ax2.xaxis.set_major_formatter(mdates.DateFormatter("%d %H:%M"))
@@ -1648,14 +1649,6 @@ class SignalFunctions(Signal):
 
         else:
             ax2.xaxis.set_tick_params(rotation=25)
-            margin_label = -10
-            interval = int((other.t[-1] / 3600) / 10)
-
-        # Set out the legend and info about pairs
-        # legend_x = time_axis[-1] + margin_label
-        # ax2.text(x=legend_x, y=0.95, s="1 pair", color=possibleColors["1"])
-        # ax2.text(x=legend_x, y=0.9, s="2 pairs", color=possibleColors["2"])
-        # ax2.text(x=legend_x, y=0.85, s="3 pairs", color=possibleColors["3"])
 
         # Divide by 2 number of ticks and add 1 as highest Corr
         corrThrLimits = []
@@ -1677,6 +1670,9 @@ class SignalFunctions(Signal):
             )
 
             axV = ax2.twiny()
+            axV.xaxis.set_major_locator(locator)
+            axV.xaxis.set_major_formatter(formatter)
+
             axV.plot(vSWAxis, np.repeat(0.99, len(vSWAxis)), alpha=0)
             axV.invert_xaxis()
             # Add a span between low and high values
@@ -1707,11 +1703,6 @@ class SignalFunctions(Signal):
             axV.set_title("Implied avg. Vsw (km/s)")
 
         ax2.grid(True)
-
-        if useRealTime:
-            ax2.set_xlabel("Date (dd HH:MM)")
-        else:
-            ax2.set_xlabel("Minutes since start")
 
         # Save, show and close
         save_name = f"{region_string}_{long_signal.name}_Summary"

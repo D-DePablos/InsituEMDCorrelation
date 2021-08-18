@@ -567,7 +567,7 @@ class Spacecraft:
             linewidth=1,
         )
         # ax0.set_ylabel(r"$\vec{B}_{T}$ (nT)")
-        ax0.set_ylabel(r"Normalised BTotal")
+        ax0.set_ylabel(r"$\hat{B}_Total$")
 
         if other is not None:
             Bt_PSP = np.sqrt(
@@ -907,6 +907,21 @@ def psp_e6():
         "end_time": datetime(2020, 9, 30, 13, 7),
         "stepMinutes": ORBIT_GAP,
     }
+
+    """
+    For showing which connection is observed by Telloni et al paper
+    solo_zoomed = {
+        "start_time": datetime(2020, 10, 2),
+        "end_time": datetime(2020, 10, 2, 2),
+        "stepMinutes": ORBIT_GAP,
+    }
+
+    psp_zoomed = {
+        "start_time": datetime(2020, 9, 27, 4),
+        "end_time": datetime(2020, 9, 27, 6),
+        "stepMinutes": ORBIT_GAP,
+    }
+    """
 
     solo.plot_solo_psp_df(psp, zone1=solo_zoomed, zone2=psp_zoomed)
     solo.zoom_in(**solo_zoomed)

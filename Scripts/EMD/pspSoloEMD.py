@@ -34,13 +34,13 @@ makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 
 # Set parameters here
 objCad = 60  # cadence in seconds for comparisons
-LONGPARAMLIST = ["V_R"]
+LONGPARAMLIST = ["B_R"]
 PERIODMINMAX = [3, 20]  # The period might be better if longer
 DELETE = False  # I believe this is not working at all as intended
 SHOWSPEED = False
 
 # Show figures as they are created
-SHOWFIG = False
+SHOWFIG = True
 
 # Add residual to non-super summary?
 ADDRESIDUAL = False
@@ -91,9 +91,8 @@ def comparePSPtoSOLO(
     LOSPEED_BMAPPING=None,
 ):
     """
-    Feed in the PSP Spacecraft and longObjectSpc object
-    Self is expected to be solar orbiter
-    Other is expected to be the lcurves
+    Feed in Objects which have a .df property that is a pandas dataframe
+    Choose some variables to correlate for short, long dataset
     """
 
     assert HISPEED_BMAPPING != None, "No High speed set"
@@ -108,21 +107,21 @@ def comparePSPtoSOLO(
     makedirs(mainDir, exist_ok=True)
 
     # Set the Self and Other dataframe to those within the Spacecraft object
-    dfRemote = shortObj.df[shortVars]
-    dfRemote.columns = [f"{shortName}_{i}" for i in shortVars]  # Rename the columns
+    dfShort = shortObj.df[shortVars]
+    dfShort.columns = [f"{shortName}_{i}" for i in shortVars]  # Rename the columns
 
-    dfInsitu = longObj.df[longVars]
-    dfInsitu.columns = [f"{longName}_{i}" for i in longVars]
+    dfLong = longObj.df[longVars]
+    dfLong.columns = [f"{longName}_{i}" for i in longVars]
 
     # Cut down the self and other dataseries
-    dfRemote = dfRemote[shortTimes[0] : shortTimes[1]]
-    dfInsitu = dfInsitu[longTimes[0] : longTimes[1]]
+    dfShort = dfShort[shortTimes[0] : shortTimes[1]]
+    dfLong = dfLong[longTimes[0] : longTimes[1]]
     cadSelf = shortCad
     cadOther = longCad
 
     compareTS(
-        dfRemote,
-        dfInsitu,
+        dfShort,
+        dfLong,
         cadSelf,
         cadOther,
         labelOther=longName,
@@ -216,108 +215,103 @@ def first_DeriveAndPlotSeparately(
     shortObjectVars=["N", "T", "V_R", "Mf", "Btotal"],
 ):
     # For each of the parameters in LONGPARAMLIST
-    for longParam in LONGPARAMLIST:
-        PARAM = longParam
 
-        """
-        PSP variables
-        V_R	V_T	V_N	N	T	swe_flag	B_R	B_T	B_N	fld_flag	Time
-        """
-        longObject = Spacecraft(
-            name="PSPpriv_e6",
-            mid_time=datetime(2020, 10, 2),
-            margin=timedelta(days=5),
-            cadence_obj=objCad,
+    """
+    PSP variables
+    V_R	V_T	V_N	N	T	swe_flag	B_R	B_T	B_N	fld_flag	Time
+    """
+    longObject = Spacecraft(
+        name="PSPpriv_e6",
+        mid_time=datetime(2020, 10, 2),
+        margin=timedelta(days=5),
+        cadence_obj=objCad,
+    )
+
+    longObject.df = longObject.df.interpolate()  # Fill gaps
+    # Velocities are sometimes modified with 4/3 factor
+    HISPEED_BMAPPING, LOSPEED_BMAPPING, MEAN = (
+        int(longObject.df["V_R"].max() / accelerated),
+        int(longObject.df["V_R"].min() / accelerated),
+        int(longObject.df["V_R"].mean() / accelerated),
+    )
+
+    # Calculate mass flux for long
+    Vx = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
+    N = (longObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
+    longObject.df["Mf"] = (N * mp * Vx).value
+
+    longObject.df["Btotal"] = np.sqrt(
+        longObject.df["B_R"] ** 2
+        + longObject.df["B_T"] ** 2
+        + longObject.df["B_N"] ** 2
+    )
+
+    """
+    Solo Vars (Short TS)
+    V_R	V_T	V_N	N	T	solo_plasma_flag	B_R	B_T	B_N	MAG_FLAG	Time
+    """
+    # Short Object (Using Spacecraft)
+    shortObject = Spacecraft(
+        name="SolOpriv_e6",
+        mid_time=datetime(2020, 10, 3),
+        margin=timedelta(days=5),
+        cadence_obj=objCad,
+    )
+    shortObject.df = shortObject.df.interpolate()  # Interpolate after forming lc object
+
+    # Calculate mass flux & Btotal short df
+    Vxshort = (shortObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
+    Nshort = (shortObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
+    shortObject.df["Mf"] = (Nshort * mp * Vxshort).value
+
+    shortObject.df["Btotal"] = np.sqrt(
+        shortObject.df["B_R"] ** 2
+        + shortObject.df["B_T"] ** 2
+        + shortObject.df["B_N"] ** 2
+    )
+    # We set a margin around original obs.
+    (
+        shortTimesList,
+        longTimesList,
+        caseNamesList,
+        refLocations,
+    ) = extractDiscreteExamples(
+        cases,
+        margin=MARGINHOURSLONG,
+    )
+
+    print(
+        f"""
+            Will be creating {len(shortTimesList)} windows. \n
+            Variables to be used will be short: {shortObject.name}: [{shortObjectVars}] and long: {longObject.name}: [{longObjectVars}] \n
+            """
+    )
+
+    for index, shortTimes in enumerate(shortTimesList):
+
+        dirName = f"""{caseNamesList[index]}"""
+
+        comparePSPtoSOLO(
+            shortObj=shortObject,
+            longObj=longObject,
+            shortVars=shortObjectVars,
+            longVars=longObjectVars,
+            shortTimes=shortTimes,
+            longTimes=longTimesList[index],
+            shortName="SolO",
+            longName="PSP",
+            shortCad=objCad,
+            longCad=objCad,
+            objDirExt=dirName,
+            filterPeriods=FILTERP,
+            PeriodMinMax=PERIODMINMAX,
+            delete=DELETE,
+            showFig=SHOWFIG,
+            expectedLocationList=[refLocations[index]],
+            renormalize=False,
+            HISPEED_BMAPPING=HISPEED_BMAPPING,
+            LOSPEED_BMAPPING=LOSPEED_BMAPPING,
         )
-
-        longObject.df = longObject.df.interpolate()  # Fill gaps
-        # Velocities are sometimes modified with 4/3 factor
-        HISPEED_BMAPPING, LOSPEED_BMAPPING, MEAN = (
-            int(longObject.df["V_R"].max() / accelerated),
-            int(longObject.df["V_R"].min() / accelerated),
-            int(longObject.df["V_R"].mean() / accelerated),
-        )
-
-        # Calculate mass flux for long
-        Vx = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
-        N = (longObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
-        longObject.df["Mf"] = (N * mp * Vx).value
-
-        longObject.df["Btotal"] = np.sqrt(
-            longObject.df["B_R"] ** 2
-            + longObject.df["B_T"] ** 2
-            + longObject.df["B_N"] ** 2
-        )
-
-        """
-        Solo Vars (Short TS)
-        V_R	V_T	V_N	N	T	solo_plasma_flag	B_R	B_T	B_N	MAG_FLAG	Time
-        """
-        # Short Object (Using Spacecraft)
-        shortObject = Spacecraft(
-            name="SolOpriv_e6",
-            mid_time=datetime(2020, 10, 3),
-            margin=timedelta(days=5),
-            cadence_obj=objCad,
-        )
-        shortObject.df = (
-            shortObject.df.interpolate()
-        )  # Interpolate after forming lc object
-
-        # Calculate mass flux & Btotal short df
-        Vxshort = (shortObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
-        Nshort = (shortObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
-        shortObject.df["Mf"] = (Nshort * mp * Vxshort).value
-
-        shortObject.df["Btotal"] = np.sqrt(
-            shortObject.df["B_R"] ** 2
-            + shortObject.df["B_T"] ** 2
-            + shortObject.df["B_N"] ** 2
-        )
-        # We set a margin around original obs.
-        (
-            shortTimesList,
-            longTimesList,
-            caseNamesList,
-            refLocations,
-        ) = extractDiscreteExamples(
-            cases,
-            margin=MARGINHOURSLONG,
-        )
-
-        print(
-            f"""
-                Will be creating {len(shortTimesList)} objects. \n
-                Variables to be used will be short: [{shortObjectVars}] and long: [{longObjectVars}] \n
-                Please verify this is a good number! \n
-                """
-        )
-
-        for index, shortTimes in enumerate(shortTimesList):
-
-            dirName = f"""{caseNamesList[index]}"""
-
-            comparePSPtoSOLO(
-                shortObj=shortObject,
-                longObj=longObject,
-                shortVars=shortObjectVars,
-                longVars=longObjectVars,
-                shortTimes=shortTimes,
-                longTimes=longTimesList[index],
-                shortName="SolO",
-                longName="PSP",
-                shortCad=objCad,
-                longCad=objCad,
-                objDirExt=dirName,
-                filterPeriods=FILTERP,
-                PeriodMinMax=PERIODMINMAX,
-                delete=DELETE,
-                showFig=SHOWFIG,
-                expectedLocationList=[refLocations[index]],
-                renormalize=False,
-                HISPEED_BMAPPING=HISPEED_BMAPPING,
-                LOSPEED_BMAPPING=LOSPEED_BMAPPING,
-            )
 
 
 # Combined Plot
@@ -411,8 +405,8 @@ def first_DeriveAndPlotSeparately(
 #                 print(shortTimes[0])
 #                 # Need to cut up dataframes
 #                 isTimes = longTimesList[index]
-#                 dfInsituCut = longObject.df[isTimes[0] : isTimes[1]]
-#                 dfInsituCut = dfInsituCut[longObjectVars]
+#                 dfLongCut = longObject.df[isTimes[0] : isTimes[1]]
+#                 dfLongCut = dfLongCut[longObjectVars]
 
 #                 lcDicCut = {}
 #                 for _wvl in lcDic:
@@ -423,7 +417,7 @@ def first_DeriveAndPlotSeparately(
 #                 dirExtension = f"{caseNamesList[index]}"
 #                 base_folder = f"{UNSAFE_EMD_DATA_PATH}{dirExtension}/"
 #                 new_plot_format(
-#                     dfInsitu=dfInsituCut,
+#                     dfLong=dfLongCut,
 #                     lcDic=lcDicCut,
 #                     regions=lcRegs,
 #                     base_folder=base_folder,
@@ -443,5 +437,5 @@ if __name__ == "__main__":
             longObjectVars=generalVars, shortObjectVars=generalVars
         )
 
-    else:
-        combinedPlot(superSummaryPlot=SUPER_SUMMARY_PLOT)
+    # else:
+    #     combinedPlot(superSummaryPlot=SUPER_SUMMARY_PLOT)
