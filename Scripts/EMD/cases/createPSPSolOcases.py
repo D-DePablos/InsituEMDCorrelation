@@ -5,14 +5,14 @@ Generate the cases for all possible SolO - SHORT times (every hour)
 from datetime import datetime, timedelta
 import pickle
 
-MARGINHOURSLONG = 25
+MARGINHOURSLONG = 100
 
 # According to Telleni et al., 2020 Sept 27 03:15-04:45 is best
 # For SolO we have Oct 1st 21:34 -> 23:04 UT
 
 # The approach cross-correlates 1.5 hour periods of Btotal and checks origin region
-startLONG = datetime(2020, 9, 26, 12)
-endLONG = datetime(2020, 9, 28)
+startLONG = datetime(2020, 9, 24, 12)
+endLONG = datetime(2020, 10, 5)
 
 midLONG = startLONG + timedelta(seconds=(endLONG - startLONG).total_seconds() / 2)
 
@@ -38,7 +38,7 @@ def main():
                 "shortTime": tSHORT,  # Equivalent to AIA time
                 "matchTime": tLONG,  # Time centered for match
                 "shortDurn": 1,
-                "caseName": f"SHORT_{tSHORT.day}_T{tSHORT.hour:02d}",
+                "caseName": f"SolO_{tSHORT.day}_T{tSHORT.hour:02d}",
                 "MARGINHOURSLONG": MARGINHOURSLONG,
             }
         )
@@ -49,6 +49,7 @@ def main():
         "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases.pickle",
         "wb",
     ) as f:
+        print("Saving cases")
         pickle.dump(cases, f)
 
 

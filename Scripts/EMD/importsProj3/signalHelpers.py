@@ -29,18 +29,12 @@ Hmin = mdates.DateFormatter("%H:%M")
 emd = EMD()
 vis = Visualisation()
 
-WVLColours = {
-    "94": "green",
-    "171": "orange",
-    "193": "brown",
-    "211": "blue",
-    "HMI": "blue",
-    "ch_open_flux": "blue",
-    "ch_bpoint_flux": "orange",
+ColumnColours = {
+    "Btotal": "red",
 }
-alphaWVL = {"94": 0.9, "171": 0.9, "193": 0.7, "211": 0.5, "HMI": 0.9}
+alphaWVL = {"94": 0.9, "171": 0.9, "193": 0.7, "211": 0.5, "HMI": 0.9, "Btotal": 0.9}
 # corrThrPlotList = np.arange(0.70, 1, 0.05)
-corrThrPlotList = np.arange(0.85, 0.901, 0.05)
+corrThrPlotList = np.arange(0.75, 0.901, 0.05)
 # corrThrPlotList = [0.65]
 
 titleDic = {
@@ -53,6 +47,7 @@ titleDic = {
     "PSP_Np": "#p",
     "PSP_Mf": "Mass Flux",
     "PSP_Br": "Br",
+    "PSP_Btotal": "Bt",
 }
 
 # Set general font size
@@ -71,6 +66,7 @@ axDic = {
     "23": [2, 2],
     "open": [0],
     "bpoint": [0],
+    "BASE": [0],
 }
 
 # font = {"family": "DejaVu Sans", "weight": "normal", "size": 25}
@@ -97,7 +93,7 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
     def _find_corr_mat(
         region="chole",
         lcDic=lcDic,
-        wvl=193,
+        shortVar=193,
         insituDF=None,
         _base_folder="/home/diegodp/Documents/PhD/Paper_3/insituObject_SDO_EUI/unsafe/ISSI/SB_6789/",
         windDisp="60s",
@@ -107,7 +103,7 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
 
         Args:
             region (str): Which remote sensing region to explore
-            wvl (int): Which wavelength is relevant
+            shortVar (int): Which wavelength is relevant
             insituParams (list): In situ parameters to find correlation matrices for
         """
         resultingMatrices = {}
@@ -116,12 +112,12 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
         for isparam in insituDF.columns:
             # How do we get in situ data? From above function!
             if region != "":
-                _subfolder = f"{_base_folder}*{wvl}_{region}*/*{isparam}/{windDisp}/{period[0]} - {period[1]}/"
+                _subfolder = f"{_base_folder}*{shortVar}_{region}*/*{isparam}/{windDisp}/{period[0]} - {period[1]}/"
             else:
-                _subfolder = f"{_base_folder}*{wvl}*/*{isparam}/{windDisp}/{period[0]} - {period[1]}/"
+                _subfolder = f"{_base_folder}*{shortVar}*/*{isparam}/{windDisp}/{period[0]} - {period[1]}/"
             foundMatrix = glob(f"{_subfolder}IMF/Corr_matrix_all.npy")
             short_D = glob(f"{_subfolder}IMF/short*.npy")
-            short_T = lcDic[wvl].index
+            short_T = lcDic[shortVar].index
             # TODO: Fix how the folder is gount - problem with underscore or something!
             resultingMatrices[f"{isparam}"] = matrixData(
                 insituDF[f"{isparam}"],
@@ -134,10 +130,10 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
 
     expandedWvlDic = {}
     # Select the correlation matrix for each insituObject variable, given region, given lcurve
-    for wvl in lcDic:
+    for shortVar in lcDic:
         # dataContainer should have all
         dataContainer = _find_corr_mat(
-            wvl=wvl,
+            shortVar=shortVar,
             lcDic=lcDic,
             insituDF=isDf,
             _base_folder=base_folder,
@@ -147,11 +143,13 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
         )
 
         # namedtuple("data", "isData corrMatrix shortData shortTime")
-        expandedWvlDic[f"{wvl}"] = dataContainer
+        expandedWvlDic[f"{shortVar}"] = dataContainer
     return expandedWvlDic
 
 
-def transformTimeAxistoVelocity(timeAxis, originTime, SPCKernelName=None):
+def transformTimeAxistoVelocity(
+    timeAxis, originTime, SPCKernelName=None, ObjBody="Sun"
+):
     """
     Gives a corresponding velocity axis for a time axis and originTime
 
@@ -181,9 +179,23 @@ def transformTimeAxistoVelocity(timeAxis, originTime, SPCKernelName=None):
     times = list(timeAxis)
     sp_traj.generate_positions(times, "Sun", "IAU_SUN")  # Is in Km
     R = sp_traj.coords.radius
+
     # Calculate dt Necessary for each of the positions. Only uses radius at the time, compares to AIA.
     dtAxis = [(t - originTime).total_seconds() for t in timeAxis]
-    vSwAxis = R.value / dtAxis  # In km / s
+
+    if ObjBody == "Sun":
+        vSwAxis = R.value / dtAxis  # In km / s
+
+    else:
+        trajName = "Solar Orbiter" if ObjBody == "solo" else "SPP"
+        spicedata.get_kernel(ObjBody)
+        body_traj = spice.Trajectory(trajName)
+        body_traj.generate_positions([originTime, originTime], "Sun", "IAU_SUN")
+        R_body = body_traj.coords[0].radius
+
+        # Reduce the distance required
+        R = R - R_body
+        vSwAxis = -R.value / dtAxis
 
     return vSwAxis
 
@@ -1248,6 +1260,7 @@ class SignalFunctions(Signal):
                 (len(corr_matrix[0, 0, :, 0]), len(corrThrPlotList), 2)
             )
 
+        # For each of the IMF set pairs
         for height in range(len(corr_matrix[0, 0, :, 0])):
             # Get all pearson, spearman, and valid values
             pearson = corr_matrix[:, :, height, 0]
@@ -1503,17 +1516,18 @@ class SignalFunctions(Signal):
                 time_axis[0] - timedelta(hours=margin_hours),
                 time_axis[-1] + timedelta(hours=margin_hours),
             )
-            ax.xaxis.grid(True)
-            ax.xaxis.set_major_locator(locator)
             ax.xaxis.set_major_formatter(formatter)
+            ax.xaxis.set_major_locator(locator)
 
         else:
             # Set xticks every hour
             xticks = np.arange(time_axis[0], time_axis[-1] + 1, step=180)
             plt.xticks(xticks)
 
+        ax.xaxis.grid(True)
+
         if useRealTime:
-            # Plot the hits
+            # Plot the columns which show correlation
             try:
                 # Saved only sometimes!
                 true_time_secs = corr_matrix[0, 0, :, 3]
@@ -1609,15 +1623,8 @@ class SignalFunctions(Signal):
 
         # Columns on bottom plot
         if useRealTime:
-            margin_label = timedelta(hours=1)
-            # interval = int((other.t[-1] / 3600) / 10)
-            bottom_interval = 6  # Bottom Plot intervals
             ax2.xaxis.set_major_locator(locator)
             ax2.xaxis.set_major_formatter(formatter)
-            ax2.xaxis.set_minor_locator(mdates.HourLocator(1))
-            ax2.xaxis.set_major_locator(mdates.HourLocator(interval=bottom_interval))
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter("%d %H:%M"))
-            ax2.xaxis.set_tick_params(rotation=15)
             # Set the x limits
             ax2.set_xlim(
                 time_axis[0] - timedelta(hours=margin_hours),
@@ -1933,8 +1940,8 @@ def compareTS(
 def plot_super_summary(
     allCasesList,
     longSpan,
-    wvlList,
-    insituParam,
+    shortParamList,
+    longObjectParam,
     regions,
     unsafeEMDDataPath,
     period,
@@ -1947,13 +1954,14 @@ def plot_super_summary(
     figName="",
     gridRegions=True,
     insituArrayFreq="1min",
+    otherObject="Sun",
 ):
     """Plots a "super" summary with info about all selected regions
 
     Args:
         allCasesList (List): All the cases in a list, each index has some info
         longSpan (tuple): Start and end time of all possible LONG data
-        wvlList (tuple): List of wavelengths which are to be studied
+        shortParamList (tuple): List of wavelengths which are to be studied
         regions (List): List of regions that should be plotted. Good to be square
         unsafeEMDDataPath (String (Path)): The path under which all the numpy arrays are found
         period (Tuple): [description]
@@ -1975,7 +1983,6 @@ def plot_super_summary(
     #     a.set_aspect('equal')
 
     # fig.subplots_adjust(wspace=0, hspace=0)
-    # TODO: Need to make it so sometimes the nrows is different to ncols
     if gridRegions == True:
         nrowsCols = int(np.sqrt(len(regions)))
         fig, axs = plt.subplots(
@@ -1992,21 +1999,31 @@ def plot_super_summary(
 
         if gridRegions == True:
             # 2-d position in grid
-            row, col = axDic[region]
-            ax = axs[row, col]
+            if type(axs) is list:
+                row, col = axDic[region]
+                ax = axs[row, col]
+
+            else:
+                ax = axs
         else:
             ax = axs[i]
 
         # Take the starting point for AIA Times
-        aiaTimes = []
+        shortTimes, longTimes = [], []
         for case in allCasesList:
-            aiaTimes.append(case.rsStend_t[0])
+            shortTimes.append(case.rsStend_t[0])
+
+            # Select mid-time for PSP
+            longTimes.append(
+                case.isStend_t[1] - (case.isStend_t[1] - case.isStend_t[0])
+            )
 
         list_times_same_speed = []
         list_times_vavg = []
         list_times_same_speed_LOW = []
 
-        for index, aiaT in enumerate(aiaTimes):
+        # TODO: Need to fix such that it makes use of PSP mid-time instead of SolO measurements!
+        for (index, TshortDF), PSPmidTime in zip(enumerate(shortTimes), longTimes):
             base_path = f"{unsafeEMDDataPath}{allCasesList[index].dirExtension}/"
 
             # Dataframe with all times, all dotSizes, for each wavelength
@@ -2017,15 +2034,15 @@ def plot_super_summary(
             # In situ times
             insituStTime = longSpan[0]
             insituEndTime = longSpan[1]
-            insituArray = pd.date_range(
+            longARRAY = pd.date_range(
                 start=insituStTime, end=insituEndTime, freq=insituArrayFreq
             )
 
-            # print(f"{insituArray[0]}  \n   TO     \n    {insituArray[-1]}")
-            for _wvl in wvlList:
-                wvlPath = f"{base_path}{_wvl}_{region}/"
+            # print(f"{longARRAY[0]}  \n   TO     \n    {longARRAY[-1]}")
+            for _shortVar in shortParamList:
+                wvlPath = f"{base_path}{region}_{_shortVar}/"
                 corr_matrix = np.load(
-                    f"{wvlPath}{insituParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
+                    f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
                 )
 
                 # List of how big dots should be in comparison.
@@ -2072,39 +2089,40 @@ def plot_super_summary(
 
                     dotSizeList.append(dotSize)
 
-                dfDots[f"{_wvl}"] = dotSizeList
+                dfDots[f"{_shortVar}"] = dotSizeList
                 firstWVL = False
 
             dfDots.index = midpointTimes
 
             # Plot inside each of the squares
             ax.plot(
-                insituArray,
-                np.repeat(aiaT, len(insituArray)),
+                longARRAY,
+                np.repeat(TshortDF, len(longARRAY)),
                 linewidth=1.2,
                 color="black",
                 alpha=0.5,
             )
 
             Vaxis = transformTimeAxistoVelocity(
-                insituArray,
-                originTime=aiaT,
+                longARRAY,
+                originTime=TshortDF,
                 SPCKernelName=SPCKernelName,
+                ObjBody=otherObject,
             )
 
             # Highest speeds
             closest_index = (np.abs(Vaxis - speedSuper)).argmin()
-            closest_time = insituArray[closest_index]
+            closest_time = longARRAY[closest_index]
             list_times_same_speed.append(closest_time)
 
             # Lower speeds
             closest_index_LOW = (np.abs(Vaxis - speedSuperLow)).argmin()
-            closest_time_LOW = insituArray[closest_index_LOW]
+            closest_time_LOW = longARRAY[closest_index_LOW]
             list_times_same_speed_LOW.append(closest_time_LOW)
 
             # Average, shown in red
             closest_index_avg = (np.abs(Vaxis - speedAVG)).argmin()
-            closest_time_avg = insituArray[closest_index_avg]
+            closest_time_avg = longARRAY[closest_index_avg]
             list_times_vavg.append(closest_time_avg)
 
             locator = mdates.HourLocator([0, 12])
@@ -2116,39 +2134,40 @@ def plot_super_summary(
             shortformatter = mdates.ConciseDateFormatter(locator)
             ax.yaxis.set_major_locator(shortlocator)
             ax.yaxis.set_major_formatter(shortformatter)
-            for _wvl in dfDots.columns:
+            for _shortVar in dfDots.columns:
                 alphaList = [
-                    alphaWVL[_wvl] if x > 0 else 0 for x in dfDots[_wvl].values
+                    alphaWVL[_shortVar] if x > 0 else 0
+                    for x in dfDots[_shortVar].values
                 ]
-                _msize = 100 * (dfDots[_wvl].values) ** 2
+                _msize = 100 * (dfDots[_shortVar].values) ** 2
                 if len(corrThrPlotList) == 1:
                     _msize = 100
 
                 ax.scatter(
                     x=dfDots.index,
-                    y=np.repeat(aiaT, len(dfDots.index)),
+                    y=np.repeat(TshortDF, len(dfDots.index)),
                     s=_msize,
                     alpha=alphaList,
-                    c=WVLColours[f"{_wvl}"],
+                    c=ColumnColours[f"{_shortVar}"],
                 )
 
         # Plot diagonal lines which highlight minimum and maximum V
         ax.plot(
             list_times_same_speed,
-            aiaTimes,
+            shortTimes,
             color="orange",
             alpha=0.6,
         )
 
         ax.plot(
             list_times_same_speed_LOW,
-            aiaTimes,
+            shortTimes,
             color="orange",
             alpha=0.6,
         )
 
         ax.fill_betweenx(
-            aiaTimes,
+            shortTimes,
             list_times_same_speed,
             list_times_same_speed_LOW,
             color="orange",
@@ -2158,7 +2177,7 @@ def plot_super_summary(
         # Show average speed (not necessarily centre)
         ax.plot(
             list_times_vavg,
-            aiaTimes,
+            shortTimes,
             color="red",
             alpha=0.8,
             linewidth=2,
@@ -2171,7 +2190,7 @@ def plot_super_summary(
         # Should be 0 0
         _legendElement = Line2D(
             [list_times_same_speed_LOW[0]],
-            [aiaTimes[0]],
+            [shortTimes[0]],
             marker="o",
             color="w",
             label=f"{corrThr:.02f}",
@@ -2183,23 +2202,23 @@ def plot_super_summary(
 
     fig.legend(handles=legend_elements)
     fig.suptitle(f" Expected velocities {speedSuper} - {speedSuperLow} km/s in yellow")
-    fig.supxlabel(f"Time at SolO ({titleDic[insituParam]})")
-    fig.supylabel("Time at Source Surface = 2.5 Rsun")
+    fig.supxlabel(f"Time at PSP (0.15AU) ({titleDic[longObjectParam]})")
+    fig.supylabel("Time at SolO (0.6AU)")
 
     # If the correlationThrList is one number, save with info
     if len(corrThrPlotList) == 1:
         plt.savefig(
-            f"{unsafeEMDDataPath}{corrThrPlotList[0]:.02f}{figName}_{insituParam}_Summary.png"
+            f"{unsafeEMDDataPath}{corrThrPlotList[0]:.02f}{figName}_{longObjectParam}_Summary.png"
         )
     else:
-        plt.savefig(f"{unsafeEMDDataPath}{figName}_{insituParam}_Summary.png")
+        plt.savefig(f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png")
 
     if showFig:
         plt.show()
 
     plt.close()
 
-    print(f"Saved {insituParam}")
+    print(f"Saved {longObjectParam}")
 
 
 def new_plot_format(
@@ -2306,31 +2325,36 @@ def new_plot_format(
         r = regionDic[f"{region}"]
 
         # Extract the WVL and IS params
-        wvlList = list(r.keys())
-        n_wvl = len(wvlList)
-        insituList = list(r[f"{wvlList[0]}"].keys())
+        shortParamList = list(r.keys())
+        _nshortVar = len(shortParamList)
+        insituList = list(r[f"{shortParamList[0]}"].keys())
         n_insitu = len(insituList)
 
-        nplots = n_wvl if n_wvl >= n_insitu else n_insitu
-        RSDuration = lcDic[wvlList[0]].index[-1] - lcDic[wvlList[0]].index[0]
+        nplots = _nshortVar if _nshortVar >= n_insitu else n_insitu
+        RSDuration = (
+            lcDic[shortParamList[0]].index[-1] - lcDic[shortParamList[0]].index[0]
+        )
 
         # Create one figure per region, per aiaTime
         fig, axs = plt.subplots(
             nrows=nplots,
             ncols=2,
-            figsize=(16, 10),
             sharex="col",
-            gridspec_kw={"width_ratios": [4, 1]},
+            figsize=(16, 8),
         )
         fig.suptitle(
-            f'Region {region} -> AIA: {lcDic[wvlList[0]].index[0].strftime(format="%Y-%m-%d %H:%M")}',
+            f'SolO: {lcDic[shortParamList[0]].index[0].strftime(format="%Y-%m-%d %H:%M")}',
             size=25,
         )
 
         # Delete all axis. If used they are shown
-        for ax in axs:
-            ax[0].set_axis_off()
-            ax[1].set_axis_off()
+        if len(axs) >= 4:
+            for ax in axs:
+                ax[0].set_axis_off()
+                ax[1].set_axis_off()
+        else:
+            for ax in axs:
+                ax.set_axis_off()
 
         i, j = 0, 0
         WVLValidity = {}
@@ -2338,8 +2362,8 @@ def new_plot_format(
         # In situ plots
         for i, isVar in enumerate(insituList):
             # Open up the isInfo from e.g., first WVL
-            isTuple = r[f"{wvlList[0]}"][f"{isVar}"]
-            axIS = axs[i, 0]
+            isTuple = r[f"{shortParamList[0]}"][f"{isVar}"]
+            axIS = axs[i, 0] if len(axs) >= 4 else axs[0]
             axIS.set_axis_on()
             fig.add_subplot(axIS)
             plt.plot(isTuple.isData, color="black")
@@ -2368,18 +2392,18 @@ def new_plot_format(
                     color="orange",
                 )
             # Plot bars within In situ chart and get IMF validity per WVL
-            for wvl in wvlList:
-                corrMatrix = r[f"{wvl}"][f"{isVar}"].corrMatrix
+            for shortVar in shortParamList:
+                corrMatrix = r[f"{shortVar}"][f"{isVar}"].corrMatrix
                 validIMFsMatrix = doBarplot(
                     axIS,
                     ISTime=isTuple.isData.index,
                     RSDuration=RSDuration,
                     corr_matrix=corrMatrix,
-                    barColour=WVLColours[f"{wvl}"],
+                    barColour=ColumnColours[f"{shortVar}"],
                 )
 
                 if i == n_insitu - 1:
-                    WVLValidity[f"{wvl}"] = validIMFsMatrix[:, 0]
+                    WVLValidity[f"{shortVar}"] = validIMFsMatrix[:, 0]
 
             if i == n_insitu - 1:
 
@@ -2389,11 +2413,11 @@ def new_plot_format(
                 axIS.xaxis.set_major_formatter(formatter)
 
         # Plot all lightcurves
-        wvlDataLabel = "Det. Lcurve"
-        for j, wvl in enumerate(wvlList):
-            wvlTime = r[f"{wvl}"][f"{insituList[0]}"].shortTime
-            wvlEMD = r[f"{wvl}"][f"{insituList[0]}"].shortData
-            axRE = axs[(nplots - n_wvl) + j, 1]
+        wvlDataLabel = "Det. "
+        for j, shortVar in enumerate(shortParamList):
+            wvlTime = r[f"{shortVar}"][f"{insituList[0]}"].shortTime
+            wvlEMD = r[f"{shortVar}"][f"{insituList[0]}"].shortData
+            axRE = axs[(nplots - _nshortVar) + j, 1] if len(axs) >= 4 else axs[1]
             axRE.set_axis_on()
             axRE.yaxis.set_visible(True)
             axRE.yaxis.tick_right()
@@ -2410,29 +2434,31 @@ def new_plot_format(
                     alpha=0.8,
                     label="Residual",
                 )
-                wvlDataLabel = "Lcurve"
+                wvlDataLabel = ""
 
             # Plot original data
             plt.plot(
                 wvlTime,
                 wvlEMD[0],
-                color=WVLColours[f"{wvl}"],
+                color=ColumnColours[f"{shortVar}"],
                 alpha=0.7,
             )
 
             plt.title(
-                wvlDataLabel + f" {wvl} Ang.", color=WVLColours[f"{wvl}"], fontsize=20
+                wvlDataLabel + f" {shortVar}",
+                color=ColumnColours[f"{shortVar}"],
+                fontsize=20,
             )
             if addEMDLcurves:
                 for k, wvlemd in enumerate(wvlEMD[1:-1]):
-                    if int(WVLValidity[f"{wvl}"][k]) == 1:
+                    if int(WVLValidity[f"{shortVar}"][k]) == 1:
                         plt.plot(
                             wvlTime,
                             wvlemd,
                             alpha=0.9,
                         )
 
-            if j == n_wvl - 1:
+            if j == _nshortVar - 1:
                 axRE.xaxis.set_major_formatter(Hmin)
                 axRE.xaxis.set_minor_locator(mdates.MinuteLocator(interval=15))
                 axRE.xaxis.set_major_locator(mdates.HourLocator(interval=1))

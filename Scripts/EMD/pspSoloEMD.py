@@ -36,8 +36,11 @@ makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 objCad = 60  # cadence in seconds for comparisons
 LONGPARAMLIST = ["B_R"]
 PERIODMINMAX = [3, 20]  # The period might be better if longer
+
+shortRegs = [""]
+
 DELETE = False  # I believe this is not working at all as intended
-SHOWSPEED = False
+SHOWSPEED = True
 
 # Show figures as they are created
 SHOWFIG = True
@@ -45,20 +48,22 @@ SHOWFIG = True
 # Add residual to non-super summary?
 ADDRESIDUAL = False
 
+# TODO: Need to change which PSP measurements are used in correlation
+
 # Filter by periodicity
 FILTERP = True
 
 # Plot all in-situ variables?
 PLOT_ALL_TOGETHER = False
 
-# Plot summary?
-SUPER_SUMMARY_PLOT = False
+# Plot summary? should be done after plotting together
+SUPER_SUMMARY_PLOT = True
 accelerated = (
     1  # Whether to accelerate speed (relevant for backmapping, coloured columns)
 )
 
 with open(
-    f"/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases.pickle",
+    "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases.pickle",
     "rb",
 ) as f:
     import pickle
@@ -315,118 +320,157 @@ def first_DeriveAndPlotSeparately(
 
 
 # Combined Plot
-# def combinedPlot(superSummaryPlot=False):
-#     lcDic = {}
-#     for _wvl in WVLLIST:
-#         lcDic[f"{_wvl}"] = LcurveManager(objCad=objCad, wavelength=_wvl)
-#         lcDic[f"{_wvl}"].df = lcDic[f"{_wvl}"].df.interpolate()
-#         try:
-#             del lcDic[f"{_wvl}"].df["Unnamed: 0"]
-#         except KeyError:
-#             pass
+def combinedPlot(
+    shortParamList=[], speedSet=None, superSummaryPlot=False, longObjectZOOM=False
+):
+    """
+    speedSet: (MAX, MIN, AVG)
+    longObjectZOOM: {"start_time": datetime, "end_time": datetime, "stepMinutes": Time step for zoomed version}
+    """
+    # The shortDFDic collects
+    shortDFDic = {}
+    for _shortParam in shortParamList:
+        shortDFDic[f"{_shortParam}"] = Spacecraft(
+            name="SolOpriv_e6",
+            mid_time=datetime(2020, 10, 3),
+            margin=timedelta(days=5),
+            cadence_obj=objCad,
+        )
+        shortDFDic[f"{_shortParam}"].df = shortDFDic[f"{_shortParam}"].df.interpolate()
+        try:
+            del shortDFDic[f"{_shortParam}"].df["Unnamed: 0"]
+        except KeyError:
+            pass
 
-#     longObject = Spacecraft(
-#         name="PSPpriv_e6",
-#         mid_time=datetime(2020, 10, 2),
-#         margin=timedelta(days=5),
-#         cadence_obj=objCad,
-#     )
-#     longObject.df = longObject.df.interpolate()  # Fill gaps
-#     # Velocities are modified with 4/3 factor. Gives slightly better idea
-#     HISPEED_BMAPPING, LOSPEED_BMAPPING, soloAVG = (
-#         int(longObject.df["V_R"].max() / accelerated),
-#         int(longObject.df["V_R"].min() / accelerated),
-#         int(longObject.df["V_R"].mean() / accelerated),
-#     )
+    # Long Object will be PSP measurements as more continuous
+    longObject = Spacecraft(
+        name="PSPpriv_e6",
+        mid_time=datetime(2020, 10, 2),
+        margin=timedelta(days=5),
+        cadence_obj=objCad,
+    )
 
-#     # Calculate mass flux
-#     Vx = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
-#     mp = const.m_p
-#     N = (longObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
-#     longObject.df["Mf"] = (N * mp * Vx).value
+    if longObjectZOOM != False:
+        longObject.zoom_in(**longObjectZOOM)
 
-#     # Variables in situ
-#     longObjectVars = ["V_R", "Mf", "N", "T"]
-#     longObject.df = longObject.df[longObjectVars]
+    longObject.df = longObject.df.interpolate()  # Fill gaps
+    # Velocities are modified with 4/3 factor. Gives slightly better idea
+    HISPEED_BMAPPING, LOSPEED_BMAPPING, soloAVG = (
+        (
+            int(longObject.df["V_R"].max() / accelerated),
+            int(longObject.df["V_R"].min() / accelerated),
+            int(longObject.df["V_R"].mean() / accelerated),
+        )
+        if speedSet == (None, None, None)
+        else speedSet
+    )
 
-#     figName = "accelerated" if accelerated == 4 / 3 else "constant"
+    # Calculate mass flux and Btotal
+    Vx = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
+    mp = const.m_p
+    N = (longObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
+    longObject.df["Mf"] = (N * mp * Vx).value
 
-#     # We set a margin around original obs.
-#     shortTimesList, longTimesList, caseNamesList, refLocations = extractDiscreteExamples(
-#         cases,
-#         margin=MARGINHOURSLONG,
-#     )
+    longObject.df["Btotal"] = np.sqrt(
+        longObject.df["B_R"] ** 2
+        + longObject.df["B_T"] ** 2
+        + longObject.df["B_N"] ** 2
+    )
 
-#     # When necessary to make summary of all summaries
-#     if superSummaryPlot:
+    # Variables for PSP (long)
+    longObjectVars = generalVars
+    longObject.df = longObject.df[longObjectVars]
 
-#         # Possibly this is not great
-#         soloStendTotal = (
-#             longObject.df.index[0].to_pydatetime(),
-#             longObject.df.index[-1].to_pydatetime(),
-#         )
+    figName = "accelerated" if accelerated == 4 / 3 else "constant"
 
-#         wvlList = WVLLIST
+    # We set a margin around original obs.
+    (
+        shortTimesList,
+        longTimesList,
+        caseNamesList,
+        refLocations,
+    ) = extractDiscreteExamples(
+        cases,
+        margin=MARGINHOURSLONG,
+    )
 
-#         allCases = []
-#         Casetuple = namedtuple("Case", ["dirExtension", "isStend_t", "rsStend_t"])
-#         for index, shortTimes in enumerate(shortTimesList):
-#             _isT = longTimesList[index]
-#             dirExtension = f"{caseNamesList[index]}"
-#             allCases.append(
-#                 Casetuple(dirExtension, (_isT[0], _isT[1]), (shortTimes[0], shortTimes[1]))
-#             )
+    # When necessary to make summary of all summaries
+    if superSummaryPlot:
 
-#         # Figure out whether to show yellow bar - DONE
+        # Possibly this is not great
+        soloStendTotal = (
+            longObject.df.index[0].to_pydatetime(),
+            longObject.df.index[-1].to_pydatetime(),
+        )
 
-#         longObject.df.columns = ["SolO_" + param for param in longObject.df.columns]
+        shortParamList = shortParamList
 
-#         for insituParam in longObject.df.columns:
-#             plot_super_summary(
-#                 allCasesList=allCases,
-#                 longSpan=soloStendTotal,
-#                 wvlList=wvlList,
-#                 insituParam=insituParam,
-#                 regions=lcRegs,
-#                 unsafeEMDDataPath=UNSAFE_EMD_DATA_PATH,
-#                 period=PERIODMINMAX,
-#                 SPCKernelName="solo",
-#                 speedSuper=HISPEED_BMAPPING,
-#                 speedSuperLow=LOSPEED_BMAPPING,
-#                 speedAVG=soloAVG,
-#                 showFig=SHOWFIG,
-#                 figName=figName,
-#             )
+        allCases = []
+        Casetuple = namedtuple("Case", ["dirExtension", "isStend_t", "rsStend_t"])
+        for index, shortTimes in enumerate(shortTimesList):
+            _isT = longTimesList[index]
+            dirExtension = f"{caseNamesList[index]}"
+            allCases.append(
+                Casetuple(
+                    dirExtension, (_isT[0], _isT[1]), (shortTimes[0], shortTimes[1])
+                )
+            )
 
-#     else:
-#         for index, shortTimes in enumerate(shortTimesList):
+        # Figure out whether to show yellow bar - DONE
 
-#             if shortTimes[0] == datetime(2020, 5, 28, 1, 30):
-#                 print(shortTimes[0])
-#                 # Need to cut up dataframes
-#                 isTimes = longTimesList[index]
-#                 dfLongCut = longObject.df[isTimes[0] : isTimes[1]]
-#                 dfLongCut = dfLongCut[longObjectVars]
+        longObject.df.columns = ["PSP_" + param for param in longObject.df.columns]
 
-#                 lcDicCut = {}
-#                 for _wvl in lcDic:
-#                     lcDicCut[f"{_wvl}"] = (
-#                         lcDic[_wvl].df[shortTimes[0] : shortTimes[1]].copy()
-#                     )
+        for longObjectParam in longObject.df.columns:
+            # raise ValueError(
+            #     "Must update plot_super_summary method before producing 'super summary'"
+            # )
+            # TODO: Fix red column
+            # TODO: Find best correlation numbers (used to be 0.85 and 0.9)
 
-#                 dirExtension = f"{caseNamesList[index]}"
-#                 base_folder = f"{UNSAFE_EMD_DATA_PATH}{dirExtension}/"
-#                 new_plot_format(
-#                     dfLong=dfLongCut,
-#                     lcDic=lcDicCut,
-#                     regions=lcRegs,
-#                     base_folder=base_folder,
-#                     period=PERIODMINMAX,
-#                     addResidual=ADDRESIDUAL,
-#                     SPCKernelName="solo",
-#                     spcSpeeds=(LOSPEED_BMAPPING, HISPEED_BMAPPING),
-#                     showFig=SHOWFIG,
-#                 )
+            plot_super_summary(
+                allCasesList=allCases,
+                longSpan=soloStendTotal,
+                shortParamList=shortParamList,
+                longObjectParam=longObjectParam,
+                regions=["SolO"],
+                # gridRegions=[1, 1, True, True],
+                unsafeEMDDataPath=UNSAFE_EMD_DATA_PATH,
+                period=PERIODMINMAX,
+                SPCKernelName="solo",
+                speedSuper=HISPEED_BMAPPING,
+                speedSuperLow=LOSPEED_BMAPPING,
+                speedAVG=soloAVG,
+                showFig=SHOWFIG,
+                figName=figName,
+                otherObject="psp",
+            )
+
+    else:
+        for index, shortTimes in enumerate(shortTimesList):
+            # Need to cut up dataframes
+            isTimes = longTimesList[index]
+            dfLongCut = longObject.df[isTimes[0] : isTimes[1]]
+            dfLongCut = dfLongCut[longObjectVars]
+
+            shortDFDicCut = {}
+            for _shortParam in shortDFDic:
+                shortDFDicCut[f"{_shortParam}"] = (
+                    shortDFDic[_shortParam].df[shortTimes[0] : shortTimes[1]].copy()
+                )
+
+            dirExtension = f"{caseNamesList[index]}"
+            base_folder = f"{UNSAFE_EMD_DATA_PATH}{dirExtension}/"
+            new_plot_format(
+                dfInsitu=dfLongCut,
+                lcDic=shortDFDicCut,
+                regions=shortRegs,
+                base_folder=base_folder,
+                period=PERIODMINMAX,
+                addResidual=ADDRESIDUAL,
+                SPCKernelName="psp",
+                spcSpeeds=(LOSPEED_BMAPPING, HISPEED_BMAPPING),
+                showFig=SHOWFIG,
+            )
 
 
 if __name__ == "__main__":
@@ -437,5 +481,19 @@ if __name__ == "__main__":
             longObjectVars=generalVars, shortObjectVars=generalVars
         )
 
-    # else:
-    #     combinedPlot(superSummaryPlot=SUPER_SUMMARY_PLOT)
+    else:
+        combinedPlot(
+            shortParamList=generalVars,
+            speedSet=(
+                300,
+                200,
+                250,
+            ),  # Speeds must be negative as short dataset no longer SUN!
+            superSummaryPlot=SUPER_SUMMARY_PLOT,
+            longObjectZOOM={
+                "start_time": datetime(2020, 9, 25),
+                "end_time": datetime(2020, 9, 30),
+                "stepMinutes": 1,
+                "extractOrbit": False,
+            },
+        )

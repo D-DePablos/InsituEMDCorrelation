@@ -808,8 +808,6 @@ class Spacecraft:
                         fl_time = flDF_relevant.index[0]
                         solo_fl_dt = (solo_time - fl_time).total_seconds() / 3600
 
-                        # TODO: Potentially add a plot of the solar orbiter observations and highlight times which are used
-
                         ax.scatter(
                             flDF_relevant["X"],
                             flDF_relevant["Y"],
@@ -835,22 +833,30 @@ class Spacecraft:
 
         plot_over_time(scTrajDF, fline_set, objFolder=objFolder)
 
-    def zoom_in(self, start_time: datetime, end_time: datetime, stepMinutes=30):
+    def zoom_in(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        stepMinutes=30,
+        extractOrbit=True,
+    ):
         """
         Zoom into a specific part of the signal and store new self.df in memory
         Uses start_time and end_time to define limits
+        stepMinutes: generates dataframe
         """
         self.start_time = start_time
         self.end_time = end_time
 
-        self.extract_orbit_data(stepMinutes=stepMinutes)
+        if extractOrbit:
+            self.extract_orbit_data(stepMinutes=stepMinutes)
 
-        # Generate a dataframe that matches in cadence the orbital data
-        self.df_orbit_match = self.df.resample(f"{stepMinutes}min").mean()[
-            self.sp_traj.coords.obstime[0]
-            .datetime : self.sp_traj.coords.obstime[-1]
-            .datetime
-        ]
+            # Generate a dataframe that matches in cadence the orbital data
+            self.df_orbit_match = self.df.resample(f"{stepMinutes}min").mean()[
+                self.sp_traj.coords.obstime[0]
+                .datetime : self.sp_traj.coords.obstime[-1]
+                .datetime
+            ]
 
         # Cut down the dataframe and maintain higher cadence
         self.df = self.df[self.start_time : self.end_time]
