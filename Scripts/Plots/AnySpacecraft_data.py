@@ -8,7 +8,6 @@ path.append(f"{BASE_PATH}Scripts/")
 from os import makedirs
 from physicsHelpers import fcl
 from signalHelpers import normalize_signal as norm
-from EMD.applyEMD import comparePSPtoSolo
 
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt

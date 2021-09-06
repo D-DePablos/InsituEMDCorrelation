@@ -40,24 +40,22 @@ PERIODMINMAX = [3, 20]  # The period might be better if longer
 shortRegs = [""]
 
 DELETE = False  # I believe this is not working at all as intended
-SHOWSPEED = True
+SHOWSPEED = False
 
 # Show figures as they are created
-SHOWFIG = True
+SHOWFIG = False
 
 # Add residual to non-super summary?
 ADDRESIDUAL = False
-
-# TODO: Need to change which PSP measurements are used in correlation
 
 # Filter by periodicity
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = False
+PLOT_ALL_TOGETHER = True
 
 # Plot summary? should be done after plotting together
-SUPER_SUMMARY_PLOT = True
+SUPER_SUMMARY_PLOT = False
 accelerated = (
     1  # Whether to accelerate speed (relevant for backmapping, coloured columns)
 )
@@ -421,12 +419,6 @@ def combinedPlot(
         longObject.df.columns = ["PSP_" + param for param in longObject.df.columns]
 
         for longObjectParam in longObject.df.columns:
-            # raise ValueError(
-            #     "Must update plot_super_summary method before producing 'super summary'"
-            # )
-            # TODO: Fix red column
-            # TODO: Find best correlation numbers (used to be 0.85 and 0.9)
-
             plot_super_summary(
                 allCasesList=allCases,
                 longSpan=soloStendTotal,
@@ -474,16 +466,16 @@ def combinedPlot(
 
 
 if __name__ == "__main__":
-    generalVars = ["Btotal"]
+    generalVars = ["V_R", "B_R", "Btotal", "Mf", "T"]
     if not PLOT_ALL_TOGETHER:
 
         first_DeriveAndPlotSeparately(
-            longObjectVars=generalVars, shortObjectVars=generalVars
+            longObjectVars=generalVars, shortObjectVars=["B_R"]
         )
 
     else:
         combinedPlot(
-            shortParamList=generalVars,
+            shortParamList=["B_R"],
             speedSet=(
                 300,
                 200,
@@ -492,7 +484,7 @@ if __name__ == "__main__":
             superSummaryPlot=SUPER_SUMMARY_PLOT,
             longObjectZOOM={
                 "start_time": datetime(2020, 9, 25),
-                "end_time": datetime(2020, 9, 30),
+                "end_time": datetime(2020, 10, 1),
                 "stepMinutes": 1,
                 "extractOrbit": False,
             },

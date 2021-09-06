@@ -19,6 +19,12 @@ from datetime import timedelta
 from copy import deepcopy
 from glob import glob
 from collections import namedtuple
+import astropy.units as u
+
+import heliopy.data.spice as spicedata
+import heliopy.spice as spice
+
+import warnings
 
 locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
 formatter = mdates.ConciseDateFormatter(locator)
@@ -31,8 +37,9 @@ vis = Visualisation()
 
 ColumnColours = {
     "Btotal": "red",
+    "B_R": "green",
 }
-alphaWVL = {"94": 0.9, "171": 0.9, "193": 0.7, "211": 0.5, "HMI": 0.9, "Btotal": 0.9}
+alphaWVL = {"94": 0.9, "171": 0.9, "193": 0.7, "211": 0.5, "HMI": 0.9, "Btotal": 0.9, "B_R": 0.9}
 # corrThrPlotList = np.arange(0.70, 1, 0.05)
 corrThrPlotList = np.arange(0.75, 0.901, 0.05)
 # corrThrPlotList = [0.65]
@@ -43,11 +50,14 @@ titleDic = {
     "SolO_N": "#p",
     "SolO_Mf": "Mass Flux",
     "PSP_Vr": "Vsw",
+    "PSP_V_R": "Vsw",
     "PSP_T": "Tp",
     "PSP_Np": "#p",
     "PSP_Mf": "Mass Flux",
     "PSP_Br": "Br",
+    "PSP_B_R": "Br",
     "PSP_Btotal": "Bt",
+    "B_R": "Br",
 }
 
 # Set general font size
@@ -87,6 +97,30 @@ def normalize_signal(s: np.ndarray):
         s[i] = (x_i - _min) / (_max - _min)
 
     return s
+
+
+def getAvgRadius(SPCKernelName, times):
+    """
+    Find average radius for a time period
+    """
+    if SPCKernelName == "solo":
+        spicedata.get_kernel("solo")
+        sp_traj = spice.Trajectory("Solar Orbiter")
+
+    elif SPCKernelName == "psp":
+        spicedata.get_kernel("psp")
+        sp_traj = spice.Trajectory("SPP")
+
+    else:
+        raise ValueError(
+            f"{SPCKernelName} is not a valid spacecraft kernel, please choose one from ['solo'] "
+        )
+    sp_traj.generate_positions(times, "Sun", "IAU_SUN")  # Is in Km
+    R = sp_traj.coords.radius
+
+    mR = R.mean().to(u.AU).value
+
+    return mR
 
 
 def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3 - 20"):
@@ -158,8 +192,6 @@ def transformTimeAxistoVelocity(
         originTime: Time that is to be compared (hour of AIA images)
         SPCKernelName: Kernel name for spacecraft
     """
-    import heliopy.data.spice as spicedata
-    import heliopy.spice as spice
 
     if SPCKernelName == "solo":
         spicedata.get_kernel("solo")
@@ -168,7 +200,6 @@ def transformTimeAxistoVelocity(
     elif SPCKernelName == "psp":
         spicedata.get_kernel("psp")
         sp_traj = spice.Trajectory("SPP")
-        pass
 
     else:
         raise ValueError(
@@ -195,7 +226,10 @@ def transformTimeAxistoVelocity(
 
         # Reduce the distance required
         R = R - R_body
-        vSwAxis = -R.value / dtAxis
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            vSwAxis = -R.value / dtAxis
 
     return vSwAxis
 
@@ -1485,10 +1519,10 @@ class SignalFunctions(Signal):
 
         if useRealTime:
             short_duration = short_signal.true_time[-1] - short_signal.true_time[0]
-            time_axis = long_signal.true_time
+            longTime_axis = long_signal.true_time
         else:
             short_duration = (short_signal.t[-1] - short_signal.t[0]) / 60
-            time_axis = long_signal.t / 60
+            longTime_axis = long_signal.t / 60
 
         region_string = self.name
         #######################################
@@ -1498,7 +1532,7 @@ class SignalFunctions(Signal):
         # First plot
         ax = axs[0]
         ax.plot(
-            time_axis, long_true_values, color="black", label=Label_long_ts, alpha=1
+            longTime_axis, long_true_values, color="black", label=Label_long_ts, alpha=1
         )
 
         if filterPeriods:
@@ -1513,15 +1547,15 @@ class SignalFunctions(Signal):
         ax.set_ylabel(f"{Label_long_ts}")
         if useRealTime:
             ax.set_xlim(
-                time_axis[0] - timedelta(hours=margin_hours),
-                time_axis[-1] + timedelta(hours=margin_hours),
+                longTime_axis[0] - timedelta(hours=margin_hours),
+                longTime_axis[-1] + timedelta(hours=margin_hours),
             )
             ax.xaxis.set_major_formatter(formatter)
             ax.xaxis.set_major_locator(locator)
 
         else:
             # Set xticks every hour
-            xticks = np.arange(time_axis[0], time_axis[-1] + 1, step=180)
+            xticks = np.arange(longTime_axis[0], longTime_axis[-1] + 1, step=180)
             plt.xticks(xticks)
 
         ax.xaxis.grid(True)
@@ -1627,8 +1661,8 @@ class SignalFunctions(Signal):
             ax2.xaxis.set_major_formatter(formatter)
             # Set the x limits
             ax2.set_xlim(
-                time_axis[0] - timedelta(hours=margin_hours),
-                time_axis[-1] + timedelta(hours=margin_hours),
+                longTime_axis[0] - timedelta(hours=margin_hours),
+                longTime_axis[-1] + timedelta(hours=margin_hours),
             )
 
             # If using some expected location dictionary add here
@@ -1671,9 +1705,10 @@ class SignalFunctions(Signal):
         if showSpeed:
             # Extract the Velocities
             vSWAxis = transformTimeAxistoVelocity(
-                time_axis,
+                longTime_axis,
                 originTime=short_signal.true_time[0].to_pydatetime(),
                 SPCKernelName=SPCKernelName,
+                ObjBody="psp",
             )
 
             axV = ax2.twiny()
@@ -1992,7 +2027,11 @@ def plot_super_summary(
         nrows = gridRegions[0]
         ncols = gridRegions[1]
         fig, axs = plt.subplots(
-            nrows=nrows, ncols=ncols, sharex=gridRegions[2], sharey=gridRegions[3]
+            nrows=nrows,
+            ncols=ncols,
+            sharex=gridRegions[2],
+            sharey=gridRegions[3],
+            figsize=(10, 10),
         )
 
     for i, region in enumerate(regions):
@@ -2022,7 +2061,6 @@ def plot_super_summary(
         list_times_vavg = []
         list_times_same_speed_LOW = []
 
-        # TODO: Need to fix such that it makes use of PSP mid-time instead of SolO measurements!
         for (index, TshortDF), PSPmidTime in zip(enumerate(shortTimes), longTimes):
             base_path = f"{unsafeEMDDataPath}{allCasesList[index].dirExtension}/"
 
@@ -2049,16 +2087,19 @@ def plot_super_summary(
                 # Smallest dot is 0, when correlation does not reach 0.70.
                 # Does not grow more if multiple matches at same corr thr.
                 dotSizeList = []
+                midpoint_time = insituStTime
 
                 # Find time and necessary size of dots
                 for height in range(len(corr_matrix[0, 0, :, 0])):
+                    if midpoint_time > insituEndTime:
+                        break
+
                     pearson = corr_matrix[:, :, height, 0]
                     spearman = corr_matrix[:, :, height, 1]
                     spearman[spearman == 0] = np.nan
                     valid = corr_matrix[:, :, height, 2]
 
                     if firstWVL:
-
                         # Create the midpointTimes list to act as index
                         midpoint = corr_matrix[0, 0, height, 3]
                         midpoint_time = insituStTime + timedelta(seconds=midpoint)
@@ -2072,11 +2113,8 @@ def plot_super_summary(
                     # Pearson and Spearman Valid
                     pvalid = pearson[valid == 1]
                     rvalid = spearman[valid == 1]
-
                     # After getting rid of some pearson and spearman values
-                    # Necessary to cound how many are above each given threshold
-                    # Could theoretically change this to just do circles above certain level
-
+                    # Necessary to count how many are above each given threshold
                     dotSize = 0
                     for corrIndex, corr_thr in enumerate(corrThrPlotList):
                         _number_high_pe = len(pvalid[np.abs(pvalid) >= corr_thr])
@@ -2089,8 +2127,8 @@ def plot_super_summary(
 
                     dotSizeList.append(dotSize)
 
-                dfDots[f"{_shortVar}"] = dotSizeList
-                firstWVL = False
+            dfDots[f"{_shortVar}"] = dotSizeList
+            firstWVL = False
 
             dfDots.index = midpointTimes
 
@@ -2125,8 +2163,6 @@ def plot_super_summary(
             closest_time_avg = longARRAY[closest_index_avg]
             list_times_vavg.append(closest_time_avg)
 
-            locator = mdates.HourLocator([0, 12])
-            formatter = mdates.ConciseDateFormatter(locator)
             ax.xaxis.set_major_locator(locator)
             ax.xaxis.set_major_formatter(formatter)
 
@@ -2174,7 +2210,7 @@ def plot_super_summary(
             alpha=0.2,
         )
 
-        # Show average speed (not necessarily centre)
+        # Show average measured speed (not necessarily centre)
         ax.plot(
             list_times_vavg,
             shortTimes,
@@ -2202,8 +2238,12 @@ def plot_super_summary(
 
     fig.legend(handles=legend_elements)
     fig.suptitle(f" Expected velocities {speedSuper} - {speedSuperLow} km/s in yellow")
-    fig.supxlabel(f"Time at PSP (0.15AU) ({titleDic[longObjectParam]})")
-    fig.supylabel("Time at SolO (0.6AU)")
+    fig.supxlabel(
+        f"Time at PSP ({getAvgRadius('psp', longARRAY):.2f}AU) ({titleDic[longObjectParam]})"
+    )
+    fig.supylabel(
+        f"Time at SolO ({getAvgRadius('solo', shortTimes):.2f}AU) ({shortParamList[0]})"
+    )
 
     # If the correlationThrList is one number, save with info
     if len(corrThrPlotList) == 1:
@@ -2218,7 +2258,7 @@ def plot_super_summary(
 
     plt.close()
 
-    print(f"Saved {longObjectParam}")
+    print(f"Saved {longObjectParam} to {unsafeEMDDataPath}")
 
 
 def new_plot_format(
