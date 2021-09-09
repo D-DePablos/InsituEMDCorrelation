@@ -2,17 +2,21 @@ BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 
 from sys import path
 
+from numpy.core.fromnumeric import var
+from pandas.core.indexes.timedeltas import timedelta_range
+
 path.append(f"{BASE_PATH}Scripts/")
 
 # from helpers import resample_and_rename
 from os import makedirs
 from physicsHelpers import fcl
 from signalHelpers import normalize_signal as norm
+from Plots.cdfReader import extractDF
 
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
-# import matplotlib.dates as mdates
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 import astropy.units as u
@@ -20,6 +24,9 @@ from astropy.coordinates import spherical_to_cartesian, SkyCoord
 
 # To add a cycle to colours
 from itertools import cycle
+
+locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+formatter = mdates.ConciseDateFormatter(locator)
 
 # Units
 units_dic = {
@@ -59,9 +66,10 @@ class Spacecraft:
         self.obj_cad = cadence_obj
         self.show = show
 
-        # Flag: Whether to add 'extra' measurements to dataframe
-        add_all_heliopy_vars = True
-        self.sp_coords_carrington = None
+        import cdflib
+        from glob import glob
+
+        self.sp_coords_carrington = None  # Set a param which is empty to then fill
 
         # Time information for specific spacecraft
         if mid_time:
@@ -73,40 +81,8 @@ class Spacecraft:
             raise ValueError("Please provid a valid mid_time and time margin")
 
         # Get the spacecraft data into the proper format
-        if self.name == "ST-A":
-            from heliopy.data import stereo
 
-            # In this ocassion magplasma L2 has both of the useful datasets
-            self.data = stereo.magplasma_l2("sta", self.start_time, self.end_time)
-            self.cadence = 60
-
-            # Output of self.data.columns
-            """
-            'BFIELDRTN_0', 'BFIELDRTN_1','BFIELDRTN_2', 'BTOTAL',
-            'HAE_0', 'HAE_1', 'HAE_2',
-            'HEE_0', 'HEE_1', 'HEE_2',
-            'HEEQ_0','HEEQ_1','HEEQ_2',
-            'CARR_0','CARR_1','CARR_2',
-            'RTN_0', 'RTN_1', 'RTN_2',
-            'R',  'Np', 'Vp',  'Tp', 'Vth',
-            'Vr_Over_V_RTN', 'Vt_Over_V_RTN', 'Vn_Over_V_RTN',
-            'Vp_RTN',
-            'Entropy', 'Beta', 'Total_Pressure',
-            'Cone_Angle', 'Clock_Angle',
-            'Magnetic_Pressure',
-            'Dynamic_Pressure'
-            """
-            self.rel_vars = {
-                "density": "Np",
-                "temperature": "Tp",
-                "velocity": "Vp",
-                "btotal": "BTOTAL",
-            }
-
-            # Can set the dataframe empty now
-            self.df = pd.DataFrame({})
-
-        elif self.name == "WIND":
+        if self.name == "WIND":
             from heliopy.data import wind
 
             df_mag = wind.mfi_h0(self.start_time, self.end_time)
@@ -162,270 +138,161 @@ class Spacecraft:
 
         elif self.name == "SolOpriv_e6":
 
-            # Not using Heliopy vars
-            add_all_heliopy_vars = False
+            df_mag_csv_path = f"{BASE_PATH}Data/Prepped_csv/solo_mag_sept.csv"
+            df_rpw_csv_path = f"{BASE_PATH}Data/Prepped_csv/solo_rpw_sept.csv"
+            df_sweap_csv_path = f"{BASE_PATH}Data/Prepped_csv/solo_sweap_sept.csv"
 
-            # Load saved file, otherwise generate
-            try:
-                swedf = pd.read_csv(f"{BASE_PATH}Data/Prepped_csv/solo_swe_sept.csv")
-                magdf = pd.read_csv(f"{BASE_PATH}Data/Prepped_csv/solo_mag_sept.csv")
+            def RPW_prep():
+                cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L3/RPW/"
 
-                self.swedf = swedf
-                self.magdf = magdf
-                self.df = None
+                _rpw_df = extractDF(
+                    cdf_path, vars=["DENSITY"], info=False, resample=f"{self.obj_cad}s"
+                )
 
-            except FileNotFoundError:
-                import cdflib
-                from glob import glob
+                _rpw_df[_rpw_df["DENSITY"] < 1] = np.nan
+                _rpw_df["N_RPW"] = _rpw_df["DENSITY"]
+                del _rpw_df["DENSITY"]
 
-                cdf_epoch = cdflib.cdfepoch()
+                _rpw_df["Time"] = _rpw_df.index
+                _rpw_df.to_csv(df_rpw_csv_path, index=False)
+                del _rpw_df["Time"]
 
-                def SWE_prep():
-                    # SWEAP data
-                    cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/GroundMom/"
+                return _rpw_df
 
-                    """ 
-                    Variables within the cdf:
-                        [
-                            'Epoch', 
-                            'Half_interval', 
-                            'SCET', 
-                            'Info', 
-                            'validity', 
-                            'N', 
-                            'V_SRF', 
-                            'V_RTN', 
-                            'P_SRF', 
-                            'P_RTN', 
-                            'TxTyTz_SRF', 
-                            'TxTyTz_RTN', 
-                            'T'
-                        ] 
-                    """
-                    # Need to separate into different relevant csv
-                    for day, file in enumerate(sorted(glob(f"{cdf_path}*.cdf"))):
-                        cdf = cdflib.CDF(file)
-                        time = cdf_epoch.to_datetime(cdf["Epoch"])
-                        _df = pd.DataFrame({}, index=time)
+            def SWA_PAS():
+                # SWA-PAS data
+                """Reduced list
+                'Epoch',
+                'validity',
+                'N',
+                'V_RTN',
+                'T'
+                """
+                cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/GroundMom/"
+                _sweap_df = extractDF(
+                    cdf_path,
+                    vars=["V_RTN", "N", "T", "validity"],
+                    info=False,
+                    resample=f"{self.obj_cad}s",
+                )
+                _sweap_df[_sweap_df["validity"] < 3] = np.nan
+                del _sweap_df["validity"]
 
-                        for i in ("V_RTN", "N", "T", "validity"):
-                            if i == "V_RTN":  # Allow for multidimensional
-                                for n, arg in zip(
-                                    (0, 1, 2), ("_R", "_T", "_N")
-                                ):  # R is radial velocity
-                                    _df[f"V{arg}"] = cdf[i][:, n]
+                # Save and delete time index
+                _sweap_df["Time"] = _sweap_df.index
+                _sweap_df.to_csv(df_sweap_csv_path, index=False)
+                del _sweap_df["Time"]
 
-                            # Treat solo swe flag differently
-                            elif i == "validity":
-                                _df["solo_plasma_flag"] = cdf[i]
-                            else:
-                                _df[i] = cdf[i]
+                return _sweap_df
 
-                        # Join the dataframes only after the first instance
-                        if day == 0:
-                            _swe_df = _df
-                        else:
-                            _swe_df = _swe_df.append(_df)
+            def MAG_prep():
+                """
+                Epoch
+                B_RTN
+                QUALITY_FLAG
+                """
+                cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/Mag/"
 
-                    _swe_df["Time"] = _swe_df.index
-                    return _swe_df
+                # Need to separate into different relevant csv
+                _mag_df = extractDF(
+                    cdf_path, vars=["B_RTN", "QUALITY_FLAG"], info=False
+                )
+                _mag_df["mag_flag"] = _mag_df["QUALITY_FLAG"]
+                del _mag_df["QUALITY_FLAG"]
 
-                def MAG_prep():
-                    # SWEAP data
-                    cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/Mag/"
+                _mag_df["Time"] = _mag_df.index
+                _mag_df.to_csv(df_mag_csv_path, index=False)
+                return _mag_df
 
-                    """ 
-                    Variables within the cdf:
-                        [
-
-                            'EPOCH'
-                            'B_RTN'
-                            'LBL1_B_RTN'
-                            'REP1_B_RTN'
-                            'SCET'
-                            'B_SRF'
-                            'LBL1_B_SRF'
-                            'REP1_B_SRF'
-                            'QUALITY_FLAG'
-                            'PRIMARY_SENSOR_FLAG'
-                            'VECTOR_RANGE'
-                            
-                        ] 
-                    """
-                    # Need to separate into different relevant csv
-                    for day, file in enumerate(sorted(glob(f"{cdf_path}*.cdf"))):
-                        cdf = cdflib.CDF(file)
-                        time = cdf_epoch.to_datetime(cdf["EPOCH"])
-                        _df = pd.DataFrame({}, index=time)
-
-                        for i in ("B_RTN", "QUALITY_FLAG"):
-                            if i == "B_RTN":  # Allow for multidimensional
-                                for n, arg in zip(
-                                    (0, 1, 2), ("_R", "_T", "_N")
-                                ):  # R is radial velocity
-                                    _df[f"B{arg}"] = cdf[i][:, n]
-                            else:
-                                _df["MAG_FLAG"] = cdf[i]
-
-                        # Join the dataframes only after the first instance
-                        if day == 0:
-                            _mag_df = _df
-                        else:
-                            _mag_df = _mag_df.append(_df)
-
-                    _mag_df["Time"] = _mag_df.index
-                    return _mag_df
-
-                # Slightly different to how we save PSP. why?
-                self.swedf = SWE_prep()
-                self.magdf = MAG_prep()
-                self.df = None
-
-            # SWEAP and MAG csv save at highest cadence
-            self.swedf.to_csv(
-                f"{BASE_PATH}Data/Prepped_csv/solo_swe_sept.csv",
-                index=False,
+            _sweapdf = SWA_PAS()
+            _rpwdf = RPW_prep()
+            self.plasmadf = pd.concat([_sweapdf, _rpwdf], join="outer", axis=1).fillna(
+                np.nan
             )
+            self.magdf = MAG_prep()
 
-            self.magdf.to_csv(
-                f"{BASE_PATH}Data/Prepped_csv/solo_mag_sept.csv",
-                index=False,
-            )
+            self.df = None
 
         elif self.name == "PSPpriv_e6":
             """
             This is the Encounter 6 data
             """
-            import cdflib
-            from glob import glob
-
-            cdf_epoch = cdflib.cdfepoch()
-            add_all_heliopy_vars = False
+            df_fld_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_mag_sept.csv"
+            df_span_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_span_sept.csv"
 
             def FLD_prep():
-                # Fields data
-                try:
-                    _fld_df = pd.read_csv(
-                        f"{BASE_PATH}Data/Prepped_csv/psp_mag_sept.csv"
-                    )
+                # When file not available, derive it
+                cdf_path = f"{BASE_PATH}unsafe/Resources/PSP_Data/FIELDS/"
 
-                except FileNotFoundError:
-                    # When file not available, derive it
-                    cdf_path = f"{BASE_PATH}unsafe/Resources/PSP_Data/FIELDS/"
-                    for day, file in enumerate(sorted(glob(f"{cdf_path}*.cdf"))):
-                        print(f"Day {day} of Magnetic data")
-                        cdf = cdflib.CDF(file)
-                        time = cdf_epoch.to_datetime(cdf["epoch_mag_RTN_1min"])
-                        mag = cdf["psp_fld_l2_mag_RTN_1min"]
-                        fldflag = cdf["psp_fld_l2_quality_flags"]
-                        # cdf.close()
+                _fld_df = extractDF(
+                    CDFfolder=cdf_path,
+                    vars=["psp_fld_l2_mag_RTN_1min", "psp_fld_l2_quality_flags"],
+                    timeIndex="epoch_mag_RTN_1min",
+                    info=False,
+                )
 
-                        # Dataframe creation and time
-                        _df = pd.DataFrame({}, index=time)
-                        for i, label in enumerate(cdf["label_RTN"][0]):
-                            _df[str(label)] = mag[:, i]
-
-                        _df["fld_flag"] = fldflag
-
-                        # Join the dataframes
-                        if day == 0:
-                            _fld_df = _df
-                        else:
-                            _fld_df = _fld_df.append(_df)
-
-                    _fld_df["Time"] = _fld_df.index
-                    _fld_df.to_csv(
-                        f"{BASE_PATH}Data/Prepped_csv/psp_mag_sept.csv",
-                        index=False,
-                    )
+                _fld_df["fld_flag"] = _fld_df["psp_fld_l2_quality_flags"]
+                del _fld_df["psp_fld_l2_quality_flags"]
+                _fld_df["Time"] = _fld_df.index
+                _fld_df.to_csv(
+                    df_fld_csv_path,
+                    index=False,
+                )
 
                 return _fld_df
 
-            def SWE_prep():
+            def SPAN_AI_prep():
                 """
                 This function prepares the SWEAP data for PSP
                 """
-                try:
-                    _swe_df = pd.read_csv(
-                        f"{BASE_PATH}Data/Prepped_csv/psp_swe_sept.csv"
-                    )
+                # When file not available, derive it
+                cdf_path = f"{BASE_PATH}unsafe/Resources/PSP_Data/SWEAP/SPAN-AI/"
 
-                except FileNotFoundError:
-                    cdf_path = f"{BASE_PATH}unsafe/Resources/PSP_Data/SWEAP/"
-                    for day, file in enumerate(sorted(glob(f"{cdf_path}*.cdf"))):
-                        cdf = cdflib.CDF(file)
-                        time = cdf_epoch.to_datetime(cdf["Epoch"])
-                        np = cdf["np_moment"]
-                        vp = cdf["vp_moment_RTN"]
-                        T = cdf["wp_moment"]
-                        flag = cdf["general_flag"]
-                        cdf.close()
+                _span_df = extractDF(
+                    CDFfolder=cdf_path,
+                    vars=["DENS", "VEL", "TEMP", "QUALITY_FLAG"],
+                    timeIndex="Epoch",
+                    info=False,
+                    resample=f"{self.obj_cad}s",
+                )
 
-                        _df = pd.DataFrame({}, index=time)
-                        for i, label in enumerate(cdf["RTN_FRAME"][0]):
-                            _df["V_" + str(label)] = vp[:, i]
+                for og, n in zip(
+                    ["DENS", "TEMP", "QUALITY_FLAG"], ["N", "T", "span_flag"]
+                ):
+                    _span_df[n] = _span_df[og].copy()
+                    del _span_df[og]
 
-                        _df["N"] = np
-                        _df["T"] = T
-                        _df["swe_flag"] = flag
-
-                        # Join dataframes
-                        if day == 0:
-                            _swe_df = _df
-
-                        else:
-                            _swe_df = _swe_df.append(_df)
-
-                    _swe_df["Time"] = _swe_df.index
-                    _swe_df.to_csv(
-                        f"{BASE_PATH}Data/Prepped_csv/psp_swe_sept.csv",
-                        index=False,
-                    )
-
-                return _swe_df
-
-                # raise NotImplementedError("The SWEAP instrument is not implemented yet")
+                _span_df["Time"] = _span_df.index
+                _span_df.to_csv(
+                    df_span_csv_path,
+                    index=False,
+                )
+                return _span_df
 
             self.magdf = FLD_prep()
-            self.swedf = SWE_prep()
+            self.plasmadf = SPAN_AI_prep()
             self.df = None
 
         else:
             raise NotImplementedError(f"{self.name} not implemented")
 
-        ## After loading measurements, quality flags, do:
-
-        # Add all variables if using Heliopy datasets
-        if add_all_heliopy_vars:  # Add more parameters only if add_extra flag is true
-            for parameter in self.rel_vars:
-                if parameter not in list(self.df):
-                    _data = self.data.to_dataframe()[self.rel_vars[parameter]]
-                    _data[_data < 0.001] = np.nan  # Does this hold for all parameters?
-                    self.df[parameter] = _data
-
-        # When we need to combine swedf and magdf
+        # When we need to combine plasmadf and magdf
         if self.df is None:
 
             # We need to use the Time column
-            self.swedf.index = pd.to_datetime(self.swedf["Time"])
-            del self.swedf["Time"]
+            # For PSP data, for SWEAP only cleaning
+            if "span_flag" in self.plasmadf.columns:
+                self.plasmadf[self.plasmadf["span_flag"] == 0] = np.nan
+                self.plasmadf[self.plasmadf["V_R"] > 0] = np.nan
+                self.plasmadf[self.plasmadf["V_T"] < -1000] = np.nan
+                self.plasmadf[self.plasmadf["V_N"] < -1000] = np.nan
 
-            # For PSP data cleaning
-            if "swe_flag" in self.swedf.columns:
-                self.swedf[self.swedf["swe_flag"] >= 1] = np.nan
-                self.swedf[self.swedf["V_R"] < 0] = np.nan
-                self.swedf[self.swedf["V_T"] < -1000] = np.nan
-                self.swedf[self.swedf["V_N"] < -1000] = np.nan
+                self.plasmadf[self.plasmadf["T"] < 0] = np.nan
+                self.plasmadf[self.plasmadf["N"] < 0] = np.nan
+                del self.plasmadf["span_flag"]
 
-                self.swedf[self.swedf["T"] < 0] = np.nan
-                self.swedf[self.swedf["N"] < 0] = np.nan
-
-            # For SolO data cleaning
-            if "solo_plasma_flag" in self.swedf.columns:
-                self.swedf[self.swedf["solo_plasma_flag"] < 3] = np.nan
-
-            self.swedf.fillna(method="pad")
-            self.swedf = self.swedf.resample(f"{self.obj_cad}s").mean()
+            self.plasmadf.fillna(method="pad")
+            self.plasmadf = self.plasmadf.resample(f"{self.obj_cad}s").mean()
 
             #############################################################
             # MAG #
@@ -436,14 +303,17 @@ class Spacecraft:
             # For PSP data cleaning
             if "fld_flag" in self.magdf.columns:
                 self.magdf[self.magdf["fld_flag"] >= 1] = np.nan
+                del self.magdf["fld_flag"]
 
-            if "MAG_FLAG" in self.magdf.columns:
-                self.magdf[self.magdf["MAG_FLAG"] < 3] = np.nan
+            # For SolO data cleaning
+            if "mag_flag" in self.magdf.columns:
+                self.magdf[self.magdf["mag_flag"] < 3] = np.nan
+                del self.magdf["mag_flag"]
 
             self.magdf.fillna(method="pad")
             self.magdf = self.magdf.resample(f"{self.obj_cad}s").mean()
 
-            df = pd.concat([self.swedf, self.magdf], join="outer", axis=1).fillna(
+            df = pd.concat([self.plasmadf, self.magdf], join="outer", axis=1).fillna(
                 np.nan
             )
 
@@ -464,6 +334,8 @@ class Spacecraft:
             f"{BASE_PATH}Data/Prepped_csv/{self.name}.csv",
             index=False,
         )
+
+        del self.df["Time"]
 
     @staticmethod
     def traceFlines(lon, lat, r, vSW, rf=0.0046547454 * u.AU, accelerated=False):
@@ -516,7 +388,7 @@ class Spacecraft:
 
         return fline
 
-    def plot_solo_psp_df(self, other, zone1=None, zone2=None):
+    def plot_solo_psp_df(self, other, zones=[]):
         """
         Plot the dataframe in the style of the previous paper
         Other must be PSP
@@ -545,39 +417,40 @@ class Spacecraft:
         Bt = np.sqrt(self.df["B_R"] ** 2 + self.df["B_T"] ** 2 + self.df["B_N"] ** 2)
         Vx = self.df["V_R"]
         Np = self.df["N"]
+        NpRPW = self.df["N_RPW"]
         T = self.df["T"]
         Mf = c.m_p.value * Np * 10 ** 15 * (-Vx)
 
         oBt = np.sqrt(
             other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
         )
-        oVx = other.df["V_R"]
+        oVx = -other.df["V_R"]
         oNp = other.df["N"]
         oT = other.df["T"]
-        oMf = c.m_p.value * oNp * 10 ** 15 * (-oVx)
+        oMf = c.m_p.value * oNp * 10 ** 15 * (oVx)
 
         # Magnetic field components
         ax0 = axs[0]
-        ax0.plot(
-            norm(Bt),
+        ax0.semilogy(
+            Bt,
             "k-",
-            label="Bt",
+            label="SolO_MAG",
             alpha=1,
             linewidth=1,
         )
         # ax0.set_ylabel(r"$\vec{B}_{T}$ (nT)")
         ax0.set_ylabel(r"$\hat{B}_Total$")
 
-        if other is not None:
-            Bt_PSP = np.sqrt(
-                other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
-            )
-            ax0.plot(
-                norm(Bt_PSP),
-                "r-",
-                label="Bt_PSP",
-                alpha=1,
-            )
+        Bt_PSP = np.sqrt(
+            other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
+        )
+        ax0.semilogy(
+            Bt_PSP,
+            "r-",
+            label="PSP_FLD",
+            alpha=1,
+        )
+        ax0.legend()
 
         # Radial velocity
         ax1 = axs[1]
@@ -602,10 +475,12 @@ class Spacecraft:
         ax4.semilogy(
             Np,
             color="black",
-            label="N_p",
+            label="Np_SolO_SWA_PAS",
             linewidth=1,
         )
-        ax4.semilogy(oNp, color="red")
+        ax4.semilogy(NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
+        ax4.semilogy(oNp, color="red", label="Np_PSP_SPAN")
+        ax4.legend()
 
         # ax4.legend([f"Np ({(Np.index[1]-Np.index[0]).total_seconds()}s cadence)"])
         ax4.set_ylabel(r"$n_p$ (# $cm^{-3}$)")
@@ -618,18 +493,22 @@ class Spacecraft:
             color="black",
             linewidth=1,
         )
-        ax5.semilogy(-oMf, color="red")
+        ax5.semilogy(oMf, color="red")
         # ax5.legend([f"Mf ({(Mf.index[1]-Mf.index[0]).total_seconds()}s cadence)"])
         ax5.set_ylabel(r"$- m_{p}n_{p} V_x (kg km s^{-1})$")
 
         # # Plot the relevant columns
-        if zone1 and zone2:
+        for ax in axs:
+            ax.set_xlim(datetime(2020, 9, 24, 12), datetime(2020, 10, 5))
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
+
+        # Plot the zones being considered
+        for zone in zones:
             for ax in axs:
-                # ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
-                for zone, colour in zip((zone1, zone2), ("black", "red")):
-                    ax.axvspan(
-                        zone["start_time"], zone["end_time"], color=colour, alpha=0.3
-                    )
+                ax.axvspan(
+                    zone["start_time"], zone["end_time"], color=zone["color"], alpha=0.3
+                )
 
         # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
         # print(f"Saving to {self}")
@@ -691,12 +570,111 @@ class Spacecraft:
             frame=frames.HeliographicCarrington
         )
 
+        self.sp_coords_hcentric = sp_traj.coords.transform_to(
+            frame=frames.HeliocentricEarthEcliptic
+        )
+
+    def plot_top_down(self, other, objFolder=f"{BASE_PATH}Figures/Orbit_3d/"):
+        """
+        Plots the longitude and latitude of a given spacecraft object
+        """
+        makedirs(objFolder, exist_ok=True)
+
+        assert self.sp_traj != None, "Please calculate the spacecraft trajectory"
+        lon1 = self.sp_coords_hcentric.lon
+        lat1 = self.sp_coords_hcentric.lat
+        rad1 = self.sp_coords_hcentric.distance
+        t1 = self.sp_coords_hcentric.obstime.datetime
+
+        # When using 2
+        lon2 = other.sp_coords_hcentric.lon
+        lat2 = other.sp_coords_hcentric.lat
+        rad2 = other.sp_coords_hcentric.distance
+        t2 = other.sp_coords_hcentric.obstime.datetime
+
+        X1, Y1, Z1 = spherical_to_cartesian(rad1, lat1, lon1)
+        X2, Y2, Z2 = spherical_to_cartesian(rad2, lat2, lon2)
+
+        # Calculate Parker Spiral  -  looks a bit odd
+        # Phi(R) = Phi(0) - rotRate/Vsw * (R - R0)
+        Phi_0, R_0 = lon2[0].value, rad2[0].value
+        rotRate = 24.47 * 24 * 3600  # Solar rot rate in Hours
+        Vsw, R = self.df["V_R"][t1].mean(), rad1[0].value
+        rList = np.linspace(R, R_0)
+
+        # range of radius
+        Phi = np.abs(np.repeat(Phi_0, len(rList)) - (rotRate / Vsw) * (rList - R_0))
+        for i, val in enumerate(Phi):
+            if val > 360:
+                Phi[i] = val / 360
+
+        coords_Pspiral = {"r": rList, "long": Phi, "lat": np.repeat(0, len(rList))}
+        pspiral = {}
+        pspiral["x"], pspiral["y"], pspiral["z"] = spherical_to_cartesian(
+            r=coords_Pspiral["r"], lat=coords_Pspiral["lat"], lon=coords_Pspiral["long"]
+        )
+
+        # Dataframes on Cartesian coords
+        df_self = pd.DataFrame(
+            {
+                "X": X1,
+                "Y": Y1,
+                "Z": Z1,
+            },
+            index=t1,
+        )
+        df_other = pd.DataFrame(
+            {
+                "X": X2,
+                "Y": Y2,
+                "Z": Z2,
+            },
+            index=t2,
+        )
+
+        # Reduce the datasets
+        solo_times, psp_times = [], []
+
+        for time in pd.date_range(
+            datetime(2020, 9, 27, 22), datetime(2020, 10, 4, 22), freq="24h"
+        ):
+            solo_times.append(time.to_pydatetime())
+
+        for time in pd.date_range(
+            datetime(2020, 9, 25, 4), datetime(2020, 10, 1, 4), freq="24h"
+        ):
+            psp_times.append(time.to_pydatetime())
+
+        df_self = df_self.resample("24h", origin="22:00").mean()
+        df_other = df_other.resample("24h", origin="04:00").mean()
+
+        # TODO: Check radial and Parker Spiral alignment of the two spacecraft.
+        # Maybe find Parker Spiral solution at a given time, and also plot radially outgoing lines from PSP
+        # This will clearly show times and locations that are relevant.
+
+        plt.figure()
+        plt.xlim(-1, 1)
+        plt.ylim(-1, 1)
+
+        plt.scatter(df_self["X"], df_self["Y"], color="black")
+        plt.scatter(df_other["X"], df_other["Y"], color="red")
+        # plt.plot(pspiral[0], pspiral[1])  # Looks weird in Heliocentric coords
+        plt.plot(pspiral["x"], pspiral["y"])
+        plt.scatter([0], [0], s=300, color="orange", marker="*")
+        plt.grid(True)
+
+        # Plot the Parker Spiral lines
+        plt.show()
+
+        pass
+
     def plot_spherical_coords(
         self, other, accelerated=False, objFolder=f"{BASE_PATH}Figures/Orbit_3d/"
     ):
         """
         Plots the longitude and latitude of a given spacecraft object
         """
+        raise ValueError("Highly likely this is wrong!")
 
         makedirs(objFolder, exist_ok=True)
 
@@ -836,6 +814,7 @@ class Spacecraft:
         self,
         start_time: datetime,
         end_time: datetime,
+        color=None,
         stepMinutes=30,
         extractOrbit=True,
     ):
@@ -878,6 +857,7 @@ def psp_e6():
     OBJ_CADENCE = 60  # To one minute resolution
     ORBIT_GAP = 30  # Orbital gap between measurements in Minutes
     PLOT_ORBITS = True
+    SHOW_PLOTS = False
 
     psp_e6_overview = {
         "name": "PSPpriv_e6",
@@ -886,12 +866,13 @@ def psp_e6():
         "cadence_obj": OBJ_CADENCE,
     }
 
+    # SHOW can be changed here
     solo_e6_overview = {
         "name": "SolOpriv_e6",
         "mid_time": datetime(2020, 10, 3),
         "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
-        "show": False,
+        "show": SHOW_PLOTS,
     }
 
     # Prepare the objects with measurements inside DF
@@ -902,33 +883,32 @@ def psp_e6():
     # In september
     # TODO: Should make multiple test cases using different solo_zoomed and psp_zoomed profiles.
     solo_zoomed = {
-        "start_time": datetime(2020, 10, 2, 11, 30),
-        "end_time": datetime(2020, 10, 3, 11, 53),
+        "start_time": datetime(2020, 9, 27, 11, 30),
+        "end_time": datetime(2020, 10, 4, 11, 53),
         "stepMinutes": ORBIT_GAP,
+        "color": "black",
     }
 
     psp_zoomed = {
-        "start_time": datetime(2020, 9, 27),
-        "end_time": datetime(2020, 9, 30, 13, 7),
+        "start_time": datetime(2020, 9, 25),
+        "end_time": datetime(2020, 9, 30),
         "stepMinutes": ORBIT_GAP,
+        "color": "red",
     }
 
-    """
-    For showing which connection is observed by Telloni et al paper
-    solo_zoomed = {
-        "start_time": datetime(2020, 10, 2),
-        "end_time": datetime(2020, 10, 2, 2),
-        "stepMinutes": ORBIT_GAP,
+    solo_paper = {
+        "start_time": datetime(2020, 10, 2, 0),
+        "end_time": datetime(2020, 10, 2, 1, 30),
+        "color": "black",
     }
 
-    psp_zoomed = {
+    psp_paper = {
         "start_time": datetime(2020, 9, 27, 4),
-        "end_time": datetime(2020, 9, 27, 6),
-        "stepMinutes": ORBIT_GAP,
+        "end_time": datetime(2020, 9, 27, 5, 30),
+        "color": "red",
     }
-    """
 
-    solo.plot_solo_psp_df(psp, zone1=solo_zoomed, zone2=psp_zoomed)
+    solo.plot_solo_psp_df(psp, zones=[solo_paper, psp_paper])
     solo.zoom_in(**solo_zoomed)
     psp.zoom_in(**psp_zoomed)
 
@@ -943,7 +923,6 @@ def psp_e6():
     solo.df.fillna(method="pad")
     psp.df.fillna(method="pad")
 
-    # TODO: Make framework that plots the orbits and extracts the data to the side
     for case in range(1):
         # These are cut to the time
         solo.df["Time"] = solo.df.index
@@ -960,15 +939,15 @@ def psp_e6():
             index=False,
         )
 
-        # TODO: Save these resulting coordinates in some file. They could be useful
         # Spacecraft object calling the function is where the solar wind is being mapped from
-
         if PLOT_ORBITS:
-            solo.plot_spherical_coords(
-                psp,
-                accelerated=True,
-                objFolder=f"{orbit_case_path}/Images/",
-            )
+            # solo.plot_spherical_coords(
+            #     psp,
+            #     accelerated=True,
+            #     objFolder=f"{orbit_case_path}Images/",
+            # )
+
+            solo.plot_top_down(psp, objFolder=f"{orbit_case_path}/")
 
 
 # %%
