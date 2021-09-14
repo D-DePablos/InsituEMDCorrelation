@@ -1,9 +1,7 @@
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 
 from sys import path
-
-from numpy.core.fromnumeric import var
-from pandas.core.indexes.timedeltas import timedelta_range
+from collections import namedtuple
 
 path.append(f"{BASE_PATH}Scripts/")
 
@@ -12,15 +10,16 @@ from os import makedirs
 from physicsHelpers import fcl
 from signalHelpers import normalize_signal as norm
 from Plots.cdfReader import extractDF
+from heliopy.models import ParkerSpiral
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import matplotlib.pyplot as plt
 
 import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 import astropy.units as u
-from astropy.coordinates import spherical_to_cartesian, SkyCoord
+from astropy.coordinates import spherical_to_cartesian
 
 # To add a cycle to colours
 from itertools import cycle
@@ -39,6 +38,33 @@ units_dic = {
 }
 
 SOLROTRATE = 24.47 / 86400
+
+
+def lineCalc(P1, P2):
+    """
+    Calculate line given 2 points (X1, Y1), (X2, Y2)
+    """
+    m = (P2[1] - P1[1]) / (P2[0] - P1[0])
+    b = P1[1] + m * P1[0]
+    return m, b
+
+
+# Find p spiral alignment
+def findSpirals(df, vSW, rads=(0, 0.9)):
+    _spirals = []
+    Spiral = namedtuple("Spiral", ["X", "Y", "Z"])
+    for t, measurements in df.iterrows():
+        r0 = measurements["rad"]
+        l0 = measurements["lon"]
+        spiral = ParkerSpiral(vSW * u.km / u.s, r0 * u.au, l0 * u.deg)
+
+        if len(rads) == 2:
+            rads = np.linspace(*rads)
+        longs = spiral.longitude(rads * u.au)
+        cartSpiral = spherical_to_cartesian(rads, np.repeat(0, len(longs)), longs)
+        _spirals.append(Spiral(*cartSpiral))
+
+    return _spirals
 
 
 class Spacecraft:
@@ -65,8 +91,21 @@ class Spacecraft:
         self.name = name
         self.obj_cad = cadence_obj
         self.show = show
+        self.completeCSVPath = f"{BASE_PATH}Data/Prepped_csv/{self.name}.csv"
 
-        import cdflib
+        try:
+            self.df = pd.read_csv(self.completeCSVPath)
+            self.df.index = pd.to_datetime(self.df["Time"])
+
+            if "R" not in self.df.columns:
+                self.saveWithRadius()
+
+            del self.df["Time"]
+            return None
+
+        except FileNotFoundError:
+            pass
+
         from glob import glob
 
         self.sp_coords_carrington = None  # Set a param which is empty to then fill
@@ -125,16 +164,6 @@ class Spacecraft:
             # Lon = sweap_l3.to_dataframe()['carr_longitude']
             # P = (1/2) * Np * (Vx**2) * 100000
             # Mf = Np * Vx
-
-        elif self.name == "SOLOpub":
-            from heliopy.data import solo
-
-            # Public solar Orbiter data TODO
-            mag = solo.download(
-                self.start_time, self.end_time, descriptor="MAG", level="LL02"
-            )
-
-            print(mag.columns)
 
         elif self.name == "SolOpriv_e6":
 
@@ -323,15 +352,13 @@ class Spacecraft:
             # After loading it breaks datetime format -> We save as the csv for ease of use
             self.df.index = pd.to_datetime(self.df["Time"])
             del self.df["Time"]
-
-            self.df.fillna(method="pad")
-            self.df = self.df.resample(f"{self.obj_cad}s").mean()
+            # self.df.fillna(method="pad")
             # self.df.interpolate(inplace=True)
 
-        self.df.resample(f"{self.obj_cad}s").mean()
+        self.df = self.df.resample(f"{self.obj_cad}s").mean()
         self.df["Time"] = self.df.index
         self.df.to_csv(
-            f"{BASE_PATH}Data/Prepped_csv/{self.name}.csv",
+            self.completeCSVPath,
             index=False,
         )
 
@@ -388,7 +415,20 @@ class Spacecraft:
 
         return fline
 
-    def plot_solo_psp_df(self, other, zones=[]):
+    def saveWithRadius(self):
+        """
+        Save a new csv with the radius information
+        """
+        self.extract_orbit_data(from_data=True, stepMinutes=self.obj_cad / 60)
+        self.df = self.df[:-1]
+        self.df["R"] = (self.sp_traj.r.to(u.km)).value
+        self.df["Time"] = self.df.index
+        self.df.to_csv(
+            self.completeCSVPath,
+            index=False,
+        )
+
+    def plot_solo_psp_df(self, other, zones=[], savefolder=None):
         """
         Plot the dataframe in the style of the previous paper
         Other must be PSP
@@ -408,30 +448,32 @@ class Spacecraft:
 
         # Figure
         # Width and marker size
-        fig, axs = plt.subplots(
+        _, axs = plt.subplots(
             5, 1, figsize=(16, 2 * 5), sharex=True, constrained_layout=True
         )
 
-        # TODO: Differentiate between SolO and PSP
-
-        Bt = np.sqrt(self.df["B_R"] ** 2 + self.df["B_T"] ** 2 + self.df["B_N"] ** 2)
+        Bt = (
+            np.sqrt(self.df["B_R"] ** 2 + self.df["B_T"] ** 2 + self.df["B_N"] ** 2)
+            / self.df["R"] ** 2
+        )
         Vx = self.df["V_R"]
-        Np = self.df["N"]
-        NpRPW = self.df["N_RPW"]
+        Np = self.df["N"] / self.df["R"] ** 2
+        NpRPW = self.df["N_RPW"] / self.df["R"] ** 2
         T = self.df["T"]
         Mf = c.m_p.value * Np * 10 ** 15 * (-Vx)
 
-        oBt = np.sqrt(
-            other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
+        Bt_PSP = (
+            np.sqrt(other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2)
+            / other.df["R"] ** 2
         )
         oVx = -other.df["V_R"]
-        oNp = other.df["N"]
+        oNp = other.df["N"] / other.df["R"] ** 2
         oT = other.df["T"]
         oMf = c.m_p.value * oNp * 10 ** 15 * (oVx)
 
         # Magnetic field components
         ax0 = axs[0]
-        ax0.semilogy(
+        ax0.plot(
             Bt,
             "k-",
             label="SolO_MAG",
@@ -439,12 +481,12 @@ class Spacecraft:
             linewidth=1,
         )
         # ax0.set_ylabel(r"$\vec{B}_{T}$ (nT)")
-        ax0.set_ylabel(r"$\hat{B}_Total$")
+        ax0.set_ylabel(r"$\hat{B}_Total (nT)$")
 
         Bt_PSP = np.sqrt(
             other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
         )
-        ax0.semilogy(
+        ax0.plot(
             Bt_PSP,
             "r-",
             label="PSP_FLD",
@@ -472,14 +514,14 @@ class Spacecraft:
 
         # Proton Density
         ax4 = axs[3]
-        ax4.semilogy(
+        ax4.plot(
             Np,
             color="black",
             label="Np_SolO_SWA_PAS",
             linewidth=1,
         )
-        ax4.semilogy(NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
-        ax4.semilogy(oNp, color="red", label="Np_PSP_SPAN")
+        ax4.plot(NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
+        ax4.plot(oNp, color="red", label="Np_PSP_SPAN")
         ax4.legend()
 
         # ax4.legend([f"Np ({(Np.index[1]-Np.index[0]).total_seconds()}s cadence)"])
@@ -487,13 +529,13 @@ class Spacecraft:
 
         # Pressure
         ax5 = axs[4]
-        ax5.semilogy(
+        ax5.plot(
             -Mf,
             label="Mass Flux",
             color="black",
             linewidth=1,
         )
-        ax5.semilogy(oMf, color="red")
+        ax5.plot(oMf, color="red")
         # ax5.legend([f"Mf ({(Mf.index[1]-Mf.index[0]).total_seconds()}s cadence)"])
         ax5.set_ylabel(r"$- m_{p}n_{p} V_x (kg km s^{-1})$")
 
@@ -522,7 +564,10 @@ class Spacecraft:
 
         plt.close()
 
-    def extract_orbit_data(self, from_data=False, stepMinutes=30):
+    def extract_orbit_data(self, from_data=False, stepMinutes=30) -> None:
+        """
+        Extracts orbital data
+        """
         import heliopy.data.spice as spicedata
         import heliopy.spice as spice
 
@@ -574,60 +619,59 @@ class Spacecraft:
             frame=frames.HeliocentricEarthEcliptic
         )
 
-    def plot_top_down(self, other, objFolder=f"{BASE_PATH}Figures/Orbit_3d/"):
+    def plot_top_down(
+        farFromSun,
+        closetoSun,
+        objFolder=f"{BASE_PATH}Figures/Orbit_3d/",
+        plotRate="24h",
+        hlight=(datetime(2020, 10, 2, 4), datetime(2020, 9, 27, 0)),
+        farTime="22:00",
+        closeTime="04:00",
+        pspiralHlight=datetime(2020, 8, 28, 15, 30),
+    ):
         """
         Plots the longitude and latitude of a given spacecraft object
+        plotRate = How often to plot the orbits
+        hlight = for farFrom, closeTo, which date to highlight (closest to!)
         """
+        # TODO : Change hlight to highlight more indices in PSP and SolO so can line up Pspiral!
         makedirs(objFolder, exist_ok=True)
 
-        assert self.sp_traj != None, "Please calculate the spacecraft trajectory"
-        lon1 = self.sp_coords_hcentric.lon
-        lat1 = self.sp_coords_hcentric.lat
-        rad1 = self.sp_coords_hcentric.distance
-        t1 = self.sp_coords_hcentric.obstime.datetime
+        assert farFromSun.sp_traj != None, "Please calculate the spacecraft trajectory"
+        lon1 = farFromSun.sp_coords_hcentric.lon
+        lat1 = farFromSun.sp_coords_hcentric.lat
+        rad1 = farFromSun.sp_coords_hcentric.distance
+        t1 = farFromSun.sp_coords_hcentric.obstime.datetime
 
         # When using 2
-        lon2 = other.sp_coords_hcentric.lon
-        lat2 = other.sp_coords_hcentric.lat
-        rad2 = other.sp_coords_hcentric.distance
-        t2 = other.sp_coords_hcentric.obstime.datetime
+        lon2 = closetoSun.sp_coords_hcentric.lon
+        lat2 = closetoSun.sp_coords_hcentric.lat
+        rad2 = closetoSun.sp_coords_hcentric.distance
+        t2 = closetoSun.sp_coords_hcentric.obstime.datetime
 
         X1, Y1, Z1 = spherical_to_cartesian(rad1, lat1, lon1)
         X2, Y2, Z2 = spherical_to_cartesian(rad2, lat2, lon2)
 
-        # Calculate Parker Spiral  -  looks a bit odd
-        # Phi(R) = Phi(0) - rotRate/Vsw * (R - R0)
-        Phi_0, R_0 = lon2[0].value, rad2[0].value
-        rotRate = 24.47 * 24 * 3600  # Solar rot rate in Hours
-        Vsw, R = self.df["V_R"][t1].mean(), rad1[0].value
-        rList = np.linspace(R, R_0)
-
-        # range of radius
-        Phi = np.abs(np.repeat(Phi_0, len(rList)) - (rotRate / Vsw) * (rList - R_0))
-        for i, val in enumerate(Phi):
-            if val > 360:
-                Phi[i] = val / 360
-
-        coords_Pspiral = {"r": rList, "long": Phi, "lat": np.repeat(0, len(rList))}
-        pspiral = {}
-        pspiral["x"], pspiral["y"], pspiral["z"] = spherical_to_cartesian(
-            r=coords_Pspiral["r"], lat=coords_Pspiral["lat"], lon=coords_Pspiral["long"]
-        )
-
         # Dataframes on Cartesian coords
-        df_self = pd.DataFrame(
+        df_farFromSun = pd.DataFrame(
             {
                 "X": X1,
                 "Y": Y1,
                 "Z": Z1,
+                "lon": lon1,
+                "lat": lat1,
+                "rad": rad1,
             },
             index=t1,
         )
-        df_other = pd.DataFrame(
+        df_nextToSun = pd.DataFrame(
             {
                 "X": X2,
                 "Y": Y2,
                 "Z": Z2,
+                "lon": lon2,
+                "lat": lat2,
+                "rad": rad2,
             },
             index=t2,
         )
@@ -636,37 +680,124 @@ class Spacecraft:
         solo_times, psp_times = [], []
 
         for time in pd.date_range(
-            datetime(2020, 9, 27, 22), datetime(2020, 10, 4, 22), freq="24h"
+            datetime(2020, 9, 27, 22), datetime(2020, 10, 4, 22), freq=f"{plotRate}"
         ):
             solo_times.append(time.to_pydatetime())
 
         for time in pd.date_range(
-            datetime(2020, 9, 25, 4), datetime(2020, 10, 1, 4), freq="24h"
+            datetime(2020, 9, 25, 4), datetime(2020, 10, 1, 4), freq=f"{plotRate}"
         ):
             psp_times.append(time.to_pydatetime())
 
-        df_self = df_self.resample("24h", origin="22:00").mean()
-        df_other = df_other.resample("24h", origin="04:00").mean()
+        df_farFromSun = df_farFromSun.resample(f"{plotRate}", origin=farTime).mean()
+        df_nextToSun = df_nextToSun.resample(f"{plotRate}", origin=closeTime).mean()
 
-        # TODO: Check radial and Parker Spiral alignment of the two spacecraft.
-        # Maybe find Parker Spiral solution at a given time, and also plot radially outgoing lines from PSP
-        # This will clearly show times and locations that are relevant.
+        # Find radial alignment
+        slopeIntList = []
+        slopeInt = namedtuple("slopeInt", ["m", "b"])
+        for r, X1 in enumerate(df_nextToSun["X"].values):
+            P1 = (0, 0)
+            P2 = (df_nextToSun["X"].values[r], df_nextToSun["Y"].values[r])
+            m, b = lineCalc(P1, P2)
+            slopeIntList.append(slopeInt(m, b))
 
-        plt.figure()
-        plt.xlim(-1, 1)
-        plt.ylim(-1, 1)
+        # Figure of the two orbits with field lines
+        plt.figure(figsize=(12, 12))
+        plt.xlim(-0.655, 0.094)
+        plt.ylim(-0.116, 0.835)
 
-        plt.scatter(df_self["X"], df_self["Y"], color="black")
-        plt.scatter(df_other["X"], df_other["Y"], color="red")
-        # plt.plot(pspiral[0], pspiral[1])  # Looks weird in Heliocentric coords
-        plt.plot(pspiral["x"], pspiral["y"])
+        hlightIndices = (
+            df_farFromSun.index.get_loc(hlight[0], method="nearest"),
+            df_nextToSun.index.get_loc(hlight[1], method="nearest"),
+        )
+        pspiralIndex = df_nextToSun.index.get_loc(pspiralHlight, method="nearest")
+
+        plt.scatter(
+            df_farFromSun["X"],
+            df_farFromSun["Y"],
+            alpha=0.6,
+        )
+        plt.scatter(
+            df_nextToSun["X"],
+            df_nextToSun["Y"],
+            alpha=0.6,
+        )
+
+        # Annotate dates
+        for i, txt in enumerate(df_nextToSun.index):
+            if i in [hlightIndices[1], pspiralIndex]:
+                plt.gca().annotate(
+                    datetime.strftime(txt, "%d-%H:%M"),
+                    (df_nextToSun["X"][i], df_nextToSun["Y"][i] + 0.005),
+                    size=15,
+                )
+
+        # Radial alignment timings
+        radAlignmentPSP = (
+            df_nextToSun["X"][hlightIndices[1]],
+            df_nextToSun["Y"][hlightIndices[1]],
+        )
+        radAlignmentSolO = (
+            df_farFromSun["X"][hlightIndices[0]],
+            df_farFromSun["Y"][hlightIndices[0]],
+        )
+
+        # For each of the measurements, calculate distance between PSP and SolO
+
+        plt.scatter(
+            radAlignmentSolO[0],
+            radAlignmentSolO[1],
+            color="black",
+            s=100,
+            label=df_farFromSun.index[hlightIndices[0]],
+        )
+        plt.scatter(
+            radAlignmentPSP[0],
+            radAlignmentPSP[1],
+            color="red",
+            s=30,
+            label=df_nextToSun.index[hlightIndices[1]],
+        )
+
+        # plot radial
+        for i, line in enumerate(slopeIntList):
+            x = (
+                np.linspace(0.0, -1.0)
+                if df_nextToSun["X"].values[i] < 0
+                else np.linspace(0.0, 0.1)
+            )
+            y = line.m * x + line.b
+
+            tline = df_nextToSun.index[i]
+            _col = "orange" if tline != df_nextToSun.index[hlightIndices[1]] else "red"
+            plt.plot(x, y, color=_col)
+
+        # plot spiral
+        pspSpirals = findSpirals(df=df_nextToSun, vSW=314, rads=(0, 1.3))
+
+        for i, spiral in enumerate(pspSpirals):
+            x = spiral.X
+            y = spiral.Y
+            _col, _alpha = ("orange", 0.5) if i != pspiralIndex else ("red", 0.8)
+            plt.plot(x, y, color=_col, alpha=_alpha)
+
+        soloSpirals = findSpirals(df_farFromSun, vSW=330, rads=(0, 1.3))
+        for spiral in soloSpirals:
+            x = spiral.X
+            y = spiral.Y
+            plt.plot(x, y, color="gray", alpha=0.5)
+
         plt.scatter([0], [0], s=300, color="orange", marker="*")
         plt.grid(True)
+        plt.xlabel("Cartesian X (AU)")
+        plt.ylabel("Cartesian Y (AU)")
+        plt.title("SolO and PSP positions with radial and Parker Spiral information")
+        plt.legend()
 
         # Plot the Parker Spiral lines
-        plt.show()
-
-        pass
+        plt.savefig(f"{objFolder}soloPSP_rate_{plotRate}")
+        if farFromSun.show == True:
+            plt.show()
 
     def plot_spherical_coords(
         self, other, accelerated=False, objFolder=f"{BASE_PATH}Figures/Orbit_3d/"
@@ -857,7 +988,7 @@ def psp_e6():
     OBJ_CADENCE = 60  # To one minute resolution
     ORBIT_GAP = 30  # Orbital gap between measurements in Minutes
     PLOT_ORBITS = True
-    SHOW_PLOTS = False
+    SHOW_PLOTS = True
 
     psp_e6_overview = {
         "name": "PSPpriv_e6",
@@ -941,13 +1072,14 @@ def psp_e6():
 
         # Spacecraft object calling the function is where the solar wind is being mapped from
         if PLOT_ORBITS:
-            # solo.plot_spherical_coords(
-            #     psp,
-            #     accelerated=True,
-            #     objFolder=f"{orbit_case_path}Images/",
-            # )
-
-            solo.plot_top_down(psp, objFolder=f"{orbit_case_path}/")
+            solo.plot_top_down(
+                psp,
+                objFolder=f"{orbit_case_path}/",
+                plotRate="12h",
+                farTime="12:00",
+                closeTime="15:30",
+                pspiralHlight=datetime(2020, 9, 28, 15, 30),
+            )
 
 
 # %%
