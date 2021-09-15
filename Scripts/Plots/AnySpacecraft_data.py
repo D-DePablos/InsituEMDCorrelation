@@ -428,7 +428,7 @@ class Spacecraft:
             index=False,
         )
 
-    def plot_solo_psp_df(self, other, zones=[], savefolder=None):
+    def plot_solo_psp_df(self, other, zones=[]):
         """
         Plot the dataframe in the style of the previous paper
         Other must be PSP
@@ -449,45 +449,47 @@ class Spacecraft:
         # Figure
         # Width and marker size
         _, axs = plt.subplots(
-            5, 1, figsize=(16, 2 * 5), sharex=True, constrained_layout=True
+            8, 1, figsize=(16, 2 * 5), sharex=True, constrained_layout=True
         )
 
-        Bt = (
-            np.sqrt(self.df["B_R"] ** 2 + self.df["B_T"] ** 2 + self.df["B_N"] ** 2)
-            / self.df["R"] ** 2
-        )
+        self.df["R"] = self.df["R"] * 1000  # Change to m
+        other.df["R"] = other.df["R"] * 1000  # Change to m
+
+        Bt = np.sqrt(self.df["B_R"] ** 2 + self.df["B_T"] ** 2 + self.df["B_N"] ** 2)
+        BtScaled = Bt * self.df["R"] ** 2
         Vx = self.df["V_R"]
-        Np = self.df["N"] / self.df["R"] ** 2
-        NpRPW = self.df["N_RPW"] / self.df["R"] ** 2
+        Np = self.df["N"]
+        NpScaled = Np * self.df["R"] ** 2
+        NpRPW = self.df["N_RPW"]
+        NpRPWScaled = NpRPW * self.df["R"] ** 2
         T = self.df["T"]
-        Mf = c.m_p.value * Np * 10 ** 15 * (-Vx)
 
-        Bt_PSP = (
-            np.sqrt(other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2)
-            / other.df["R"] ** 2
+        Mf = c.m_p.value * Np * 10 ** 15 * (-Vx * 1000)
+        MfScaled = Mf * self.df["R"] ** 2
+
+        oBTUnscaled = np.sqrt(
+            other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
         )
+        oBtScaled = oBTUnscaled * other.df["R"] ** 2
         oVx = -other.df["V_R"]
-        oNp = other.df["N"] / other.df["R"] ** 2
+        oNp = other.df["N"]
+        oNpScaled = oNp * other.df["R"] ** 2
         oT = other.df["T"]
-        oMf = c.m_p.value * oNp * 10 ** 15 * (oVx)
+        oMf = c.m_p.value * oNp * 10 ** 15 * (oVx * 1000)
+        oMfScaled = oMf * other.df["R"] ** 2
 
         # Magnetic field components
         ax0 = axs[0]
-        ax0.plot(
+        ax0.set_ylabel(r"$\hat{B}_T(nT)$")
+        ax0.semilogy(
             Bt,
             "k-",
             label="SolO_MAG",
             alpha=1,
             linewidth=1,
         )
-        # ax0.set_ylabel(r"$\vec{B}_{T}$ (nT)")
-        ax0.set_ylabel(r"$\hat{B}_Total (nT)$")
-
-        Bt_PSP = np.sqrt(
-            other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
-        )
-        ax0.plot(
-            Bt_PSP,
+        ax0.semilogy(
+            oBTUnscaled,
             "r-",
             label="PSP_FLD",
             alpha=1,
@@ -498,7 +500,7 @@ class Spacecraft:
         ax1 = axs[1]
         ax1.plot(Vx, color="black", label="Vp [GSE]", linewidth=1)
         ax1.plot(oVx, color="red")
-        ax1.set_ylabel(r"$-{V_x}(km s^{-1})$")
+        ax1.set_ylabel(r"$-{V_x} (kms^{-1})$")
 
         # Temperature
         ax2 = axs[2]
@@ -509,35 +511,73 @@ class Spacecraft:
             linewidth=1,
         )
         ax2.plot(oT, color="red")
-        # ax2.legend([f"T ({(T.index[1]-T.index[0]).total_seconds()}s cadence)"])
         ax2.set_ylabel(r"$T_p (K)$")
 
         # Proton Density
         ax4 = axs[3]
-        ax4.plot(
+        ax4.semilogy(
             Np,
             color="black",
             label="Np_SolO_SWA_PAS",
             linewidth=1,
         )
-        ax4.plot(NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
-        ax4.plot(oNp, color="red", label="Np_PSP_SPAN")
+        ax4.semilogy(NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
+        ax4.semilogy(oNp, color="red", label="Np_PSP_SPAN")
+        ax4.set_ylabel(r"$n_p$ (# $cm^{-3}$)")
         ax4.legend()
 
-        # ax4.legend([f"Np ({(Np.index[1]-Np.index[0]).total_seconds()}s cadence)"])
-        ax4.set_ylabel(r"$n_p$ (# $cm^{-3}$)")
-
         # Pressure
-        ax5 = axs[4]
-        ax5.plot(
+        axMf = axs[4]
+        axMf.semilogy(
             -Mf,
             label="Mass Flux",
             color="black",
             linewidth=1,
         )
-        ax5.plot(oMf, color="red")
-        # ax5.legend([f"Mf ({(Mf.index[1]-Mf.index[0]).total_seconds()}s cadence)"])
-        ax5.set_ylabel(r"$- m_{p}n_{p} V_x (kg km s^{-1})$")
+        axMf.semilogy(oMf, color="red")
+        axMf.set_ylabel(r"$-Mf$")
+
+        # Magnetic field components
+        axs[5].set_ylabel(r"$\hat{B}_Total$")
+        axs[5].plot(
+            BtScaled,
+            "k-",
+            label=r"$R^2$ Scaled Btotal SolO",
+        )
+        axs[5].plot(
+            oBtScaled,
+            "r-",
+            label=r"$R^2$ Scaled Btotal PSP",
+        )
+        axs[5].legend()
+
+        # Proton Density
+        axs[6].plot(
+            NpScaled,
+            color="black",
+            label=r"$R^2$ Scaled Np (PAS)",
+            linewidth=1,
+        )
+        axs[6].plot(
+            NpRPWScaled,
+            color="blue",
+            alpha=0.4,
+            label=r"$R^2$ Scaled Np (RPW)",
+        )
+        axs[6].plot(
+            oNpScaled,
+            color="red",
+            label=r"$R^2$ Scaled Np (PSP_SWEAP)",
+        )
+        axs[6].set_ylabel(r"$n_p$")
+        axs[6].legend()
+
+        axs[7].plot(
+            -MfScaled, color="black", linewidth=1, label=r"$R^2$ Scaled Mf SolO"
+        )
+        axs[7].plot(oMfScaled, color="red", label=r"$R^2$ Scaled Mf PSP")
+        axs[7].set_ylabel(r"$-Mf$")
+        axs[7].legend()
 
         # # Plot the relevant columns
         for ax in axs:
@@ -634,7 +674,6 @@ class Spacecraft:
         plotRate = How often to plot the orbits
         hlight = for farFrom, closeTo, which date to highlight (closest to!)
         """
-        # TODO : Change hlight to highlight more indices in PSP and SolO so can line up Pspiral!
         makedirs(objFolder, exist_ok=True)
 
         assert farFromSun.sp_traj != None, "Please calculate the spacecraft trajectory"
@@ -730,6 +769,7 @@ class Spacecraft:
                     datetime.strftime(txt, "%d-%H:%M"),
                     (df_nextToSun["X"][i], df_nextToSun["Y"][i] + 0.005),
                     size=15,
+                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
                 )
 
         # Radial alignment timings
@@ -978,12 +1018,113 @@ def psp_e6():
     Have Potential PSP and SolO Conjunction
     Must study the SolO data and link it back to PSP
     Then apply algorithm and observe results
-    - TODO: Make relevant case studies (e.g., a couple of hours of obs on SolO to more time in PSP)
-    - TODO: apply algo
-    - TODO: Show all relevant results at the same time (similar to P1 but with same variables?)
-    - TODO: how to make statistically sound? -> Use significance through P-values?
     """
     # Parker Encounter 6
+    # psp_fld_l2_mag_RTN_4_Sa_per_Cyc_20201002_v01
+    OBJ_CADENCE = 60  # To one minute resolution
+    ORBIT_GAP = 30  # Orbital gap between measurements in Minutes
+    PLOT_ORBITS = True
+    SHOW_PLOTS = True
+
+    psp_e6_overview = {
+        "name": "PSPpriv_e6",
+        "mid_time": datetime(2020, 10, 2),
+        "margin": timedelta(days=5),
+        "cadence_obj": OBJ_CADENCE,
+    }
+
+    # SHOW can be changed here
+    solo_e6_overview = {
+        "name": "SolOpriv_e6",
+        "mid_time": datetime(2020, 10, 3),
+        "margin": timedelta(days=5),
+        "cadence_obj": OBJ_CADENCE,
+        "show": SHOW_PLOTS,
+    }
+
+    # Prepare the objects with measurements inside DF
+    psp = Spacecraft(**psp_e6_overview)
+    solo = Spacecraft(**solo_e6_overview)
+
+    # Solar orbiter lines up with latitude?
+    # In september
+    # TODO: Should make multiple test cases using different solo_zoomed and psp_zoomed profiles.
+    solo_zoomed = {
+        "start_time": datetime(2020, 9, 27, 11, 30),
+        "end_time": datetime(2020, 10, 4, 11, 53),
+        "stepMinutes": ORBIT_GAP,
+        "color": "black",
+    }
+
+    psp_zoomed = {
+        "start_time": datetime(2020, 9, 25),
+        "end_time": datetime(2020, 9, 30),
+        "stepMinutes": ORBIT_GAP,
+        "color": "red",
+    }
+
+    solo_paper = {
+        "start_time": datetime(2020, 10, 2, 0),
+        "end_time": datetime(2020, 10, 2, 1, 30),
+        "color": "black",
+    }
+
+    psp_paper = {
+        "start_time": datetime(2020, 9, 27, 4),
+        "end_time": datetime(2020, 9, 27, 5, 30),
+        "color": "red",
+    }
+
+    solo.plot_solo_psp_df(psp, zones=[solo_paper, psp_paper])
+    solo.zoom_in(**solo_zoomed)
+    psp.zoom_in(**psp_zoomed)
+
+    # Resample to an objective cadence
+    psp.df = psp.df.resample(f"{OBJ_CADENCE}s").mean()
+    solo.df = solo.df.resample(f"{OBJ_CADENCE}s").mean()
+
+    # print(solo.df)
+    # print(psp.df)
+
+    # Remove all blanks
+    solo.df.fillna(method="pad")
+    psp.df.fillna(method="pad")
+
+    for case in range(1):
+        # These are cut to the time
+        solo.df["Time"] = solo.df.index
+        psp.df["Time"] = psp.df.index
+        orbit_case_path = f"{BASE_PATH}Figures/Orbit_3d/Case_{case:02d}/"
+        makedirs(orbit_case_path, exist_ok=True)
+        solo.df.to_csv(
+            f"{orbit_case_path}solo_case{case:02d}.csv",
+            index=False,
+        )
+
+        psp.df.to_csv(
+            f"{orbit_case_path}psp_case{case:02d}.csv",
+            index=False,
+        )
+
+        # Spacecraft object calling the function is where the solar wind is being mapped from
+        if PLOT_ORBITS:
+            solo.plot_top_down(
+                psp,
+                objFolder=f"{orbit_case_path}/",
+                plotRate="12h",
+                farTime="12:00",
+                closeTime="15:30",
+                pspiralHlight=datetime(2020, 9, 28, 15, 30),
+            )
+
+
+def explore_other_E():
+    """
+    Parker Encounter 6, estimated to take from 26 Sept to 7 October 2020.
+    Have Potential PSP and SolO Conjunction
+    Must study the SolO data and link it back to PSP
+    Then apply algorithm and observe results
+    """
     # psp_fld_l2_mag_RTN_4_Sa_per_Cyc_20201002_v01
     OBJ_CADENCE = 60  # To one minute resolution
     ORBIT_GAP = 30  # Orbital gap between measurements in Minutes

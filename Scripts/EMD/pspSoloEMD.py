@@ -12,21 +12,13 @@ from EMD.importsProj3.signalHelpers import (
     compareTS,
     new_plot_format,
     plot_super_summary,
+    massFluxCalc,
 )
 import numpy as np
 from datetime import datetime, timedelta
-from astropy import constants as const
 from astropy import units as u
 
 from Scripts.Plots.AnySpacecraft_data import Spacecraft
-
-"""
-# TODO: Should ensure that we can swap out of SolO short / PSP 
-"""
-
-
-"""Universal Constants"""
-mp = const.m_p
 
 """Main routine to compare remote and in-situ observations"""
 UNSAFE_EMD_DATA_PATH = f"{BASE_PATH}unsafe/EMD_Data/"
@@ -34,10 +26,9 @@ makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 
 # Set parameters here
 objCad = 60  # cadence in seconds for comparisons
-LONGPARAMLIST = ["B_R"]
 PERIODMINMAX = [3, 20]  # The period might be better if longer
 
-shortRegs = [""]
+shortRegs = [""]  # Set to empty string
 
 DELETE = False  # I believe this is not working at all as intended
 SHOWSPEED = False
@@ -52,7 +43,7 @@ ADDRESIDUAL = False
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = True
+PLOT_ALL_TOGETHER = False
 
 # Plot summary? should be done after plotting together
 SUPER_SUMMARY_PLOT = False
@@ -213,16 +204,16 @@ def extractDiscreteExamples(Caselist, margin, shortDuration=1.5, **kwargs):
     return shortTimes, longTimes, caseNames, refLocations
 
 
-def first_DeriveAndPlotSeparately(
+def deriveAndPlotSeparatelyPSPE6(
     longObjectVars=["N", "T", "V_R", "Mf", "Btotal"],
     shortObjectVars=["N", "T", "V_R", "Mf", "Btotal"],
+    scaleWithR=False,
 ):
-    # For each of the parameters in LONGPARAMLIST
-
     """
     PSP variables
     V_R	V_T	V_N	N	T	swe_flag	B_R	B_T	B_N	fld_flag	Time
     """
+
     longObject = Spacecraft(
         name="PSPpriv_e6",
         mid_time=datetime(2020, 10, 2),
@@ -231,6 +222,10 @@ def first_DeriveAndPlotSeparately(
     )
 
     longObject.df = longObject.df.interpolate()  # Fill gaps
+    assert (
+        "R" in longObject.df.columns
+    ), f"LongObject {longObject.name} does not have a Radius column"
+
     # Velocities are sometimes modified with 4/3 factor
     HISPEED_BMAPPING, LOSPEED_BMAPPING, MEAN = (
         int(longObject.df["V_R"].max() / accelerated),
@@ -239,9 +234,9 @@ def first_DeriveAndPlotSeparately(
     )
 
     # Calculate mass flux for long
-    Vx = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
-    N = (longObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
-    longObject.df["Mf"] = (N * mp * Vx).value
+    longObject.df["Mf"] = massFluxCalc(
+        longObject.df["V_R"].values, longObject.df["N"].values
+    )
 
     longObject.df["Btotal"] = np.sqrt(
         longObject.df["B_R"] ** 2
@@ -261,17 +256,35 @@ def first_DeriveAndPlotSeparately(
         cadence_obj=objCad,
     )
     shortObject.df = shortObject.df.interpolate()  # Interpolate after forming lc object
+    assert (
+        "R" in shortObject.df.columns
+    ), f"ShortObject {shortObject.name} does not have a Radius column"
 
     # Calculate mass flux & Btotal short df
-    Vxshort = (shortObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
-    Nshort = (shortObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
-    shortObject.df["Mf"] = (Nshort * mp * Vxshort).value
+    shortObject.df["Mf"] = massFluxCalc(
+        shortObject.df["V_R"].values, shortObject.df["N"].values
+    )
 
     shortObject.df["Btotal"] = np.sqrt(
         shortObject.df["B_R"] ** 2
         + shortObject.df["B_T"] ** 2
         + shortObject.df["B_N"] ** 2
     )
+
+    # When necessary to scale with R
+    if scaleWithR:
+        affectedVars = ("N", "Btotal", "Mf")
+        for _df, _l in zip(
+            (shortObject.df, longObject.df), (shortObjectVars, longObjectVars)
+        ):
+            for vari in affectedVars:
+                _df[f"{vari}Scaled"] = _df[vari] * 1000 * _df["R"] ** 2
+                try:
+                    _i = _l.index(vari)
+                    _l[_i] = f"{vari}Scaled"
+                except:
+                    pass
+
     # We set a margin around original obs.
     (
         shortTimesList,
@@ -286,13 +299,16 @@ def first_DeriveAndPlotSeparately(
     print(
         f"""
             Will be creating {len(shortTimesList)} windows. \n
-            Variables to be used will be short: {shortObject.name}: [{shortObjectVars}] and long: {longObject.name}: [{longObjectVars}] \n
-            """
+            Variables to be used - short: {shortObject.name}: [{shortObjectVars}] \n 
+            long: {longObject.name}: [{longObjectVars}] \n
+         """
     )
 
     for index, shortTimes in enumerate(shortTimesList):
 
+        # Minimise number of prints
         dirName = f"""{caseNamesList[index]}"""
+        print(f"Creating and Saving to {dirName}")
 
         comparePSPtoSOLO(
             shortObj=shortObject,
@@ -364,10 +380,9 @@ def combinedPlot(
     )
 
     # Calculate mass flux and Btotal
-    Vx = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
-    mp = const.m_p
+    VxMS = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
     N = (longObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
-    longObject.df["Mf"] = (N * mp * Vx).value
+    longObject.df["Mf"] = (N * mp * VxMS).value
 
     longObject.df["Btotal"] = np.sqrt(
         longObject.df["B_R"] ** 2
@@ -466,11 +481,19 @@ def combinedPlot(
 
 
 if __name__ == "__main__":
-    generalVars = ["V_R", "B_R", "Btotal", "Mf", "T"]
+    generalVars = [
+        "V_R",
+        "Btotal",
+        "N",
+        "Mf",
+        "T",
+    ]
     if not PLOT_ALL_TOGETHER:
 
-        first_DeriveAndPlotSeparately(
-            longObjectVars=generalVars, shortObjectVars=["B_R"]
+        deriveAndPlotSeparatelyPSPE6(
+            longObjectVars=generalVars,
+            shortObjectVars=["Btotal", "N"],
+            scaleWithR=True,
         )
 
     else:

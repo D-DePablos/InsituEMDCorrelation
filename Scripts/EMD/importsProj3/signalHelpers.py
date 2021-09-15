@@ -1,8 +1,9 @@
 """Helper functions"""
 from matplotlib import rc
 from os import makedirs
+import warnings
+warnings.filterwarnings("ignore")
 
-# import h5py
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
@@ -11,10 +12,9 @@ from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 from glob import glob
 import matplotlib
-from PyEMD import EMD, Visualisation  # This import works so let's just leave it
+from PyEMD import EMD, Visualisation  
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.dates as mdates
-import matplotlib.gridspec as gridspec
 from datetime import timedelta
 from copy import deepcopy
 from glob import glob
@@ -39,7 +39,15 @@ ColumnColours = {
     "Btotal": "red",
     "B_R": "green",
 }
-alphaWVL = {"94": 0.9, "171": 0.9, "193": 0.7, "211": 0.5, "HMI": 0.9, "Btotal": 0.9, "B_R": 0.9}
+alphaWVL = {
+    "94": 0.9,
+    "171": 0.9,
+    "193": 0.7,
+    "211": 0.5,
+    "HMI": 0.9,
+    "Btotal": 0.9,
+    "B_R": 0.9,
+}
 # corrThrPlotList = np.arange(0.70, 1, 0.05)
 corrThrPlotList = np.arange(0.75, 0.901, 0.05)
 # corrThrPlotList = [0.65]
@@ -81,6 +89,21 @@ axDic = {
 
 # font = {"family": "DejaVu Sans", "weight": "normal", "size": 25}
 # rc("font", **font)
+
+
+def massFluxCalc(Vsw, Np):
+    """
+    Returns the mass flux
+    Vsw: Solar wind speed in km/s
+    Np: Solar wind proton density per cm3
+    """
+    import astropy.constants as cons
+    import astropy.units as u
+
+    mp = cons.m_p
+    VxshortMS = (Vsw * (u.km / u.s)).to(u.m / u.s)
+    NshortM3 = (Np * (u.cm ** (-3))).to(u.m ** (-3))
+    return (NshortM3 * mp * VxshortMS).value
 
 
 # Local helper functions
@@ -845,7 +868,6 @@ class SignalFunctions(Signal):
         self.saveformat = signal.saveformat if saveformat is None else saveformat
 
         if norm:
-            print(f"Normalising {self.signalObject.name}")
             self.s = normalize_signal(signal.data.copy())
         else:
             self.s = signal.data.copy()
@@ -937,8 +959,6 @@ class SignalFunctions(Signal):
         self.path_to_corr_matrix = f"{short.saveFolder}IMF/Corr_matrix_all.npy"
         self.windowDisp = windowDisp
 
-        print(f"Saving IMF files to {short.saveFolder}")
-
         short_imfs = emd_and_save(
             s=short.s,
             t=short.t,
@@ -970,8 +990,6 @@ class SignalFunctions(Signal):
         self.no_displacements = int(
             np.floor((long.t[-1] - short.t[-1]) / self.windowDisp)
         )  # In seconds
-
-        print(f"Found {self.no_displacements} displacements possible.")
 
         # If the correlation matrix is set, skip
         try:
@@ -1080,10 +1098,6 @@ class SignalFunctions(Signal):
                         savepath=f"{long.saveFolder}IMFplots/",
                         save_name=f"{height:08d}",
                         with_residue=True,
-                    )
-
-                    print(
-                        f"Saved long IMF {height:08d} figures to {long.saveFolder}IMFplots/ \n"
                     )
 
                 # For all of the short, long IMFs
@@ -1222,7 +1236,6 @@ class SignalFunctions(Signal):
         )
         # plt.show()
         plt.close()
-        print(f"Saved IMFs to {savepath} \n")
 
     def plot_all_results(
         self,
@@ -1439,7 +1452,6 @@ class SignalFunctions(Signal):
 
                 plt.tight_layout(pad=0.001)
                 plt.savefig(fig_locn, bbox_inches="tight", dpi=300)
-                print(f"Saved heatmap to {fig_locn}")
                 # plt.show()
                 plt.close()
 
@@ -1470,7 +1482,6 @@ class SignalFunctions(Signal):
 
                 plt.tight_layout(pad=0.001)
                 plt.savefig(fig_locn, bbox_inches="tight", dpi=300)
-                print(f"Saved pvalue to {fig_locn}")
                 plt.close()
 
                 def create_ts_plot(a=self.s, b=other.s, start=height):
