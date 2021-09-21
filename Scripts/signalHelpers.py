@@ -61,6 +61,8 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
 
     try:
         imfs = np.load(saved_npy)
+        if "0000" in save_name:
+            print(f"Loading {saved_npy}")
         return imfs
     except FileNotFoundError:
         pass
@@ -798,6 +800,7 @@ class SignalFunctions(Signal):
 
         # If the correlation matrix is set, skip
         try:
+            # Loading the correlation matrix from the short dataset
             np.load(self.path_to_corr_matrix)
 
             # When it loads correctly, it either continues or returns None

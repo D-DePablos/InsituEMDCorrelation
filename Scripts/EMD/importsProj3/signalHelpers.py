@@ -2,8 +2,10 @@
 from matplotlib import rc
 from os import makedirs
 import warnings
-warnings.filterwarnings("ignore")
 
+# warnings.filterwarnings("ignore")
+
+from os import makedirs
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
@@ -12,7 +14,7 @@ from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 from glob import glob
 import matplotlib
-from PyEMD import EMD, Visualisation  
+from PyEMD import EMD, Visualisation
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.dates as mdates
 from datetime import timedelta
@@ -38,6 +40,7 @@ vis = Visualisation()
 ColumnColours = {
     "Btotal": "red",
     "B_R": "green",
+    "N_RPW": "orange",
 }
 alphaWVL = {
     "94": 0.9,
@@ -169,13 +172,12 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
         for isparam in insituDF.columns:
             # How do we get in situ data? From above function!
             if region != "":
-                _subfolder = f"{_base_folder}*{shortVar}_{region}*/*{isparam}/{windDisp}/{period[0]} - {period[1]}/"
+                _subfolder = f"{_base_folder}*{shortVar}_{region}*/*{isparam}*/{windDisp}/{period[0]} - {period[1]}/"
             else:
-                _subfolder = f"{_base_folder}*{shortVar}*/*{isparam}/{windDisp}/{period[0]} - {period[1]}/"
+                _subfolder = f"{_base_folder}*{shortVar}*/*{isparam}*/{windDisp}/{period[0]} - {period[1]}/"
             foundMatrix = glob(f"{_subfolder}IMF/Corr_matrix_all.npy")
             short_D = glob(f"{_subfolder}IMF/short*.npy")
             short_T = lcDic[shortVar].index
-            # TODO: Fix how the folder is gount - problem with underscore or something!
             resultingMatrices[f"{isparam}"] = matrixData(
                 insituDF[f"{isparam}"],
                 np.load(foundMatrix[0]),
@@ -262,6 +264,8 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
     Generate ALL EMDs for a relevant timeseries and save them in a numpy file for later use
     Checks if the file exists already to not repeat efforts
 
+    This is done for each of the cases
+
     Input params:
     :param s: signal (data)
     :param t: long_signal_time array
@@ -274,7 +278,6 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
 
     try:
         imfs = np.load(saved_npy)
-        # print(f"loading imfs {saved_npy}")
         return imfs
     except FileNotFoundError:
         pass
@@ -1900,7 +1903,7 @@ def compareTS(
     deleted_already = False
     # For all of the lightcurves
     for varOther in list(dfOther):
-        otherPath = f"{savePath}{labelOther}/{varOther}/"
+        otherPath = f"{savePath}../{labelOther}/{varOther}/"
         makedirs(otherPath, exist_ok=True)
 
         signalOther = Signal(
@@ -2391,7 +2394,8 @@ def new_plot_format(
             nrows=nplots,
             ncols=2,
             sharex="col",
-            figsize=(16, 8),
+            figsize=(4 * nplots, 8),
+            constrained_layout=True,
         )
         fig.suptitle(
             f'SolO: {lcDic[shortParamList[0]].index[0].strftime(format="%Y-%m-%d %H:%M")}',
@@ -2500,6 +2504,7 @@ def new_plot_format(
                 color=ColumnColours[f"{shortVar}"],
                 fontsize=20,
             )
+
             if addEMDLcurves:
                 for k, wvlemd in enumerate(wvlEMD[1:-1]):
                     if int(WVLValidity[f"{shortVar}"][k]) == 1:
@@ -2514,11 +2519,8 @@ def new_plot_format(
                 axRE.xaxis.set_minor_locator(mdates.MinuteLocator(interval=15))
                 axRE.xaxis.set_major_locator(mdates.HourLocator(interval=1))
 
-        from os import makedirs
-
         saveFolder = f"{base_folder}0_Compressed/{period[0]} - {period[1]}/"
         makedirs(saveFolder, exist_ok=True)
-        plt.tight_layout()
         if showFig:
             plt.show()
         print(f"Region {region}")

@@ -345,7 +345,7 @@ def combinedPlot(
     shortDFDic = {}
     for _shortParam in shortParamList:
         shortDFDic[f"{_shortParam}"] = Spacecraft(
-            name="SolOpriv_e6",
+            name="SolO_Scaled_e6",
             mid_time=datetime(2020, 10, 3),
             margin=timedelta(days=5),
             cadence_obj=objCad,
@@ -358,7 +358,7 @@ def combinedPlot(
 
     # Long Object will be PSP measurements as more continuous
     longObject = Spacecraft(
-        name="PSPpriv_e6",
+        name="PSP_Scaled_e6",
         mid_time=datetime(2020, 10, 2),
         margin=timedelta(days=5),
         cadence_obj=objCad,
@@ -379,17 +379,6 @@ def combinedPlot(
         else speedSet
     )
 
-    # Calculate mass flux and Btotal
-    VxMS = (longObject.df["V_R"].values * (u.km / u.s)).to(u.m / u.s)
-    N = (longObject.df["N"].values * (u.cm ** (-3))).to(u.m ** (-3))
-    longObject.df["Mf"] = (N * mp * VxMS).value
-
-    longObject.df["Btotal"] = np.sqrt(
-        longObject.df["B_R"] ** 2
-        + longObject.df["B_T"] ** 2
-        + longObject.df["B_N"] ** 2
-    )
-
     # Variables for PSP (long)
     longObjectVars = generalVars
     longObject.df = longObject.df[longObjectVars]
@@ -397,12 +386,7 @@ def combinedPlot(
     figName = "accelerated" if accelerated == 4 / 3 else "constant"
 
     # We set a margin around original obs.
-    (
-        shortTimesList,
-        longTimesList,
-        caseNamesList,
-        refLocations,
-    ) = extractDiscreteExamples(
+    (shortTimesList, longTimesList, caseNamesList, _,) = extractDiscreteExamples(
         cases,
         margin=MARGINHOURSLONG,
     )
@@ -492,13 +476,13 @@ if __name__ == "__main__":
 
         deriveAndPlotSeparatelyPSPE6(
             longObjectVars=generalVars,
-            shortObjectVars=["Btotal", "N"],
+            shortObjectVars=["Btotal", "N_RPW"],
             scaleWithR=True,
         )
 
     else:
         combinedPlot(
-            shortParamList=["B_R"],
+            shortParamList=["Btotal", "N_RPW"],
             speedSet=(
                 300,
                 200,
