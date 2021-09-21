@@ -3,7 +3,7 @@ from matplotlib import rc
 from os import makedirs
 import warnings
 
-# warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")
 
 from os import makedirs
 import numpy as np

@@ -9,7 +9,6 @@ path.append(f"{BASE_PATH}Scripts/")
 # from helpers import resample_and_rename
 from os import makedirs
 from physicsHelpers import fcl
-from signalHelpers import normalize_signal as norm
 from Plots.cdfReader import extractDF
 from heliopy.models import ParkerSpiral
 
@@ -20,7 +19,7 @@ import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 import astropy.units as u
-from astropy.coordinates import spherical_to_cartesian, cartesian_to_spherical
+from astropy.coordinates import spherical_to_cartesian
 from astropy.table import QTable
 
 unitsTable = {
@@ -72,6 +71,8 @@ def findSpirals(df, vSW, rads=(0, 0.9)):
         if len(rads) == 2:
             rads = np.linspace(*rads)
         longs = spiral.longitude(rads * u.au)
+
+        # This works once the coordinate frame is fixed
         cartSpiral = spherical_to_cartesian(rads, np.repeat(0, len(longs)), longs)
         _spirals.append(Spiral(*cartSpiral))
 

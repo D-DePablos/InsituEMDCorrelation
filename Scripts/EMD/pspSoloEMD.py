@@ -26,7 +26,7 @@ makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 
 # Set parameters here
 objCad = 60  # cadence in seconds for comparisons
-PERIODMINMAX = [3, 20]  # The period might be better if longer
+PERIODMINMAX = [5, 90]  # The period might be better if longer
 
 shortRegs = [""]  # Set to empty string
 
