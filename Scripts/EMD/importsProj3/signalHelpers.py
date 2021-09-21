@@ -23,8 +23,6 @@ from glob import glob
 from collections import namedtuple
 import astropy.units as u
 
-import heliopy.data.spice as spicedata
-import heliopy.spice as spice
 
 import warnings
 
@@ -94,6 +92,130 @@ axDic = {
 # rc("font", **font)
 
 
+def extractDiscreteExamples(Caselist, margin, shortDuration=1.5, **kwargs):
+    """Extracts discrete PSP - longObject pairs
+
+    Args:
+        Caselist ([type]): [description]
+        margin ([type]): [description]
+        pspDuration (int, optional): [description]. Defaults to 1.
+        noColumns (bool, optional): Whether to skip plotting backmapped time columns
+        Kwargs_construct = _exp_loc_color, _exp_loc_label
+    """
+
+    def _constructExpectedLocation(
+        _times, _exp_loc_color="blue", _exp_loc_label="BBMatch"
+    ):
+        """Construct the Expected Location dic
+
+        Args:
+            _times ([type]): Tuple of two datetimes, start and end
+            _exp_loc_color (str, optional): [description]. Defaults to "orange".
+            label (str, optional): [description]. Defaults to "BBMatch".
+
+        Returns:
+            Dictionary with proper formatting
+        """
+
+        return {
+            "start": _times[0],
+            "end": _times[1],
+            "color": _exp_loc_color,
+            "label": _exp_loc_label,
+        }
+
+    shortTimes = []
+    matchTimes = []
+    longTimes = []
+    caseNames = []
+    refLocations = []
+
+    # Open each of the list dictionaries
+    for case in Caselist:
+        # Get the PSP start and end
+        shortStart = case["shortTime"]
+        shortEnd = shortStart + timedelta(hours=shortDuration)
+        shortTimes.append((shortStart, shortEnd))
+
+        # Get the match, which is used for reference later
+        matchStart = case["matchTime"]
+
+        # longObjectDurn gives reference to amount of longObject datapoints that match
+        matchEnd = matchStart + timedelta(hours=case["shortDurn"])
+        matchAvg = matchStart + (matchEnd - matchStart) / 2
+        matchTimes.append((matchStart, matchEnd))
+
+        # Get the Solar Orbiter measurements
+        longObjectStart = matchAvg - timedelta(hours=margin)
+        longObjectEnd = matchAvg + timedelta(hours=margin)
+        longTimes.append((longObjectStart, longObjectEnd))
+
+        # Get the specific case Name
+        caseNames.append(case["caseName"])
+
+        refLocations.append(
+            _constructExpectedLocation(_times=(matchStart, matchEnd), **kwargs)
+        )
+
+    return shortTimes, longTimes, caseNames, refLocations
+
+
+def caseCreation(
+    shortTimes,
+    longTimes,
+    shortDuration,
+    caseName,
+    shortDisplacement=None,
+    MarginHours=24,
+    savePicklePath=None,
+    forceCreate=False,
+):
+    import pickle
+
+    # Attempt to load the file first
+    if not forceCreate:
+        try:
+            with open(f"{savePicklePath}", "rb") as f:
+                print("Loaded test cases instead of created them.")
+                cases = pickle.load(f)
+                return cases
+
+        except FileNotFoundError:
+            pass
+
+    from datetime import timedelta
+
+    startSHORT, endSHORT = shortTimes
+    startLONG, endLONG = longTimes
+
+    baseLONG = endLONG - (endLONG - startLONG) / 2
+
+    cases, i = [], 0
+    _tShort = startSHORT
+
+    shortDisplacement = (
+        shortDuration if shortDisplacement == None else shortDisplacement
+    )
+    while _tShort <= (endSHORT - timedelta(hours=shortDuration)):
+        _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
+
+        cases.append(
+            {
+                "shortTime": _tShort,
+                "matchTime": baseLONG,
+                "shortDurn": shortDuration,
+                "caseName": f"{caseName}_{_tShort.day}_T{_tShort.hour:02d}",
+                "MARGINHOURSLONG": MarginHours,
+            }
+        )
+
+        i += 1
+
+    with open(f"{savePicklePath}", "wb") as f:
+        pickle.dump(cases, f)
+    return cases
+
+
 def massFluxCalc(Vsw, Np):
     """
     Returns the mass flux
@@ -129,6 +251,8 @@ def getAvgRadius(SPCKernelName, times):
     """
     Find average radius for a time period
     """
+    import heliopy.data.spice as spicedata
+    import heliopy.spice as spice
     if SPCKernelName == "solo":
         spicedata.get_kernel("solo")
         sp_traj = spice.Trajectory("Solar Orbiter")
@@ -217,6 +341,8 @@ def transformTimeAxistoVelocity(
         originTime: Time that is to be compared (hour of AIA images)
         SPCKernelName: Kernel name for spacecraft
     """
+    import heliopy.data.spice as spicedata
+    import heliopy.spice as spice
 
     if SPCKernelName == "solo":
         spicedata.get_kernel("solo")

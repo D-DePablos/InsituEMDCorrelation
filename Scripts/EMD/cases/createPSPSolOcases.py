@@ -1,9 +1,14 @@
 """
 Generate the cases for all possible SolO - SHORT times (every hour)
 """
+from sys import path
+
+BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
+path.append(f"{BASE_PATH}Scripts/")
 
 from datetime import datetime, timedelta
 import pickle
+from EMD.importsProj3.signalHelpers import caseCreation
 
 MARGINHOURSLONG = 60
 
@@ -49,49 +54,6 @@ def main():
     ) as f:
         print("Saving cases")
         pickle.dump(cases, f)
-
-
-def caseCreation(
-    shortTimes,
-    longTimes,
-    shortDuration,
-    caseName,
-    shortDisplacement=None,
-    MarginHours=24,
-    savePicklePath=None,
-):
-    import pickle
-    from datetime import timedelta
-
-    startSHORT, endSHORT = shortTimes
-    startLONG, endLONG = longTimes
-
-    baseLONG = endLONG - (endLONG - startLONG) / 2
-
-    cases, i = [], 0
-    _tShort = startSHORT
-
-    shortDisplacement = (
-        shortDuration if shortDisplacement == None else shortDisplacement
-    )
-    while _tShort <= (endSHORT - timedelta(hours=shortDuration)):
-        _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
-
-        cases.append(
-            {
-                "shortTime": _tShort,
-                "matchTime": baseLONG,
-                "shortDurn": shortDuration,
-                "caseName": f"{caseName}_{_tShort.day}_T{_tShort.hour:02d}",
-                "MARGINHOURSLONG": MarginHours,
-            }
-        )
-
-        i += 1
-
-    with open(f"{savePicklePath}", "wb") as f:
-        pickle.dump(cases, f)
-    return cases
 
 
 def alterCases():

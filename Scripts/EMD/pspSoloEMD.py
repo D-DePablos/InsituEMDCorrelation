@@ -13,6 +13,7 @@ from EMD.importsProj3.signalHelpers import (
     new_plot_format,
     plot_super_summary,
     massFluxCalc,
+    extractDiscreteExamples,
 )
 import numpy as np
 from datetime import datetime, timedelta
@@ -134,74 +135,6 @@ def comparePSPtoSOLO(
         LOSPEED=HISPEED_BMAPPING,
         HISPEED=LOSPEED_BMAPPING,
     )
-
-
-def extractDiscreteExamples(Caselist, margin, shortDuration=1.5, **kwargs):
-    """Extracts discrete PSP - longObject pairs
-
-    Args:
-        Caselist ([type]): [description]
-        margin ([type]): [description]
-        pspDuration (int, optional): [description]. Defaults to 1.
-        noColumns (bool, optional): Whether to skip plotting backmapped time columns
-        Kwargs_construct = _exp_loc_color, _exp_loc_label
-    """
-
-    def _constructExpectedLocation(
-        _times, _exp_loc_color="blue", _exp_loc_label="BBMatch"
-    ):
-        """Construct the Expected Location dic
-
-        Args:
-            _times ([type]): Tuple of two datetimes, start and end
-            _exp_loc_color (str, optional): [description]. Defaults to "orange".
-            label (str, optional): [description]. Defaults to "BBMatch".
-
-        Returns:
-            Dictionary with proper formatting
-        """
-
-        return {
-            "start": _times[0],
-            "end": _times[1],
-            "color": _exp_loc_color,
-            "label": _exp_loc_label,
-        }
-
-    shortTimes = []
-    matchTimes = []
-    longTimes = []
-    caseNames = []
-    refLocations = []
-
-    # Open each of the list dictionaries
-    for case in Caselist:
-        # Get the PSP start and end
-        shortStart = case["shortTime"]
-        shortEnd = shortStart + timedelta(hours=shortDuration)
-        shortTimes.append((shortStart, shortEnd))
-
-        # Get the match, which is used for reference later
-        matchStart = case["matchTime"]
-
-        # longObjectDurn gives reference to amount of longObject datapoints that match
-        matchEnd = matchStart + timedelta(hours=case["shortDurn"])
-        matchAvg = matchStart + (matchEnd - matchStart) / 2
-        matchTimes.append((matchStart, matchEnd))
-
-        # Get the Solar Orbiter measurements
-        longObjectStart = matchAvg - timedelta(hours=margin)
-        longObjectEnd = matchAvg + timedelta(hours=margin)
-        longTimes.append((longObjectStart, longObjectEnd))
-
-        # Get the specific case Name
-        caseNames.append(case["caseName"])
-
-        refLocations.append(
-            _constructExpectedLocation(_times=(matchStart, matchEnd), **kwargs)
-        )
-
-    return shortTimes, longTimes, caseNames, refLocations
 
 
 def deriveAndPlotSeparatelyPSPE6(
