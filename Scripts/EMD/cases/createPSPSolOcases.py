@@ -51,6 +51,49 @@ def main():
         pickle.dump(cases, f)
 
 
+def caseCreation(
+    shortTimes,
+    longTimes,
+    shortDuration,
+    caseName,
+    shortDisplacement=None,
+    MarginHours=24,
+    savePicklePath=None,
+):
+    import pickle
+    from datetime import timedelta
+
+    startSHORT, endSHORT = shortTimes
+    startLONG, endLONG = longTimes
+
+    baseLONG = endLONG - (endLONG - startLONG) / 2
+
+    cases, i = [], 0
+    _tShort = startSHORT
+
+    shortDisplacement = (
+        shortDuration if shortDisplacement == None else shortDisplacement
+    )
+    while _tShort <= (endSHORT - timedelta(hours=shortDuration)):
+        _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
+
+        cases.append(
+            {
+                "shortTime": _tShort,
+                "matchTime": baseLONG,
+                "shortDurn": shortDuration,
+                "caseName": f"{caseName}_{_tShort.day}_T{_tShort.hour:02d}",
+                "MARGINHOURSLONG": MarginHours,
+            }
+        )
+
+        i += 1
+
+    with open(f"{savePicklePath}", "wb") as f:
+        pickle.dump(cases, f)
+    return cases
+
+
 def alterCases():
     """
     Cases like "hump" from dave
@@ -93,6 +136,25 @@ def alterCases():
         pickle.dump(cases, f)
 
 
+def testCaseCreation():
+    """
+    Tests that cases are created successfully and deletes evidence
+    """
+    testCase = {
+        "shortTimes": (datetime(2020, 1, 1, 0), datetime(2020, 1, 1, 23)),
+        "longTimes": (datetime(2020, 2, 1), datetime(2020, 2, 10)),
+        "shortDuration": 1,
+        "caseName": "TEST",
+        "shortDisplacement": 1,
+        "MarginHours": 10,
+        "savePicklePath": "/home/diegodp/Downloads/case.pickle",
+    }
+
+    cases = caseCreation(**testCase)
+    assert len(cases) == 24, "Length not equal to expected"
+
+
 if __name__ == "__main__":
     # main()
-    alterCases()
+    # alterCases()
+    testCaseCreation()
