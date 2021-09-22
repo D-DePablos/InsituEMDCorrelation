@@ -8,18 +8,17 @@ from collections import namedtuple
 from os import makedirs
 
 # Different imports on Project 2
-from EMD.importsProj3.signalHelpers import (
+from EMD.importsProj3.signalAPI import (
     compareTS,
     new_plot_format,
     plot_super_summary,
-    massFluxCalc,
     extractDiscreteExamples,
 )
 import numpy as np
 from datetime import datetime, timedelta
 from astropy import units as u
 
-from Scripts.Plots.AnySpacecraft_data import Spacecraft
+from Plots.AnySpacecraft_data import Spacecraft
 
 """Main routine to compare remote and in-situ observations"""
 UNSAFE_EMD_DATA_PATH = f"{BASE_PATH}unsafe/EMD_Data/"
@@ -27,7 +26,7 @@ makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 
 # Set parameters here
 objCad = 60  # cadence in seconds for comparisons
-PERIODMINMAX = [5, 90]  # The period might be better if longer
+PERIODMINMAX = [5, 20]  # The period might be better if longer
 
 shortRegs = [""]  # Set to empty string
 
@@ -44,10 +43,10 @@ ADDRESIDUAL = False
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = False
+PLOT_ALL_TOGETHER = True
 
 # Plot summary? should be done after plotting together
-SUPER_SUMMARY_PLOT = False
+SUPER_SUMMARY_PLOT = True
 accelerated = (
     1  # Whether to accelerate speed (relevant for backmapping, coloured columns)
 )
@@ -75,10 +74,10 @@ def comparePSPtoSOLO(
     shortCad,
     longCad,
     objDirExt,
+    corrThrPlotList=np.arange(0.65, 1, 0.05),
     expectedLocationList=False,
     PeriodMinMax=[1, 20],
     filterPeriods=False,
-    delete=DELETE,
     showFig=True,
     renormalize=False,
     DETREND_BOX_WIDTH=None,
@@ -121,18 +120,17 @@ def comparePSPtoSOLO(
         cadOther,
         labelOther=longName,
         winDispList=[60],
-        corrThrPlotList=np.arange(0.65, 1, 0.05),
         PeriodMinMax=PeriodMinMax,
         filterPeriods=filterPeriods,
         savePath=mainDir,
         useRealTime=True,
         expectedLocationList=expectedLocationList,
         detrend_box_width=DETREND_BOX_WIDTH,
-        delete=delete,
         showFig=showFig,
         renormalize=renormalize,
         showSpeed=SHOWSPEED,
         LOSPEED=HISPEED_BMAPPING,
+        corrThrPlotList=corrThrPlotList,
         HISPEED=LOSPEED_BMAPPING,
     )
 
@@ -140,7 +138,6 @@ def comparePSPtoSOLO(
 def deriveAndPlotSeparatelyPSPE6(
     longObjectVars=["N", "T", "V_R", "Mf", "Btotal"],
     shortObjectVars=["N", "T", "V_R", "Mf", "Btotal"],
-    scaleWithR=False,
 ):
     """
     PSP variables
@@ -148,16 +145,11 @@ def deriveAndPlotSeparatelyPSPE6(
     """
 
     longObject = Spacecraft(
-        name="PSPpriv_e6",
-        mid_time=datetime(2020, 10, 2),
-        margin=timedelta(days=5),
+        name="PSP_Scaled_e6",
         cadence_obj=objCad,
     )
 
     longObject.df = longObject.df.interpolate()  # Fill gaps
-    assert (
-        "R" in longObject.df.columns
-    ), f"LongObject {longObject.name} does not have a Radius column"
 
     # Velocities are sometimes modified with 4/3 factor
     HISPEED_BMAPPING, LOSPEED_BMAPPING, MEAN = (
@@ -166,57 +158,16 @@ def deriveAndPlotSeparatelyPSPE6(
         int(longObject.df["V_R"].mean() / accelerated),
     )
 
-    # Calculate mass flux for long
-    longObject.df["Mf"] = massFluxCalc(
-        longObject.df["V_R"].values, longObject.df["N"].values
-    )
-
-    longObject.df["Btotal"] = np.sqrt(
-        longObject.df["B_R"] ** 2
-        + longObject.df["B_T"] ** 2
-        + longObject.df["B_N"] ** 2
-    )
-
     """
     Solo Vars (Short TS)
-    V_R	V_T	V_N	N	T	solo_plasma_flag	B_R	B_T	B_N	MAG_FLAG	Time
+    
     """
     # Short Object (Using Spacecraft)
     shortObject = Spacecraft(
-        name="SolOpriv_e6",
-        mid_time=datetime(2020, 10, 3),
-        margin=timedelta(days=5),
+        name="SolO_Scaled_e6",
         cadence_obj=objCad,
     )
     shortObject.df = shortObject.df.interpolate()  # Interpolate after forming lc object
-    assert (
-        "R" in shortObject.df.columns
-    ), f"ShortObject {shortObject.name} does not have a Radius column"
-
-    # Calculate mass flux & Btotal short df
-    shortObject.df["Mf"] = massFluxCalc(
-        shortObject.df["V_R"].values, shortObject.df["N"].values
-    )
-
-    shortObject.df["Btotal"] = np.sqrt(
-        shortObject.df["B_R"] ** 2
-        + shortObject.df["B_T"] ** 2
-        + shortObject.df["B_N"] ** 2
-    )
-
-    # When necessary to scale with R
-    if scaleWithR:
-        affectedVars = ("N", "Btotal", "Mf")
-        for _df, _l in zip(
-            (shortObject.df, longObject.df), (shortObjectVars, longObjectVars)
-        ):
-            for vari in affectedVars:
-                _df[f"{vari}Scaled"] = _df[vari] * 1000 * _df["R"] ** 2
-                try:
-                    _i = _l.index(vari)
-                    _l[_i] = f"{vari}Scaled"
-                except:
-                    pass
 
     # We set a margin around original obs.
     (
@@ -231,7 +182,7 @@ def deriveAndPlotSeparatelyPSPE6(
 
     print(
         f"""
-            Will be creating {len(shortTimesList)} windows. \n
+            Will be creating {len(shortTimesList)} short windows. \n
             Variables to be used - short: {shortObject.name}: [{shortObjectVars}] \n 
             long: {longObject.name}: [{longObjectVars}] \n
          """
@@ -257,18 +208,22 @@ def deriveAndPlotSeparatelyPSPE6(
             objDirExt=dirName,
             filterPeriods=FILTERP,
             PeriodMinMax=PERIODMINMAX,
-            delete=DELETE,
             showFig=SHOWFIG,
             expectedLocationList=[refLocations[index]],
             renormalize=False,
             HISPEED_BMAPPING=HISPEED_BMAPPING,
             LOSPEED_BMAPPING=LOSPEED_BMAPPING,
+            corrThrPlotList=np.arange(0.8, 1.01, 0.1),
         )
 
 
 # Combined Plot
 def combinedPlot(
-    shortParamList=[], speedSet=None, superSummaryPlot=False, longObjectZOOM=False
+    shortParamList=[],
+    speedSet=None,
+    superSummaryPlot=False,
+    longObjectZOOM=False,
+    corrThrPlotList=np.arange(0.7, 1, 0.05),
 ):
     """
     speedSet: (MAX, MIN, AVG)
@@ -279,8 +234,6 @@ def combinedPlot(
     for _shortParam in shortParamList:
         shortDFDic[f"{_shortParam}"] = Spacecraft(
             name="SolO_Scaled_e6",
-            mid_time=datetime(2020, 10, 3),
-            margin=timedelta(days=5),
             cadence_obj=objCad,
         )
         shortDFDic[f"{_shortParam}"].df = shortDFDic[f"{_shortParam}"].df.interpolate()
@@ -292,8 +245,6 @@ def combinedPlot(
     # Long Object will be PSP measurements as more continuous
     longObject = Spacecraft(
         name="PSP_Scaled_e6",
-        mid_time=datetime(2020, 10, 2),
-        margin=timedelta(days=5),
         cadence_obj=objCad,
     )
 
@@ -357,7 +308,6 @@ def combinedPlot(
                 shortParamList=shortParamList,
                 longObjectParam=longObjectParam,
                 regions=["SolO"],
-                # gridRegions=[1, 1, True, True],
                 unsafeEMDDataPath=UNSAFE_EMD_DATA_PATH,
                 period=PERIODMINMAX,
                 SPCKernelName="solo",
@@ -367,6 +317,7 @@ def combinedPlot(
                 showFig=SHOWFIG,
                 figName=figName,
                 otherObject="psp",
+                corrThrPlotList=corrThrPlotList,
             )
 
     else:
@@ -406,14 +357,17 @@ if __name__ == "__main__":
         "T",
     ]
     if not PLOT_ALL_TOGETHER:
-
         deriveAndPlotSeparatelyPSPE6(
             longObjectVars=generalVars,
             shortObjectVars=["Btotal", "N_RPW"],
-            scaleWithR=True,
         )
 
     else:
+        corrThrPlotList = (
+            np.arange(0.7, 1, 0.05)
+            if SUPER_SUMMARY_PLOT == False
+            else np.arange(0.7, 1, 0.1)
+        )
         combinedPlot(
             shortParamList=["Btotal", "N_RPW"],
             speedSet=(
@@ -428,4 +382,5 @@ if __name__ == "__main__":
                 "stepMinutes": 1,
                 "extractOrbit": False,
             },
+            corrThrPlotList=corrThrPlotList,
         )

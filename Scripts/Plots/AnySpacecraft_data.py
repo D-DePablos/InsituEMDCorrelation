@@ -112,29 +112,26 @@ class Spacecraft:
     def __init__(
         self,
         name="NONE",
-        mid_time=None,
-        margin=timedelta(days=1),
         cadence_obj=None,
         show=False,
     ):
         """
         :param name: Spacecraft name from one of [WIND, PSP, ST-A]
-        :param mid_time: Time at centre of timeseries
-        :param margin: Timemargin (Timedelta object) at either side of mid_time
         :param cadence_obj: Objective cadence
         """
         self.name = name
         self.obj_cad = cadence_obj
         self.show = show
         self.completeCSVPath = f"{BASE_PATH}Data/Prepped_csv/{self.name}.csv"
+        self.scaledCSVPath = f"{BASE_PATH}Data/Prepped_csv/{self.name}.csv"
 
         try:
             self.df = pd.read_csv(self.completeCSVPath)
             self.df.index = pd.to_datetime(self.df["Time"])
 
-            if "R" not in self.df.columns:
+            if "R" not in self.df.columns and "Scaled" not in self.name:
                 self.saveWithRadius()
-                raise ("Saved With Radius added. Please re-run")
+                raise ValueError(f"Saved {self.name} With Radius added. Please re-run")
 
             del self.df["Time"]
             self.dfUnits = QTable.from_pandas(self.df, index=True)
@@ -156,15 +153,6 @@ class Spacecraft:
         from glob import glob
 
         self.sp_coords_carrington = None  # Set a param which is empty to then fill
-
-        # Time information for specific spacecraft
-        if mid_time:
-            self.mid_time = mid_time
-            self.margin = margin
-            self.start_time = mid_time - self.margin
-            self.end_time = mid_time + self.margin
-        else:
-            raise ValueError("Please provid a valid mid_time and time margin")
 
         # Get the spacecraft data into the proper format
 
@@ -370,7 +358,12 @@ class Spacecraft:
             del self.df["Time"]
 
         self.df = self.df.resample(f"{self.obj_cad}s").mean()
+
+        # Set the start and end time
+        self.start_time = pd.to_datetime(self.df.index[0])
+        self.end_time = pd.to_datetime(self.df.index[-1])
         self.df["Time"] = self.df.index
+
         self.df.to_csv(
             self.completeCSVPath,
             index=False,
@@ -636,7 +629,6 @@ class Spacecraft:
 
         # # Plot the relevant columns
         for ax in axs:
-            ax.set_xlim(datetime(2020, 9, 24, 12), datetime(2020, 10, 5))
             ax.xaxis.set_major_locator(locator)
             ax.xaxis.set_major_formatter(formatter)
 
@@ -957,23 +949,18 @@ def psp_e6():
     """
     Additional encounter possibly currently. Check data
     """
-    # psp_fld_l2_mag_RTN_4_Sa_per_Cyc_20201002_v01
     OBJ_CADENCE = 60  # To one minute resolution
     PLOT_ORBITS = False
-    SHOW_PLOTS = False
+    SHOW_PLOTS = True
     stepMinutes = 60
 
     psp_e6_overview = {
         "name": "PSPpriv_e6",
-        "mid_time": datetime(2020, 10, 2),
-        "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
     }
 
     solo_e6_overview = {
         "name": "SolOpriv_e6",
-        "mid_time": datetime(2020, 10, 3),
-        "margin": timedelta(days=5),
         "cadence_obj": OBJ_CADENCE,
         "show": SHOW_PLOTS,
     }
@@ -984,7 +971,6 @@ def psp_e6():
 
     # Solar orbiter lines up with latitude?
     # In september
-    # TODO: Should make multiple test cases using different solo_zoomed and psp_zoomed profiles.
     solo_zoomed = {
         "start_time": datetime(2020, 9, 27, 11, 30),
         "end_time": datetime(2020, 10, 4, 11, 53),
@@ -1060,4 +1046,7 @@ def psp_e6():
 # %%
 
 if __name__ == "__main__":
-    psp_e6()
+    try:
+        psp_e6()
+    except AttributeError or ValueError:
+        psp_e6()
