@@ -39,7 +39,7 @@ vis = Visualisation()
 ColumnColours = {
     "Btotal": "red",
     "B_R": "green",
-    "N_RPW": "orange",
+    "N_RPW": "blue",
 }
 alphaWVL = {
     "94": 0.9,
@@ -762,6 +762,7 @@ def plot_super_summary(
             ax.xaxis.set_major_locator(locator)
             ax.xaxis.set_major_formatter(formatter)
 
+            # Locators for the y axis (short dframe)
             shortlocator = mdates.HourLocator([0, 4, 8, 12, 16, 20])
             shortformatter = mdates.ConciseDateFormatter(locator)
             ax.yaxis.set_major_locator(shortlocator)
@@ -838,7 +839,7 @@ def plot_super_summary(
         f"Time at PSP ({getAvgRadius('psp', longARRAY):.2f}AU) ({titleDic[longObjectParam]})"
     )
     fig.supylabel(
-        f"Time at SolO ({getAvgRadius('solo', shortTimes):.2f}AU) ({shortParamList[0]})"
+        f"Time at SolO ({getAvgRadius('solo', shortTimes):.2f}AU) ({[i for i in shortParamList]})"
     )
 
     # TODO: See where we are missing N_RPW

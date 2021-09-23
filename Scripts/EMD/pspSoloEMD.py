@@ -34,7 +34,7 @@ DELETE = False  # I believe this is not working at all as intended
 SHOWSPEED = False
 
 # Show figures as they are created
-SHOWFIG = False
+SHOWFIG = True
 
 # Add residual to non-super summary?
 ADDRESIDUAL = False
@@ -43,7 +43,7 @@ ADDRESIDUAL = False
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = True
+PLOT_ALL_TOGETHER = False
 
 # Plot summary? should be done after plotting together
 SUPER_SUMMARY_PLOT = True
@@ -356,10 +356,11 @@ if __name__ == "__main__":
         "Mf",
         "T",
     ]
+    shortParamList = (["Btotal", "B_R", "V_R", "M_F", "N_RPW"],)
     if not PLOT_ALL_TOGETHER:
         deriveAndPlotSeparatelyPSPE6(
             longObjectVars=generalVars,
-            shortObjectVars=["Btotal", "N_RPW"],
+            shortObjectVars=shortParamList,
         )
 
     else:
@@ -369,7 +370,7 @@ if __name__ == "__main__":
             else np.arange(0.7, 1, 0.1)
         )
         combinedPlot(
-            shortParamList=["Btotal", "N_RPW"],
+            shortParamList=shortParamList,
             speedSet=(
                 300,
                 200,
