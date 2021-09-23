@@ -26,7 +26,7 @@ makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 
 # Set parameters here
 objCad = 60  # cadence in seconds for comparisons
-PERIODMINMAX = [5, 20]  # The period might be better if longer
+PERIODMINMAX = [5, 22]  # The period might be better if longer
 
 shortRegs = [""]  # Set to empty string
 
@@ -34,7 +34,7 @@ DELETE = False  # I believe this is not working at all as intended
 SHOWSPEED = False
 
 # Show figures as they are created
-SHOWFIG = True
+SHOWFIG = False
 
 # Add residual to non-super summary?
 ADDRESIDUAL = False
@@ -356,7 +356,7 @@ if __name__ == "__main__":
         "Mf",
         "T",
     ]
-    shortParamList = (["Btotal", "B_R", "V_R", "M_F", "N_RPW"],)
+    shortParamList = ["Btotal", "B_R", "V_R", "Mf", "N_RPW"]
     if not PLOT_ALL_TOGETHER:
         deriveAndPlotSeparatelyPSPE6(
             longObjectVars=generalVars,
