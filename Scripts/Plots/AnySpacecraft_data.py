@@ -12,7 +12,7 @@ from physicsHelpers import fcl
 from Plots.cdfReader import extractDF
 from heliopy.models import ParkerSpiral
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
 import matplotlib.dates as mdates
@@ -453,6 +453,7 @@ class Spacecraft:
         matplotlib.rcParams["xtick.labelsize"] = 16
         matplotlib.rcParams["ytick.labelsize"] = 16
 
+        # TODO: calculate what it looks like if we scale to PSP instead of Sun (e.g., avg radius)
         # Figure
         # Width and marker size
         _, axs = plt.subplots(

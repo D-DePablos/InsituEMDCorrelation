@@ -9,16 +9,11 @@ from os import makedirs
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-from scipy import signal as scipy_sig
-from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 from glob import glob
-import matplotlib
 from PyEMD import EMD, Visualisation
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.dates as mdates
 from datetime import timedelta
-from copy import deepcopy
 from glob import glob
 from collections import namedtuple
 import astropy.units as u
