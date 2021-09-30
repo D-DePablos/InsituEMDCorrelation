@@ -1,27 +1,28 @@
 # Set up UNSAFE_EMD_DATA_PATH: global variable
-from sys import path
-
-BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
-path.append(f"{BASE_PATH}Scripts/")
-
-from collections import namedtuple
-from os import makedirs
-
-# Different imports on Project 2
+from Plots.AnySpacecraft_data import Spacecraft
+from astropy import units as u
+from datetime import datetime, timedelta
+import numpy as np
 from EMD.importsProj3.signalAPI import (
     compareTS,
     new_plot_format,
     plot_super_summary,
     extractDiscreteExamples,
 )
-import numpy as np
-from datetime import datetime, timedelta
-from astropy import units as u
+from os import makedirs
+from collections import namedtuple
+from sys import path
 
-from Plots.AnySpacecraft_data import Spacecraft
+BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
+path.append(f"{BASE_PATH}Scripts/")
+
+
+# Different imports on Project 2
+
 
 """Main routine to compare remote and in-situ observations"""
-UNSAFE_EMD_DATA_PATH = f"{BASE_PATH}unsafe/EMD_Data/"
+SUBPATH = "encounter6_Parker/"
+UNSAFE_EMD_DATA_PATH = f"{BASE_PATH}unsafe/EMD_Data/{SUBPATH}"
 makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 
 # Set parameters here
@@ -43,13 +44,15 @@ ADDRESIDUAL = False
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = False
+PLOT_ALL_TOGETHER = True
 
+# Box that's shown above the plots
+SHOWBOX = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
+           (datetime(2020, 10, 1, 20, ), datetime(2020, 10, 2, 0, 13)))
 # Plot summary? should be done after plotting together
 SUPER_SUMMARY_PLOT = True
-accelerated = (
-    1  # Whether to accelerate speed (relevant for backmapping, coloured columns)
-)
+# Whether to accelerate speed (relevant for backmapping, coloured columns)
+accelerated = (1)
 
 with open(
     "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases.pickle",
@@ -62,6 +65,8 @@ with open(
 MARGINHOURSLONG = cases[0]["MARGINHOURSLONG"]
 
 # Import the following functions into the AnySpacecraft_data script
+
+
 def comparePSPtoSOLO(
     shortObj,
     longObj,
@@ -84,11 +89,30 @@ def comparePSPtoSOLO(
     HISPEED_BMAPPING=None,
     LOSPEED_BMAPPING=None,
 ):
-    """
-    Feed in Objects which have a .df property that is a pandas dataframe
-    Choose some variables to correlate for short, long dataset
-    """
+    """Compares PSP to SolO Measurements
 
+    Args:
+        shortObj (Object with df): Short object (usually SolO)
+        longObj (Object with df): Long object (usually PSP)
+        shortVars ([type]): [description]
+        longVars ([type]): [description]
+        shortTimes ([type]): [description]
+        longTimes ([type]): [description]
+        shortName ([type]): [description]
+        longName ([type]): [description]
+        shortCad ([type]): [description]
+        longCad ([type]): [description]
+        objDirExt ([type]): [description]
+        corrThrPlotList ([type], optional): [description]. Defaults to np.arange(0.65, 1, 0.05).
+        expectedLocationList (bool, optional): [description]. Defaults to False.
+        PeriodMinMax (list, optional): [description]. Defaults to [1, 20].
+        filterPeriods (bool, optional): [description]. Defaults to False.
+        showFig (bool, optional): [description]. Defaults to True.
+        renormalize (bool, optional): [description]. Defaults to False.
+        DETREND_BOX_WIDTH ([type], optional): [description]. Defaults to None.
+        HISPEED_BMAPPING ([type], optional): [description]. Defaults to None.
+        LOSPEED_BMAPPING ([type], optional): [description]. Defaults to None.
+    """
     assert HISPEED_BMAPPING != None, "No High speed set"
     assert LOSPEED_BMAPPING != None, "No Low speed set"
 
@@ -102,14 +126,15 @@ def comparePSPtoSOLO(
 
     # Set the Self and Other dataframe to those within the Spacecraft object
     dfShort = shortObj.df[shortVars]
-    dfShort.columns = [f"{shortName}_{i}" for i in shortVars]  # Rename the columns
+    # Rename the columns
+    dfShort.columns = [f"{shortName}_{i}" for i in shortVars]
 
     dfLong = longObj.df[longVars]
     dfLong.columns = [f"{longName}_{i}" for i in longVars]
 
     # Cut down the self and other dataseries
-    dfShort = dfShort[shortTimes[0] : shortTimes[1]]
-    dfLong = dfLong[longTimes[0] : longTimes[1]]
+    dfShort = dfShort[shortTimes[0]: shortTimes[1]]
+    dfLong = dfLong[longTimes[0]: longTimes[1]]
     cadSelf = shortCad
     cadOther = longCad
 
@@ -167,7 +192,8 @@ def deriveAndPlotSeparatelyPSPE6(
         name="SolO_Scaled_e6",
         cadence_obj=objCad,
     )
-    shortObject.df = shortObject.df.interpolate()  # Interpolate after forming lc object
+    # Interpolate after forming lc object
+    shortObject.df = shortObject.df.interpolate()
 
     # We set a margin around original obs.
     (
@@ -224,6 +250,7 @@ def combinedPlot(
     superSummaryPlot=False,
     longObjectZOOM=False,
     corrThrPlotList=np.arange(0.7, 1, 0.05),
+    showBox=None,
 ):
     """
     speedSet: (MAX, MIN, AVG)
@@ -284,22 +311,22 @@ def combinedPlot(
             longObject.df.index[-1].to_pydatetime(),
         )
 
-        shortParamList = shortParamList
-
         allCases = []
-        Casetuple = namedtuple("Case", ["dirExtension", "isStend_t", "rsStend_t"])
+        Casetuple = namedtuple(
+            "Case", ["dirExtension", "isStend_t", "rsStend_t"])
         for index, shortTimes in enumerate(shortTimesList):
             _isT = longTimesList[index]
             dirExtension = f"{caseNamesList[index]}"
             allCases.append(
                 Casetuple(
-                    dirExtension, (_isT[0], _isT[1]), (shortTimes[0], shortTimes[1])
+                    dirExtension, (_isT[0], _isT[1]
+                                   ), (shortTimes[0], shortTimes[1])
                 )
             )
 
         # Figure out whether to show yellow bar - DONE
-
-        longObject.df.columns = ["PSP_" + param for param in longObject.df.columns]
+        longObject.df.columns = [
+            "PSP_" + param for param in longObject.df.columns]
 
         for longObjectParam in longObject.df.columns:
             plot_super_summary(
@@ -318,19 +345,21 @@ def combinedPlot(
                 figName=figName,
                 otherObject="psp",
                 corrThrPlotList=corrThrPlotList,
+                showBox=showBox,
             )
 
     else:
         for index, shortTimes in enumerate(shortTimesList):
             # Need to cut up dataframes
             isTimes = longTimesList[index]
-            dfLongCut = longObject.df[isTimes[0] : isTimes[1]]
+            dfLongCut = longObject.df[isTimes[0]: isTimes[1]]
             dfLongCut = dfLongCut[longObjectVars]
 
             shortDFDicCut = {}
             for _shortParam in shortDFDic:
                 shortDFDicCut[f"{_shortParam}"] = (
-                    shortDFDic[_shortParam].df[shortTimes[0] : shortTimes[1]].copy()
+                    shortDFDic[_shortParam].df[shortTimes[0]
+                        : shortTimes[1]].copy()
                 )
 
             dirExtension = f"{caseNamesList[index]}"
@@ -365,9 +394,9 @@ if __name__ == "__main__":
 
     else:
         corrThrPlotList = (
-            np.arange(0.7, 1, 0.05)
+            np.arange(0.6, 1, 0.05)
             if SUPER_SUMMARY_PLOT == False
-            else np.arange(0.7, 1, 0.1)
+            else np.arange(0.75, 0.94, 0.1)
         )
         combinedPlot(
             shortParamList=shortParamList,
@@ -384,4 +413,5 @@ if __name__ == "__main__":
                 "extractOrbit": False,
             },
             corrThrPlotList=corrThrPlotList,
+            showBox=SHOWBOX,
         )

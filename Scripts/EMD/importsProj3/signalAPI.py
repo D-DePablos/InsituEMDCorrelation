@@ -1,26 +1,21 @@
 """Helper functions"""
+from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
+import astropy.units as u
+from collections import namedtuple
+from datetime import timedelta
+import matplotlib.dates as mdates
+from PyEMD import EMD, Visualisation
+from glob import glob
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy.ma as ma
+import numpy as np
 from matplotlib import rc
 from os import makedirs
 import warnings
 
 warnings.filterwarnings("ignore")
 
-from os import makedirs
-import numpy as np
-import numpy.ma as ma
-import pandas as pd
-import matplotlib.pyplot as plt
-from glob import glob
-from PyEMD import EMD, Visualisation
-import matplotlib.dates as mdates
-from datetime import timedelta
-from glob import glob
-from collections import namedtuple
-import astropy.units as u
-
-from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
-
-import warnings
 
 locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
 formatter = mdates.ConciseDateFormatter(locator)
@@ -32,9 +27,11 @@ emd = EMD()
 vis = Visualisation()
 
 ColumnColours = {
-    "Btotal": "red",
-    "B_R": "green",
-    "N_RPW": "blue",
+    "Btotal": "pink",
+    "B_R": "blue",
+    "N_RPW": "green",
+    "Mf": "purple",
+    "V_R": "red",
 }
 alphaWVL = {
     "94": 0.9,
@@ -45,6 +42,8 @@ alphaWVL = {
     "Btotal": 0.9,
     "B_R": 0.9,
     "N_RPW": 0.9,
+    "V_R": 0.9,
+    "Mf": 0.9,
 }
 
 titleDic = {
@@ -271,7 +270,8 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
             insituParams (list): In situ parameters to find correlation matrices for
         """
         resultingMatrices = {}
-        matrixData = namedtuple("data", "isData corrMatrix shortData shortTime")
+        matrixData = namedtuple(
+            "data", "isData corrMatrix shortData shortTime")
 
         for isparam in insituDF.columns:
             # How do we get in situ data? From above function!
@@ -334,7 +334,8 @@ def plot_imfs(time_array, vector, imfs, title, savePath, width, show):
             plt.plot(curr_imf, color="black")
         leg = plt.legend([f"IMF {index}"], loc=1)
         leg.get_frame().set_linewidth(0.0)
-        plt.ylim(curr_imf.mean() - spacing - width, curr_imf.mean() + spacing + width)
+        plt.ylim(curr_imf.mean() - spacing - width,
+                 curr_imf.mean() + spacing + width)
         ax_frame.axes.get_xaxis().set_visible(False)
 
     ax.add_subplot(len(imfs), 1, len(imfs))
@@ -398,8 +399,9 @@ def emdAndCompareCases(
         for index, shortTimes in enumerate(shortTimesList):
             dirName = f"{caseNamesList[index]}"
             print(f"Starting {dirName}")
-            _dfShortCut = _dfShort[shortTimes[0] : shortTimes[1]]
-            _dfLongCut = _dfLong[longTimesList[index][0] : longTimesList[index][1]]
+            _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
+            _dfLongCut = _dfLong[longTimesList[index]
+                                 [0]: longTimesList[index][1]]
             _specificFolder = f"{saveFolder}{dirName}/"
 
             if refLocations != []:
@@ -585,6 +587,7 @@ def plot_super_summary(
     gridRegions=True,
     insituArrayFreq="1min",
     otherObject="Sun",
+    showBox=None,
 ):
     """Plots a "super" summary with info about all selected regions
 
@@ -598,6 +601,7 @@ def plot_super_summary(
         SPCKernelName ([type], optional): SpacecraftKernel name for psp or solo. Defaults to None.
         showFig (bool, optional): [description]. Defaults to False.
         gridRegions = (nrows, ncols, sharex, sharey)
+        showBox = ([X0, XF], [Y0, YF]) - in datetime
     """
     from matplotlib.lines import Line2D
 
@@ -710,9 +714,11 @@ def plot_super_summary(
                     # Necessary to count how many are above each given threshold
                     dotSize = 0
                     for corrIndex, corr_thr in enumerate(corrThrPlotList):
-                        _number_high_pe = len(pvalid[np.abs(pvalid) >= corr_thr])
+                        _number_high_pe = len(
+                            pvalid[np.abs(pvalid) >= corr_thr])
                         # corr_locations[height, index, 1] = _number_high_pe
-                        _number_high_sp = len(rvalid[np.abs(rvalid) >= corr_thr])
+                        _number_high_sp = len(
+                            rvalid[np.abs(rvalid) >= corr_thr])
                         # corr_locations[height, index, 2] = _number_high_sp
 
                         if _number_high_pe > 0:
@@ -720,7 +726,7 @@ def plot_super_summary(
 
                     dotSizeList.append(dotSize)
 
-            dfDots[f"{_shortVar}"] = dotSizeList
+                dfDots[f"{_shortVar}"] = dotSizeList
             dfDots.index = midpointTimes
 
             # Plot inside each of the squares
@@ -738,6 +744,8 @@ def plot_super_summary(
                 SPCKernelName=SPCKernelName,
                 ObjBody=otherObject,
             )
+
+            # Create lines to delineate highest speeds
 
             # Highest speeds
             closest_index = (np.abs(Vaxis - speedSuper)).argmin()
@@ -762,6 +770,8 @@ def plot_super_summary(
             shortformatter = mdates.ConciseDateFormatter(locator)
             ax.yaxis.set_major_locator(shortlocator)
             ax.yaxis.set_major_formatter(shortformatter)
+
+            # For each of the variables in the dots array
             for _shortVar in dfDots.columns:
                 alphaList = [
                     alphaWVL[_shortVar] if x > 0 else 0
@@ -811,11 +821,18 @@ def plot_super_summary(
             linewidth=2,
         )
 
+        if showBox != None:
+            box_X0, box_X1 = showBox[0]
+            box_Y0, box_Y1 = showBox[1]
+
+            rec = plt.Rectangle((box_X0, box_Y0), box_X1 - box_X0,
+                                box_Y1 - box_Y0, fc="blue", ec=None, alpha=0.4)
+            ax.add_patch(rec)
+
     # Custom legend
     legend_elements = []
     for j, corrThr in enumerate(corrThrPlotList):
-        _mkrsize = 10 + j * 8
-        # Should be 0 0
+        _mkrsize = 12 + j * 8
         _legendElement = Line2D(
             [list_times_same_speed_LOW[0]],
             [shortTimes[0]],
@@ -828,8 +845,23 @@ def plot_super_summary(
 
         legend_elements.append(_legendElement)
 
+    for j, var in enumerate(dfDots.columns):
+        _mkrsize = 12
+        _legendElement = Line2D(
+            [list_times_same_speed_LOW[0]],
+            [shortTimes[0]],
+            marker="o",
+            color="w",
+            label=f"{var}",
+            markerfacecolor=ColumnColours[var],
+            markersize=_mkrsize,
+        )
+
+        legend_elements.append(_legendElement)
+
     fig.legend(handles=legend_elements)
-    fig.suptitle(f" Expected velocities {speedSuper} - {speedSuperLow} km/s in yellow")
+    fig.suptitle(
+        f" Expected velocities {speedSuper} - {speedSuperLow} km/s in yellow")
     fig.supxlabel(
         f"Time at PSP ({getAvgRadius('psp', longARRAY):.2f}AU) ({titleDic[longObjectParam]})"
     )
@@ -837,7 +869,6 @@ def plot_super_summary(
         f"Time at SolO ({getAvgRadius('solo', shortTimes):.2f}AU) ({[i for i in shortParamList]})"
     )
 
-    # TODO: See where we are missing N_RPW
     plt.savefig(f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png")
 
     if showFig:
@@ -960,7 +991,8 @@ def new_plot_format(
 
         nplots = _nshortVar if _nshortVar >= n_insitu else n_insitu
         RSDuration = (
-            lcDic[shortParamList[0]].index[-1] - lcDic[shortParamList[0]].index[0]
+            lcDic[shortParamList[0]].index[-1] -
+            lcDic[shortParamList[0]].index[0]
         )
 
         # Create one figure per region, per aiaTime
@@ -1044,7 +1076,8 @@ def new_plot_format(
         for j, shortVar in enumerate(shortParamList):
             wvlTime = r[f"{shortVar}"][f"{insituList[0]}"].shortTime
             wvlEMD = r[f"{shortVar}"][f"{insituList[0]}"].shortData
-            axRE = axs[(nplots - _nshortVar) + j, 1] if len(axs) >= 4 else axs[1]
+            axRE = axs[(nplots - _nshortVar) + j,
+                       1] if len(axs) >= 4 else axs[1]
             axRE.set_axis_on()
             axRE.yaxis.set_visible(True)
             axRE.yaxis.tick_right()

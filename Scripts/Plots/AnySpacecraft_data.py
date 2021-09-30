@@ -1,26 +1,26 @@
+from astropy.table import QTable
+from astropy.coordinates import spherical_to_cartesian
+import astropy.constants as const
+import astropy.units as u
+import pandas as pd
+import numpy as np
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from heliopy.models import ParkerSpiral
+from Plots.cdfReader import extractDF
+from Imports.physicsHelpers import fcl
+from os import makedirs
+from copy import deepcopy
+from collections import namedtuple
+from sys import path
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 
-from sys import path
-from collections import namedtuple
-from copy import deepcopy
 
 path.append(f"{BASE_PATH}Scripts/")
 
 # from helpers import resample_and_rename
-from os import makedirs
-from physicsHelpers import fcl
-from Plots.cdfReader import extractDF
-from heliopy.models import ParkerSpiral
 
-from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
-
-import matplotlib.dates as mdates
-import numpy as np
-import pandas as pd
-import astropy.units as u
-from astropy.coordinates import spherical_to_cartesian
-from astropy.table import QTable
 
 unitsTable = {
     "V_R": u.km / u.s,
@@ -45,6 +45,14 @@ units_dic = {
     "V_T": r"$km/s$",
     "V_N": r"$km/s$",
     "btotal": r"$T$",
+}
+
+# Hold between 0.3 and 1 AU
+analyValues = {
+    "N": (0.7766, -1.934, 0.01823, -2.245),
+    "B": (0.5, -1.1, 0.2815, 0.875),
+    "V": (2.651, 0.000, -0.0239, -1.836),
+    "T": (4.858, -0.668, -4.69*10**-42, -40.91),
 }
 
 SOLROTRATE = 24.47 / 86400
@@ -73,7 +81,8 @@ def findSpirals(df, vSW, rads=(0, 0.9)):
         longs = spiral.longitude(rads * u.au)
 
         # This works once the coordinate frame is fixed
-        cartSpiral = spherical_to_cartesian(rads, np.repeat(0, len(longs)), longs)
+        cartSpiral = spherical_to_cartesian(
+            rads, np.repeat(0, len(longs)), longs)
         _spirals.append(Spiral(*cartSpiral))
 
     return _spirals
@@ -131,17 +140,19 @@ class Spacecraft:
 
             if "R" not in self.df.columns and "Scaled" not in self.name:
                 self.saveWithRadius()
-                raise ValueError(f"Saved {self.name} With Radius added. Please re-run")
+                raise ValueError(
+                    f"Saved {self.name} With Radius added. Please re-run")
 
             del self.df["Time"]
             self.dfUnits = QTable.from_pandas(self.df, index=True)
 
             for _i in self.dfUnits.colnames:
                 if _i == "N":
-                    self.dfUnits["N"] = self.dfUnits["N"] / u.cm ** (-3)
+                    self.dfUnits["N"] = self.dfUnits["N"] * u.cm ** (-3)
 
                 elif _i == "N_RPW":
-                    self.dfUnits["N_RPW"] = self.dfUnits["N_RPW"] / u.cm ** (-3)
+                    self.dfUnits["N_RPW"] = self.dfUnits["N_RPW"] * \
+                        u.cm ** (-3)
 
                 elif _i in unitsTable:
                     self.dfUnits[_i] = self.dfUnits[_i] * unitsTable[_i]
@@ -157,7 +168,8 @@ class Spacecraft:
         # Get the spacecraft data into the proper format
 
         if self.name == "SolO_Scaled_e6":
-            self.df = pd.read_csv(f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
+            self.df = pd.read_csv(
+                f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
         elif self.name == "SolOpriv_e6" or self.name == "SolOsecond_Case":
 
             if self.name == "SolOpriv_e6":
@@ -244,7 +256,8 @@ class Spacecraft:
 
         elif self.name == "PSP_Scaled_e6":
             # Just load the measurements
-            self.df = pd.read_csv(f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
+            self.df = pd.read_csv(
+                f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
 
         elif self.name == "PSPpriv_e6":
             """
@@ -259,7 +272,8 @@ class Spacecraft:
 
                 _fld_df = extractDF(
                     CDFfolder=cdf_path,
-                    vars=["psp_fld_l2_mag_RTN_1min", "psp_fld_l2_quality_flags"],
+                    vars=["psp_fld_l2_mag_RTN_1min",
+                          "psp_fld_l2_quality_flags"],
                     timeIndex="epoch_mag_RTN_1min",
                     info=False,
                 )
@@ -305,6 +319,22 @@ class Spacecraft:
             self.magdf = FLD_prep()
             self.plasmadf = SPAN_AI_prep()
             self.df = None
+
+        elif self.name == "SDOAhead":
+            df_sda_csv_path = f"{BASE_PATH}Data/Prepped_csv/sdo_comb_nov19.csv"
+            sdo_df = extractDF(
+                CDFfolder=df_sda_csv_path,
+                vars=["BFIELDRTN", "BTOTAL", "Np", "Tp", "Vp_RTN"],
+                info=False,
+            )
+
+            sdo_df["Time"] = sdo_df.index
+            sdo_df.to_csv(
+                df_sda_csv_path,
+                index=False,
+            )
+
+            return sdo_df
 
         else:
             raise NotImplementedError(f"{self.name} not implemented")
@@ -453,52 +483,57 @@ class Spacecraft:
         matplotlib.rcParams["xtick.labelsize"] = 16
         matplotlib.rcParams["ytick.labelsize"] = 16
 
-        # TODO: calculate what it looks like if we scale to PSP instead of Sun (e.g., avg radius)
         # Figure
         # Width and marker size
         _, axs = plt.subplots(
             8, 1, figsize=(16, 2 * 5), sharex=True, constrained_layout=True
         )
 
-        self.df["R"] = self.dfUnits["R"].to(u.m).value
-        other.df["R"] = other.dfUnits["R"].to(u.m).value
-        Bt = np.sqrt(self.df["B_R"] ** 2 + self.df["B_T"] ** 2 + self.df["B_N"] ** 2)
-        BrScaled = (self.dfUnits["B_R"].to(u.T)).value * self.df["R"] ** 2
+        R = (self.dfUnits["R"].to(u.m) - const.R_sun).value
+        oR = (other.dfUnits["R"].to(u.m) - const.R_sun).value
+
+        ts = self.df.index
+        ots = other.df.index
+
+        Bt = np.sqrt(
+            self.dfUnits["B_R"] ** 2 + self.dfUnits["B_T"] ** 2 + self.dfUnits["B_N"] ** 2)
+        BrScaled = (self.dfUnits["B_R"].to(u.T)) * R**2
         BtScaled = np.sqrt(
             BrScaled ** 2
-            + self.dfUnits["B_T"].to(u.T).value ** 2
-            + self.dfUnits["B_N"].to(u.T).value ** 2
-        )
+            + self.dfUnits["B_T"].to(u.T) ** 2
+            + self.dfUnits["B_N"].to(u.T) ** 2
+        ).to(u.nT)
 
-        Vx = np.abs(self.df["V_R"])
-        Np = self.df["N"]  # In protons per cm3
+        Vx = np.abs(self.dfUnits["V_R"])
+        Np = self.dfUnits["N"]  # In protons per cm3
         NpScaled = (
-            self.dfUnits["N"].to(1 / u.m ** (-3)).value * self.df["R"] ** 2
-        )  # To 1/m**3
+            Np.to(u.m ** (-3)) * R ** 2
+        ).to(u.cm**(-3))  # To 1/m**3
 
-        NpRPW = self.df["N_RPW"]
-        NpRPWScaled = (self.dfUnits["N_RPW"]).to(1 / u.m ** (-3)).value * self.df[
-            "R"
-        ] ** 2
+        NpRPW = self.dfUnits["N_RPW"]
+        NpRPWScaled = (NpRPW.to(u.m ** (-3)) * R ** 2).to(u.cm**(-3))
         T = self.df["T"]
 
         # m_p is in kg
-        Mf = c.m_p.value * NpRPWScaled * np.abs(self.dfUnits["V_R"].to(u.m / u.s))
+        Mf = c.m_p * NpRPWScaled.to(u.m**(-3)) * \
+            np.abs(self.dfUnits["V_R"].to(u.m / u.s))
         MfScaled = Mf
 
         # Other object (PSP)
         oBTUnscaled = np.sqrt(
             other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
         )
-        oBrScaled = other.dfUnits["B_R"].to(u.T).value * other.df["R"] ** 2
+        oBrScaled = other.dfUnits["B_R"].to(u.T) * oR ** 2
         oBtScaled = np.sqrt(
-            oBrScaled ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
-        )
-        oVx = np.abs(other.df["V_R"])
-        oNp = other.df["N"]
-        oNpScaled = other.dfUnits["N"].to(1 / u.m ** (-3)).value * other.df["R"] ** 2
+            oBrScaled ** 2 +
+            other.dfUnits["B_T"].to(u.T) ** 2 +
+            other.dfUnits["B_N"].to(u.T) ** 2
+        ).to(u.nT)
+        oVx = np.abs(other.dfUnits["V_R"])
+        oNp = other.dfUnits["N"]
+        oNpScaled = (oNp.to(u.m ** (-3)) * oR ** 2).to(u.cm**(-3))
         oT = other.df["T"]
-        oMf = c.m_p.value * oNpScaled * np.abs(other.dfUnits["V_R"]).to(u.m / u.s)
+        oMf = c.m_p.value * oNpScaled.to(u.m**(-3)) * np.abs(oVx).to(u.m / u.s)
         oMfScaled = oMf
 
         selfScaledDF = pd.DataFrame(
@@ -526,13 +561,16 @@ class Spacecraft:
 
         if saveScaledDF:
             if case == "orbit6":
-                selfScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
-                otherScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
+                selfScaledDF.to_csv(
+                    f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
+                otherScaledDF.to_csv(
+                    f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
 
         # Magnetic field components
         ax0 = axs[0]
         ax0.set_ylabel(r"$\hat{B}_T(nT)$")
         ax0.semilogy(
+            ts,
             Bt,
             "k-",
             label="SolO_MAG",
@@ -540,6 +578,7 @@ class Spacecraft:
             linewidth=1,
         )
         ax0.semilogy(
+            ots,
             oBTUnscaled,
             "r-",
             label="PSP_FLD",
@@ -549,53 +588,58 @@ class Spacecraft:
 
         # Radial velocity
         ax1 = axs[1]
-        ax1.plot(Vx, color="black", label="Vp [GSE]", linewidth=1)
-        ax1.plot(oVx, color="red")
+        ax1.plot(ts, Vx, color="black", label="Vp [GSE]", linewidth=1)
+        ax1.plot(ots, oVx, color="red")
         ax1.set_ylabel(r"$-{V_x} (km/s)$")
 
         # Temperature
         ax2 = axs[2]
         ax2.semilogy(
+            ts,
             T,
             color="black",
             label=r"$T_p$",
             linewidth=1,
         )
-        ax2.semilogy(oT, color="red")
+        ax2.semilogy(ots, oT, color="red")
         ax2.set_ylabel(r"$T_p (K)$")
 
         # Proton Density
         ax4 = axs[3]
         ax4.semilogy(
+            ts,
             Np,
             color="black",
             label="Np_SolO_SWA_PAS",
             linewidth=1,
         )
-        ax4.semilogy(NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
-        ax4.semilogy(oNp, color="red", label="Np_PSP_SPAN")
+        ax4.semilogy(ts, NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
+        ax4.semilogy(ots, oNp, color="red", label="Np_PSP_SPAN")
         ax4.set_ylabel(r"$n_p$ (# $cm^{-3}$)")
         ax4.legend()
 
         # Pressure
         axMf = axs[4]
         axMf.semilogy(
+            ts,
             Mf,
             label="Mass Flux",
             color="black",
             linewidth=1,
         )
-        axMf.semilogy(oMf, color="red")
+        axMf.semilogy(ots, oMf, color="red")
         axMf.set_ylabel(r"$Mf$")
 
         # Magnetic field components
         axs[5].set_ylabel(r"$\hat{B}_Total$")
         axs[5].plot(
+            ts,
             BtScaled,
             "k-",
             label=r"$R^2$ Scaled Btotal SolO",
         )
         axs[5].plot(
+            ots,
             oBtScaled,
             "r-",
             label=r"$R^2$ Scaled Btotal PSP",
@@ -604,18 +648,21 @@ class Spacecraft:
 
         # Proton Density
         axs[6].plot(
+            ts,
             NpScaled,
             color="black",
             label=r"$R^2$ Scaled Np (PAS)",
             linewidth=1,
         )
         axs[6].plot(
+            ts,
             NpRPWScaled,
             color="blue",
             alpha=0.4,
             label=r"$R^2$ Scaled Np (RPW)",
         )
         axs[6].plot(
+            ots,
             oNpScaled,
             color="red",
             label=r"$R^2$ Scaled Np (PSP_SWEAP)",
@@ -623,8 +670,9 @@ class Spacecraft:
         axs[6].set_ylabel(r"$n_p$ (# $m^{-3}$)")
         axs[6].legend()
 
-        axs[7].plot(MfScaled, color="black", linewidth=1, label=r"$R^2$ Scaled Mf SolO")
-        axs[7].plot(oMfScaled, color="red", label=r"$R^2$ Scaled Mf PSP")
+        axs[7].plot(ts, MfScaled, color="black", linewidth=1,
+                    label=r"$R^2$ Scaled Mf SolO")
+        axs[7].plot(ots, oMfScaled, color="red", label=r"$R^2$ Scaled Mf PSP")
         axs[7].set_ylabel(r"$Mf$")
         axs[7].legend()
 
@@ -698,7 +746,7 @@ class Spacecraft:
 
         self.sp_traj = deepcopy(sp_traj)
 
-    def plot_top_down(
+    def plotOrbit_x_y(
         farFromSun,
         closetoSun,
         objFolder=f"{BASE_PATH}Figures/Orbit_3d/",
@@ -716,7 +764,8 @@ class Spacecraft:
         makedirs(objFolder, exist_ok=True)
         assert farFromSun.sp_traj != None, "Please calculate the spacecraft trajectory"
         t1 = farFromSun.sp_traj.times.datetime
-        X1, Y1, Z1 = (farFromSun.sp_traj.x, farFromSun.sp_traj.y, farFromSun.sp_traj.z)
+        X1, Y1, Z1 = (farFromSun.sp_traj.x,
+                      farFromSun.sp_traj.y, farFromSun.sp_traj.z)
         rad1, lat1, lon1 = (
             farFromSun.sp_traj.coords.distance,
             farFromSun.sp_traj.coords.lat,
@@ -724,7 +773,8 @@ class Spacecraft:
         )
 
         t2 = closetoSun.sp_traj.times.datetime
-        X2, Y2, Z2 = (closetoSun.sp_traj.x, closetoSun.sp_traj.y, closetoSun.sp_traj.z)
+        X2, Y2, Z2 = (closetoSun.sp_traj.x,
+                      closetoSun.sp_traj.y, closetoSun.sp_traj.z)
         rad2, lat2, lon2 = (
             closetoSun.sp_traj.coords.distance,
             closetoSun.sp_traj.coords.lat,
@@ -767,8 +817,10 @@ class Spacecraft:
         ):
             psp_times.append(time.to_pydatetime())
 
-        df_farFromSun = df_farFromSun.resample(f"{plotRate}", origin=farTime).mean()
-        df_nextToSun = df_nextToSun.resample(f"{plotRate}", origin=closeTime).mean()
+        df_farFromSun = df_farFromSun.resample(
+            f"{plotRate}", origin=farTime).mean()
+        df_nextToSun = df_nextToSun.resample(
+            f"{plotRate}", origin=closeTime).mean()
 
         tSoloList, tPSPList, lonDistList = [], [], []
         lonDistDF = pd.DataFrame({})
@@ -787,7 +839,8 @@ class Spacecraft:
         lonDistDF["SoloTime"] = tSoloList
         lonDistDF["LonDist"] = lonDistList
 
-        closestRows = lonDistDF[np.abs(lonDistDF["LonDist"]) <= radialTolerance]
+        closestRows = lonDistDF[np.abs(
+            lonDistDF["LonDist"]) <= radialTolerance]
 
         # Find radial alignment
         slopeIntList = []
@@ -833,9 +886,10 @@ class Spacecraft:
             alpha=0.6,
         )
 
-        ### ANNOTATION
+        # ANNOTATION
         # Annotate dates in PSP
-        pspiralIndex = df_nextToSun.index.get_loc(pspiralHlight, method="nearest")
+        pspiralIndex = df_nextToSun.index.get_loc(
+            pspiralHlight, method="nearest")
         for i, txt in enumerate(df_nextToSun.index):
             if i in list(set([*hlightIndices["PSPIndices"], pspiralIndex])):
                 # plt.gca().annotate(
@@ -870,7 +924,7 @@ class Spacecraft:
                     label="SolO " + datetime.strftime(txt, "%Y-%m-%d %H:%M"),
                 )
 
-        ### RADIAL
+        # RADIAL
         # plot radial
         for i, line in enumerate(slopeIntList):
             x = (
@@ -888,13 +942,14 @@ class Spacecraft:
             )
             plt.plot(x, y, color=_col)
 
-        ### SPIRALS
+        # SPIRALS
         # plot spiral
         pspSpirals = findSpirals(df=df_nextToSun, vSW=314, rads=(0, 1.3))
         for i, spiral in enumerate(pspSpirals):
             x = spiral.X
             y = spiral.Y
-            _col, _alpha = ("orange", 0.5) if i != pspiralIndex else ("red", 0.8)
+            _col, _alpha = (
+                "orange", 0.5) if i != pspiralIndex else ("red", 0.8)
             plt.plot(x, y, color=_col, alpha=_alpha)
 
         # Plot Solo Spiral
@@ -908,7 +963,8 @@ class Spacecraft:
         plt.grid(True)
         plt.xlabel("Cartesian X (AU)")
         plt.ylabel("Cartesian Y (AU)")
-        plt.title(f"Maximum accepted Long. Separation {radialTolerance:.2f} deg.")
+        plt.title(
+            f"Maximum accepted Long. Separation {radialTolerance:.2f} deg.")
         plt.legend()
 
         # Plot the Parker Spiral lines
@@ -939,11 +995,11 @@ class Spacecraft:
 
             # Generate a dataframe that matches in cadence the orbital data
             self.df_orbit_match = self.df.resample(f"{stepMinutes}min").mean()[
-                self.sp_traj.times.datetime[0] : self.sp_traj.times.datetime[-1]
+                self.sp_traj.times.datetime[0]: self.sp_traj.times.datetime[-1]
             ]
 
         # Cut down the dataframe and maintain higher cadence
-        self.df = self.df[self.start_time : self.end_time]
+        self.df = self.df[self.start_time: self.end_time]
 
 
 def psp_e6():
@@ -1019,6 +1075,7 @@ def psp_e6():
     # Spacecraft object calling the function is where the solar wind is being mapped from
     if PLOT_ORBITS:
 
+        # Create a set of radial separations
         for minSteps in [
             stepMinutes,
             stepMinutes * 2,
@@ -1028,7 +1085,7 @@ def psp_e6():
             stepMinutes * 24,
         ]:
             tol = 1.5
-            solo.plot_top_down(
+            solo.plotOrbit_x_y(
                 psp,
                 objFolder=f"{orbit_case_path}/",
                 plotRate=f"{minSteps}min",
@@ -1044,9 +1101,14 @@ def psp_e6():
             )
 
 
+def psp_sda_2019():
+    pass
+
 # %%
 
+
 if __name__ == "__main__":
+    # Do twice so it saves with Radius hopefully
     try:
         psp_e6()
     except AttributeError or ValueError:
