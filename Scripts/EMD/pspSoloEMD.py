@@ -1,7 +1,11 @@
 # Set up UNSAFE_EMD_DATA_PATH: global variable
+from sys import path
+BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
+path.append(f"{BASE_PATH}Scripts/")
+
 from Plots.AnySpacecraft_data import Spacecraft
 from astropy import units as u
-from datetime import datetime, timedelta
+from datetime import datetime
 import numpy as np
 from EMD.importsProj3.signalAPI import (
     compareTS,
@@ -11,18 +15,10 @@ from EMD.importsProj3.signalAPI import (
 )
 from os import makedirs
 from collections import namedtuple
-from sys import path
-
-BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
-path.append(f"{BASE_PATH}Scripts/")
-
-
-# Different imports on Project 2
-
 
 """Main routine to compare remote and in-situ observations"""
-SUBPATH = "encounter6_Parker/"
-UNSAFE_EMD_DATA_PATH = f"{BASE_PATH}unsafe/EMD_Data/{SUBPATH}"
+SUBPATH = "encounter6_Parker_1_5/"
+UNSAFE_EMD_DATA_PATH = f"{BASE_PATH}unsafe/EMD_Results/{SUBPATH}/"
 makedirs(UNSAFE_EMD_DATA_PATH, exist_ok=True)
 
 # Set parameters here
@@ -35,7 +31,7 @@ DELETE = False  # I believe this is not working at all as intended
 SHOWSPEED = False
 
 # Show figures as they are created
-SHOWFIG = False
+SHOWFIG = True
 
 # Add residual to non-super summary?
 ADDRESIDUAL = False
@@ -44,7 +40,7 @@ ADDRESIDUAL = False
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = True
+PLOT_ALL_TOGETHER = False
 
 # Box that's shown above the plots
 SHOWBOX = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
@@ -55,7 +51,7 @@ SUPER_SUMMARY_PLOT = True
 accelerated = (1)
 
 with open(
-    "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases.pickle",
+    "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_1-5.pickle",
     "rb",
 ) as f:
     import pickle
@@ -209,8 +205,8 @@ def deriveAndPlotSeparatelyPSPE6(
     print(
         f"""
             Will be creating {len(shortTimesList)} short windows. \n
-            Variables to be used - short: {shortObject.name}: [{shortObjectVars}] \n 
-            long: {longObject.name}: [{longObjectVars}] \n
+            Variables to be used - short: {shortObject.name}: {shortObjectVars} \n 
+            long: {longObject.name}: {longObjectVars} \n
          """
     )
 

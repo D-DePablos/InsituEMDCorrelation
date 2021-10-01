@@ -126,7 +126,7 @@ def extractDiscreteExamples(Caselist, margin, shortDuration=1.5, **kwargs):
 
     # Open each of the list dictionaries
     for case in Caselist:
-        # Get the PSP start and end
+        # Get the short start and end
         shortStart = case["shortTime"]
         shortEnd = shortStart + timedelta(hours=shortDuration)
         shortTimes.append((shortStart, shortEnd))
