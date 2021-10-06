@@ -10,8 +10,6 @@ path.append(f"{BASE_PATH}Scripts/")
 # Keep here
 from EMD.importsProj3.signalAPI import caseCreation
 
-MARGINHOURSLONG = 60
-
 # According to Telleni et al., 2020 Sept 27 03:15-04:45 is best
 # For SolO we have Oct 1st 21:34 -> 23:04 UT
 
@@ -22,8 +20,8 @@ endLONG = datetime(2020, 10, 5)
 
 def main():
     # The Solar Orbiter (short) data is complete between the two times used here
-    SHORT_base = datetime(2020, 9, 29, 0)
-    SHORT_max = datetime(2020, 10, 3, 11, 53)
+    SHORT_base = datetime(2020, 9, 30, 0)
+    SHORT_max = datetime(2020, 10, 2, 23, 0)
     # How many hours to advance to create new case (should be length of short dataset)
     SHORT_dt = 1.5
 
@@ -43,7 +41,6 @@ def main():
                 "matchTime": tLONG,  # Time centered for match
                 "shortDurn": 1.5,
                 "caseName": f"SolO_{tSHORT.day}_T{tSHORT.hour:02d}",
-                "MARGINHOURSLONG": MARGINHOURSLONG,
             }
         )
 
@@ -67,7 +64,6 @@ def testCaseCreation():
         "shortDuration": 1,
         "caseName": "TEST",
         "shortDisplacement": 1,
-        "MarginHours": 10,
         "savePicklePath": "/home/diegodp/Downloads/case.pickle",
     }
 

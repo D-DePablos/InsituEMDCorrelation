@@ -1,11 +1,12 @@
 """Helper functions"""
+from multiprocessing.pool import TERMINATE
+from multiprocessing.sharedctypes import Value
 from matplotlib import rc
 from os import makedirs
 import warnings
 
 warnings.filterwarnings("ignore")
 
-from os import makedirs
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
@@ -82,7 +83,8 @@ def check_imf_periods(
 
         Period_valid[:, 0] = False
         # print(f"Invalidating {filter_low_high[0]}:{len(imfs)} - {filter_low_high[1]}")
-        Period_valid[filter_low_high[0] : len(imfs) - filter_low_high[1], 0] = True
+        Period_valid[filter_low_high[0]: len(
+            imfs) - filter_low_high[1], 0] = True
         Period_valid[:, 1] = np.nan
 
     return Period_valid
@@ -103,15 +105,21 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
 
     """
     makedirs(saveFolder, exist_ok=True)
+    # FIXME: Need to change where numpy files are saved. This should fix further issues!
     saved_npy = f"{saveFolder}{save_name}.npy"
 
     try:
         imfs = np.load(saved_npy)
-        return imfs
+        return deepcopy(imfs)
+
+    # When not found, must create (pass)
     except FileNotFoundError:
         pass
+    except ValueError:
+        TERMINATE
+        pass
 
-    # Will always use EMD. Will always get imfs and residue separately
+        # Will always use EMD. Will always get imfs and residue separately
     imfs = emd.emd(S=s, T=t)
 
     if plot:
@@ -125,7 +133,7 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
     np.save(f"{saveFolder}{time_id}.npy", t)
     np.save(saved_npy, imfs)  # Keeps noise as we can do filtering later
 
-    return imfs
+    return deepcopy(imfs)
 
 
 def transformTimeAxistoVelocity(
@@ -170,7 +178,8 @@ def transformTimeAxistoVelocity(
         trajName = "Solar Orbiter" if ObjBody == "solo" else "SPP"
         spicedata.get_kernel(ObjBody)
         body_traj = spice.Trajectory(trajName)
-        body_traj.generate_positions([originTime, originTime], "Sun", "IAU_SUN")
+        body_traj.generate_positions(
+            [originTime, originTime], "Sun", "IAU_SUN")
         R_body = body_traj.coords[0].radius
 
         # Reduce the distance required
@@ -245,7 +254,8 @@ def heatmap(
     ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False)
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right", rotation_mode="anchor")
+    plt.setp(ax.get_xticklabels(), rotation=-30,
+             ha="right", rotation_mode="anchor")
 
     # Turn spines off and create white grid.
     for edge, spine in ax.spines.items():
@@ -318,7 +328,8 @@ def annotate_heatmap(
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
             kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
-            text = im.axes.text(j, i, valfmt(data[i, j], None), fontsize="large", **kw)
+            text = im.axes.text(j, i, valfmt(
+                data[i, j], None), fontsize="large", **kw)
             texts.append(text)
 
     return texts
@@ -412,11 +423,13 @@ class Signal:
                 ), "Was unable to set true long_signal_time using either index or Time Column"
 
             else:
-                raise ValueError(f"Did not pass a valid type {type(custom_data)}")
+                raise ValueError(
+                    f"Did not pass a valid type {type(custom_data)}")
 
             # Generate constant long_signal_time array for IMFs
             self.duration = self.cadence * len(self.data)
-            self.long_signal_time = np.arange(0, self.duration, step=self.cadence)
+            self.long_signal_time = np.arange(
+                0, self.duration, step=self.cadence)
 
     def __repr__(self):
         """
@@ -558,7 +571,8 @@ class Signal:
                                 # Doing it like this means that you never reach the higher value - desired behaviour!
                                 temp_gaussian.append(
                                     gaussian[i]
-                                    + (grad * n_g / len(range(alter_mode[key])))
+                                    + (grad * n_g /
+                                       len(range(alter_mode[key])))
                                 )
 
                     gaussian = np.array(temp_gaussian)
@@ -672,7 +686,8 @@ class SignalFunctions(Signal):
         self.noise = noise
         self.saveformat = signal.saveformat if saveformat is None else saveformat
         self.corrThrPlotList = (
-            corrThrPlotList if corrThrPlotList != [] else np.arange(0.75, 0.901, 0.05)
+            corrThrPlotList if corrThrPlotList != [
+            ] else np.arange(0.75, 0.901, 0.05)
         )
         if norm:
             self.s = normalize_signal(signal.data.copy())
@@ -730,7 +745,8 @@ class SignalFunctions(Signal):
         plt.ylabel(labels[1])
 
         if save_to:
-            plt.savefig(f"{save_to}{self.name}_{self.cadence}s.{self.saveformat}")
+            plt.savefig(
+                f"{save_to}{self.name}_{self.cadence}s.{self.saveformat}")
 
         if show:
             plt.show()
@@ -842,10 +858,11 @@ class SignalFunctions(Signal):
                 j = int(np.where(long.t == right_bound)[0])
 
                 # Make copies of data instead of using directly
-                _data_long = deepcopy(long.s[i : j + 1])
+                _data_long = deepcopy(long.s[i: j + 1])
                 _data_long = _data_long.reshape(len(_data_long))
-                _data_long = normalize_signal(_data_long) if renormalize else _data_long
-                _time_long = deepcopy(long.t[i : j + 1])
+                _data_long = normalize_signal(
+                    _data_long) if renormalize else _data_long
+                _time_long = deepcopy(long.t[i: j + 1])
 
                 # Set values for array
                 complete_array[0, height, :] = _time_long
@@ -909,22 +926,33 @@ class SignalFunctions(Signal):
 
                 # For all of the short, long IMFs
                 for i, row in enumerate(short_imfs):
-                    short_valid = valid_imfs_short[i, 0]
-                    for j, col in enumerate(_long_imfs):
-                        long_valid = _valid_imfs_long[j, 0]
-                        if short_valid and long_valid:
-                            valid = 1
-                        else:
-                            valid = 0
+                    if np.isnan(np.sum(row)):
+                        for j, col in enumerate(_long_imfs):
+                            corr_matrix[i, j, height, 0] = 0.01
+                            corr_matrix[i, j, height, 1] = 0.01
+                            corr_matrix[i, j, height, 2] = 0
 
-                        # Contains pearsonR values, SpearmanR values, and validity
-                        # Get the p value for each!
-                        corr_matrix[i, j, height, 0] = pearsonr(row, col)[0]
-                        corr_matrix[i, j, height, 1] = pearsonr(row, col)[1]
-                        corr_matrix[i, j, height, 2] = valid
+                    else:
+                        short_valid = valid_imfs_short[i, 0]
+                        for j, col in enumerate(_long_imfs):
+                            long_valid = _valid_imfs_long[j, 0]
+                            if short_valid and long_valid:
+                                valid = 1
+                            else:
+                                valid = 0
+
+                            # Contains pearsonR values, SpearmanR values, and validity
+                            # Get the p value for each!
+
+                            corr_matrix[i, j, height, 0] = pearsonr(row, col)[
+                                0]
+                            corr_matrix[i, j, height, 1] = pearsonr(row, col)[
+                                1]
+                            corr_matrix[i, j, height, 2] = valid
 
                 if useRealTime:  # We only have the real time in some ocasions
-                    mid_point_time = np.floor((_time_long[-1] + _time_long[0]) / 2)
+                    mid_point_time = np.floor(
+                        (_time_long[-1] + _time_long[0]) / 2)
                     corr_matrix[0, 0, height, 3] = mid_point_time
 
             # Increase height by one before advancing
@@ -1052,7 +1080,7 @@ class SignalFunctions(Signal):
         expectedLocationList=False,
         savePath=None,
         plot_heatmaps=False,
-        margin_hours=0.5,
+        margin_hours=0.5,  # For plot margins
         bar_width=1.2,
         filterPeriods=True,
         showFig=False,
@@ -1121,7 +1149,8 @@ class SignalFunctions(Signal):
 
             if useRealTime:
                 midpoint = corr_matrix[0, 0, height, 3]
-                midpoint_time = other.true_time[0] + timedelta(seconds=midpoint)
+                midpoint_time = other.true_time[0] + \
+                    timedelta(seconds=midpoint)
                 time = midpoint_time
 
             else:
@@ -1292,8 +1321,8 @@ class SignalFunctions(Signal):
                 plt.close()
 
                 def create_ts_plot(a=self.s, b=other.s, start=height):
-                    c = b[start : start + len(a)]
-                    t = other.t[start : start + len(a)] / 60
+                    c = b[start: start + len(a)]
+                    t = other.t[start: start + len(a)] / 60
 
                     plt.figure(figsize=(16, 12))
                     plt.plot(t, a, color="black", label=r"AIA$_{synth}$")
@@ -1301,7 +1330,8 @@ class SignalFunctions(Signal):
                     plt.ylabel("Normalised value")
                     plt.xlabel("Minutes since start")
                     plt.legend()
-                    plt.title(f"Direct Pearson R correlation: {pearsonr(a, c)[0]:.2f}")
+                    plt.title(
+                        f"Direct Pearson R correlation: {pearsonr(a, c)[0]:.2f}")
                     save_to = f"{self.saveFolder}corr_matrix/IMF_Heatmap{height:08d}_{time}_plot.{self.saveformat}"
                     plt.savefig(save_to, bbox_inches="tight", dpi=300)
                     # plt.show()
@@ -1324,7 +1354,8 @@ class SignalFunctions(Signal):
         # window_width = max(short_time) * 12 / 60
 
         if useRealTime:
-            short_duration = short_signal.true_time[-1] - short_signal.true_time[0]
+            short_duration = short_signal.true_time[-1] - \
+                short_signal.true_time[0]
             longTime_axis = long_signal.true_time
         else:
             short_duration = (short_signal.t[-1] - short_signal.t[0]) / 60
@@ -1361,7 +1392,8 @@ class SignalFunctions(Signal):
 
         else:
             # Set xticks every hour
-            xticks = np.arange(longTime_axis[0], longTime_axis[-1] + 1, step=180)
+            xticks = np.arange(
+                longTime_axis[0], longTime_axis[-1] + 1, step=180)
             plt.xticks(xticks)
 
         ax.xaxis.grid(True)
@@ -1372,7 +1404,8 @@ class SignalFunctions(Signal):
                 # Saved only sometimes!
                 true_time_secs = corr_matrix[0, 0, :, 3]
             except IndexError as ind_err:
-                raise IndexError("Please ensure that the true timeseries is saved!")
+                raise IndexError(
+                    "Please ensure that the true timeseries is saved!")
 
             ttindex = (true_time_secs / long_signal.cadence).astype(int)
             true_time_datetime = long_signal.true_time[ttindex]
@@ -1413,7 +1446,8 @@ class SignalFunctions(Signal):
 
             if useRealTime:
                 midpoint = corr_matrix[0, 0, height, 3]
-                midpoint_time = other.true_time[0] + timedelta(seconds=midpoint)
+                midpoint_time = other.true_time[0] + \
+                    timedelta(seconds=midpoint)
                 time = midpoint_time
                 barchart_time = time.to_pydatetime()
 
@@ -1505,7 +1539,8 @@ class SignalFunctions(Signal):
         corrThrLimits.append(1)
 
         ax2.set_yticks(corrThrLimits)  # Ensure ticks are good
-        ax2.set_ylim(self.corrThrPlotList[0], 1.01)  # Allows for any correlation
+        # Allows for any correlation
+        ax2.set_ylim(self.corrThrPlotList[0], 1.01)
         ax2.set_ylabel("Highest corr. found")
 
         if showSpeed:
@@ -1598,7 +1633,9 @@ class SignalFunctions(Signal):
 
         if save:
             # This will be one of the results dataframes
-            self.table["pearson"].to_csv(f"{self.saveFolder}pearson_hitrate.csv")
-            self.table["spearman"].to_csv(f"{self.saveFolder}spearman_hitrate.csv")
+            self.table["pearson"].to_csv(
+                f"{self.saveFolder}pearson_hitrate.csv")
+            self.table["spearman"].to_csv(
+                f"{self.saveFolder}spearman_hitrate.csv")
 
         return self.table

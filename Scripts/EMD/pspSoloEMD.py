@@ -1,5 +1,7 @@
 # Set up UNSAFE_EMD_DATA_PATH: global variable
 from sys import path
+
+from pandas import to_datetime
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 path.append(f"{BASE_PATH}Scripts/")
 
@@ -12,6 +14,7 @@ from EMD.importsProj3.signalAPI import (
     new_plot_format,
     plot_super_summary,
     extractDiscreteExamples,
+    caseTuple,
 )
 from os import makedirs
 from collections import namedtuple
@@ -30,6 +33,9 @@ shortRegs = [""]  # Set to empty string
 DELETE = False  # I believe this is not working at all as intended
 SHOWSPEED = False
 
+# Number of CPUS
+N_CPUS = 4
+
 # Show figures as they are created
 SHOWFIG = True
 
@@ -40,7 +46,7 @@ ADDRESIDUAL = False
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = False
+PLOT_ALL_TOGETHER = True
 
 # Box that's shown above the plots
 SHOWBOX = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
@@ -50,6 +56,7 @@ SUPER_SUMMARY_PLOT = True
 # Whether to accelerate speed (relevant for backmapping, coloured columns)
 accelerated = (1)
 
+# Open 1.5 hours cases
 with open(
     "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_1-5.pickle",
     "rb",
@@ -57,8 +64,6 @@ with open(
     import pickle
 
     cases = pickle.load(f)
-
-MARGINHOURSLONG = cases[0]["MARGINHOURSLONG"]
 
 # Import the following functions into the AnySpacecraft_data script
 
@@ -194,12 +199,10 @@ def deriveAndPlotSeparatelyPSPE6(
     # We set a margin around original obs.
     (
         shortTimesList,
-        longTimesList,
         caseNamesList,
         refLocations,
     ) = extractDiscreteExamples(
         cases,
-        margin=MARGINHOURSLONG,
     )
 
     print(
@@ -222,7 +225,7 @@ def deriveAndPlotSeparatelyPSPE6(
             shortVars=shortObjectVars,
             longVars=longObjectVars,
             shortTimes=shortTimes,
-            longTimes=longTimesList[index],
+            longTimes=None,
             shortName="SolO",
             longName="PSP",
             shortCad=objCad,
@@ -240,7 +243,7 @@ def deriveAndPlotSeparatelyPSPE6(
 
 
 # Combined Plot
-def combinedPlot(
+def pspSoloCombinedPlot(
     shortParamList=[],
     speedSet=None,
     superSummaryPlot=False,
@@ -293,9 +296,8 @@ def combinedPlot(
     figName = "accelerated" if accelerated == 4 / 3 else "constant"
 
     # We set a margin around original obs.
-    (shortTimesList, longTimesList, caseNamesList, _,) = extractDiscreteExamples(
+    (shortTimesList, caseNamesList, _) = extractDiscreteExamples(
         cases,
-        margin=MARGINHOURSLONG,
     )
 
     # When necessary to make summary of all summaries
@@ -308,15 +310,13 @@ def combinedPlot(
         )
 
         allCases = []
-        Casetuple = namedtuple(
-            "Case", ["dirExtension", "isStend_t", "rsStend_t"])
-        for index, shortTimes in enumerate(shortTimesList):
-            _isT = longTimesList[index]
-            dirExtension = f"{caseNamesList[index]}"
+        for index, _shortTimes in enumerate(shortTimesList):
+            _isT = (longObject.df.index[0].to_pydatetime(
+            ), longObject.df.index[-1].to_pydatetime())
+            _dirExtension = f"{caseNamesList[index]}"
             allCases.append(
-                Casetuple(
-                    dirExtension, (_isT[0], _isT[1]
-                                   ), (shortTimes[0], shortTimes[1])
+                caseTuple(
+                    _dirExtension, (_shortTimes)
                 )
             )
 
@@ -334,9 +334,7 @@ def combinedPlot(
                 unsafeEMDDataPath=UNSAFE_EMD_DATA_PATH,
                 period=PERIODMINMAX,
                 SPCKernelName="solo",
-                speedSuper=HISPEED_BMAPPING,
-                speedSuperLow=LOSPEED_BMAPPING,
-                speedAVG=soloAVG,
+                speedSet=(HISPEED_BMAPPING, LOSPEED_BMAPPING, soloAVG),
                 showFig=SHOWFIG,
                 figName=figName,
                 otherObject="psp",
@@ -344,18 +342,19 @@ def combinedPlot(
                 showBox=showBox,
             )
 
+    # When we want to plot all long and short vars for a given short time
     else:
         for index, shortTimes in enumerate(shortTimesList):
-            # Need to cut up dataframes
-            isTimes = longTimesList[index]
+            # No longer splitting long dataframe, instead using full range of values
+            isTimes = (longObject.df.index[0].to_pydatetime(
+            ), longObject.df.index[-1].to_pydatetime())
             dfLongCut = longObject.df[isTimes[0]: isTimes[1]]
             dfLongCut = dfLongCut[longObjectVars]
 
             shortDFDicCut = {}
             for _shortParam in shortDFDic:
                 shortDFDicCut[f"{_shortParam}"] = (
-                    shortDFDic[_shortParam].df[shortTimes[0]
-                        : shortTimes[1]].copy()
+                    shortDFDic[_shortParam].df[shortTimes[0]: shortTimes[1]].copy()
                 )
 
             dirExtension = f"{caseNamesList[index]}"
@@ -394,7 +393,7 @@ if __name__ == "__main__":
             if SUPER_SUMMARY_PLOT == False
             else np.arange(0.75, 0.94, 0.1)
         )
-        combinedPlot(
+        pspSoloCombinedPlot(
             shortParamList=shortParamList,
             speedSet=(
                 300,
