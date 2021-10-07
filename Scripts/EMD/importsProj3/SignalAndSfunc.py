@@ -38,8 +38,8 @@ def normalize_signal(s: np.ndarray):
     :param s: Input signal
     """
 
-    _min = np.min(s)
-    _max = np.max(s)
+    _min = np.nanmin(s)
+    _max = np.nanmax(s)
 
     for i, x_i in enumerate(s):
         s[i] = (x_i - _min) / (_max - _min)
@@ -667,12 +667,12 @@ class SignalFunctions(Signal):
     def __init__(
         self,
         signal,
+        corrThrPlotList,
         noise=None,
         filterIMFs=False,
         norm=True,
         PeriodMinMax=[5, 50],
         saveformat=None,
-        corrThrPlotList=[],
     ):
         """
         Give additional functionality to a signal object
@@ -685,10 +685,7 @@ class SignalFunctions(Signal):
         self.pmax = signal.pmax
         self.noise = noise
         self.saveformat = signal.saveformat if saveformat is None else saveformat
-        self.corrThrPlotList = (
-            corrThrPlotList if corrThrPlotList != [
-            ] else np.arange(0.75, 0.901, 0.05)
-        )
+        self.corrThrPlotList = corrThrPlotList
         if norm:
             self.s = normalize_signal(signal.data.copy())
         else:
@@ -817,6 +814,7 @@ class SignalFunctions(Signal):
         # If the correlation matrix is set, skip
         try:
             np.load(self.path_to_corr_matrix)
+            print(f"Loaded {self.path_to_corr_matrix}")
 
             # When it loads correctly, it either continues or returns None
             if plot_long_imfs:
@@ -848,6 +846,7 @@ class SignalFunctions(Signal):
         right_bound = short.t[-1]
 
         # While inside the long timeseries
+        prev_long = None
         while height < short.no_displacements:
             # Only do if necessary!
             if (height in long_window_imf_list and plot_long_imfs) or (
@@ -925,30 +924,35 @@ class SignalFunctions(Signal):
                     )
 
                 # For all of the short, long IMFs
-                for i, row in enumerate(short_imfs):
+                for _i, row in enumerate(short_imfs):
+                    # If either the shortIMFs are NAN or longIMFs are NAN
                     if np.isnan(np.sum(row)):
-                        for j, col in enumerate(_long_imfs):
-                            corr_matrix[i, j, height, 0] = 0.01
-                            corr_matrix[i, j, height, 1] = 0.01
-                            corr_matrix[i, j, height, 2] = 0
+                        for _j, col in enumerate(_long_imfs):
+                            corr_matrix[_i, _j, height, 0] = 0.01
+                            corr_matrix[_i, _j, height, 1] = 0.01
+                            corr_matrix[_i, _j, height, 2] = 0
 
                     else:
-                        short_valid = valid_imfs_short[i, 0]
-                        for j, col in enumerate(_long_imfs):
-                            long_valid = _valid_imfs_long[j, 0]
-                            if short_valid and long_valid:
-                                valid = 1
+                        short_valid = valid_imfs_short[_i, 0]
+                        for __j, col in enumerate(_long_imfs):
+                            if np.isnan(np.sum(col)):
+                                corr_matrix[_i, __j, height, 0] = 0.01
+                                corr_matrix[_i, __j, height, 1] = 0.01
+                                corr_matrix[_i, __j, height, 2] = 0
+
                             else:
-                                valid = 0
 
-                            # Contains pearsonR values, SpearmanR values, and validity
-                            # Get the p value for each!
+                                long_valid = _valid_imfs_long[__j, 0]
+                                if short_valid and long_valid:
+                                    valid = 1
+                                else:
+                                    valid = 0
 
-                            corr_matrix[i, j, height, 0] = pearsonr(row, col)[
-                                0]
-                            corr_matrix[i, j, height, 1] = pearsonr(row, col)[
-                                1]
-                            corr_matrix[i, j, height, 2] = valid
+                                corr_matrix[_i, __j, height, 0] = pearsonr(row, col)[
+                                    0]
+                                corr_matrix[_i, __j, height, 1] = pearsonr(row, col)[
+                                    1]
+                                corr_matrix[_i, __j, height, 2] = valid
 
                 if useRealTime:  # We only have the real time in some ocasions
                     mid_point_time = np.floor(

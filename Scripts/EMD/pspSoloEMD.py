@@ -1,11 +1,12 @@
 # Set up UNSAFE_EMD_DATA_PATH: global variable
+from multiprocessing.managers import ValueProxy
 from sys import path
 
 from pandas import to_datetime
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 path.append(f"{BASE_PATH}Scripts/")
 
-from Plots.AnySpacecraft_data import Spacecraft
+from Imports.Spacecraft import PSPSolO_e6
 from astropy import units as u
 from datetime import datetime
 import numpy as np
@@ -46,7 +47,7 @@ ADDRESIDUAL = False
 FILTERP = True
 
 # Plot all in-situ variables?
-PLOT_ALL_TOGETHER = True
+PLOT_ALL_TOGETHER = False
 
 # Box that's shown above the plots
 SHOWBOX = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
@@ -135,7 +136,8 @@ def comparePSPtoSOLO(
 
     # Cut down the self and other dataseries
     dfShort = dfShort[shortTimes[0]: shortTimes[1]]
-    dfLong = dfLong[longTimes[0]: longTimes[1]]
+    if longTimes != None:
+        dfLong = dfLong[longTimes[0]: longTimes[1]]
     cadSelf = shortCad
     cadOther = longCad
 
@@ -170,7 +172,7 @@ def deriveAndPlotSeparatelyPSPE6(
     V_R	V_T	V_N	N	T	swe_flag	B_R	B_T	B_N	fld_flag	Time
     """
 
-    longObject = Spacecraft(
+    longObject = PSPSolO_e6(
         name="PSP_Scaled_e6",
         cadence_obj=objCad,
     )
@@ -189,7 +191,7 @@ def deriveAndPlotSeparatelyPSPE6(
     
     """
     # Short Object (Using Spacecraft)
-    shortObject = Spacecraft(
+    shortObject = PSPSolO_e6(
         name="SolO_Scaled_e6",
         cadence_obj=objCad,
     )
@@ -258,7 +260,7 @@ def pspSoloCombinedPlot(
     # The shortDFDic collects
     shortDFDic = {}
     for _shortParam in shortParamList:
-        shortDFDic[f"{_shortParam}"] = Spacecraft(
+        shortDFDic[f"{_shortParam}"] = PSPSolO_e6(
             name="SolO_Scaled_e6",
             cadence_obj=objCad,
         )
@@ -269,7 +271,7 @@ def pspSoloCombinedPlot(
             pass
 
     # Long Object will be PSP measurements as more continuous
-    longObject = Spacecraft(
+    longObject = PSPSolO_e6(
         name="PSP_Scaled_e6",
         cadence_obj=objCad,
     )
@@ -373,6 +375,7 @@ def pspSoloCombinedPlot(
 
 
 if __name__ == "__main__":
+    # Before running EMD, run Plots/psp_SOlO_e6.py
     generalVars = [
         "V_R",
         "Btotal",

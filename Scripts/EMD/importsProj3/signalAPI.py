@@ -28,11 +28,10 @@ vis = Visualisation()
 
 # Named tuples
 caseTuple = namedtuple("caseTuple", ["dirExtension", "shortTimes"])
-simpleDFDic = namedtuple("simpleDFDic", ["name", "df"])
 shortDFDic = namedtuple(
-    "shortDFDic", ["df", "name", "cases", "paramList", "regionName", "kernelName"])
+    "shortDFDic", ["df", "name", "cases", "paramList", "regionName", "kernelName"], defaults=(None,) * 6)
 longDFDic = namedtuple(
-    "longDFDic", ["df", "kernelName", "accelerated", "speedSet"])
+    "longDFDic", ["df", "name", "kernelName", "accelerated", "speedSet"], defaults=(None,) * 5)
 
 ColumnColours = {
     "Btotal": "pink",
@@ -160,17 +159,31 @@ def caseCreation(
     longTimes,
     shortDuration,
     caseName,
+    savePicklePath,
     shortDisplacement=None,
-    savePicklePath=None,
     forceCreate=False,
 ):
+    """Creates cases given times of short and long datasets
+
+    Args:
+        shortTimes (datetime): start SHORT end SHORT
+        longTimes (datetime): start LONG end LONG
+        shortDuration (int): duration of short WINDOW in hours
+        caseName ([type]): CaseName  folder will take the format {caseName}_{startShort.day}_H{startShort.hour}
+        savePicklePath ([type]): [description]
+        shortDisplacement ([type], optional): [description]. Defaults to None.
+        forceCreate (bool, optional): [description]. Defaults to False.
+
+    Returns:
+        [type]: [description]
+    """
     import pickle
 
     # Attempt to load the file first
     if not forceCreate:
         try:
             with open(f"{savePicklePath}", "rb") as f:
-                print("Loaded test cases instead of created them.")
+                print("Loaded test cases.")
                 cases = pickle.load(f)
                 return cases
 
@@ -364,7 +377,7 @@ def emdAndCompareCases(
     detrendBoxWidth=None,
     showFig=True,
     corrThrPlotList=np.arange(0.65, 1, 0.05),
-    multiCPU=None,
+    multiCPU=1,
 ):
     """
     Perform EMD and Compare a short and a Long dataframe
@@ -465,7 +478,8 @@ def emdAndCompareCases(
             cadLong == cadShort
         ), "Cadence of short object not equal to cad. of long Object"
 
-        if multiCPU == None:
+        # Old functionality
+        if multiCPU == 1:
             for index, shortTimes in enumerate(shortTimesList):
                 dirName = f"{caseNamesList[index]}"
                 print(f"Starting {dirName}")
@@ -613,7 +627,7 @@ def compareTS(
     labelOther,
     winDispList=[60],
     PeriodMinMax=[1, 180],
-    filterPeriods=False,
+    filterPeriods=True,
     savePath=None,
     useRealTime=False,
     expectedLocationList=False,
@@ -641,9 +655,14 @@ def compareTS(
     labelOther = Which label to show for other dataset
     """
 
+    import random
+
     assert savePath != None, "Please set savePath to store relevant arrays"
     # For all of the lightcurves
-    for varOther in list(dfOther):
+    varList = list(dfOther)
+    random.shuffle(varList)
+    for varOther in varList:
+        print(f"Starting {varOther}")
         otherPath = f"{savePath}../{labelOther}/{varOther}/"
         makedirs(otherPath, exist_ok=True)
 
@@ -682,6 +701,7 @@ def compareTS(
                 signalSelf,
                 filterIMFs=True,
                 PeriodMinMax=PeriodMinMax,
+                corrThrPlotList=corrThrPlotList,
             )
 
             for windowDisp in winDispList:
