@@ -1,11 +1,5 @@
 from astropy.table import QTable
 from astropy.coordinates import spherical_to_cartesian
-import astropy.constants as const
-import astropy.units as u
-import pandas as pd
-import numpy as np
-import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
 from datetime import datetime
 from os import makedirs
 from sys import path
@@ -113,6 +107,14 @@ def psp_e6():
                 ),
                 radialTolerance=tol,
             )
+
+
+def solo_Earth_April_2020():
+    """
+    Additional encounter possibly currently. Check data
+    Likely we can implement it in the other area
+    """
+    pass
 
 
 def psp_sda_2019():

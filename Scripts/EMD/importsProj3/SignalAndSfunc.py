@@ -14,7 +14,6 @@ from scipy import signal as scipy_sig
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 from glob import glob
-import matplotlib
 from PyEMD import EMD, Visualisation
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.dates as mdates
@@ -105,7 +104,6 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
 
     """
     makedirs(saveFolder, exist_ok=True)
-    # FIXME: Need to change where numpy files are saved. This should fix further issues!
     saved_npy = f"{saveFolder}{save_name}.npy"
 
     try:
@@ -119,7 +117,7 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
         TERMINATE
         pass
 
-        # Will always use EMD. Will always get imfs and residue separately
+    # Will always use EMD. Will always get imfs and residue separately
     imfs = emd.emd(S=s, T=t)
 
     if plot:
@@ -779,33 +777,6 @@ class SignalFunctions(Signal):
         self.path_to_corr_matrix = f"{short.saveFolder}IMF/Corr_matrix_all.npy"
         self.windowDisp = windowDisp
 
-        short_imfs = emd_and_save(
-            s=short.s,
-            t=short.t,
-            saveFolder=f"{short.saveFolder}IMF/",
-            save_name=f"short_{short.t[0]:08d}_{short.t[-1]:08d}",
-            plot=False,
-        )
-        self.imfs = short_imfs
-
-        # Find the valid IMFs on short signal
-        if filterPeriods:
-            valid_imfs_short = check_imf_periods(
-                imfs=short_imfs,
-                t=short.t,
-                pmin=self.pmin,
-                pmax=self.pmax,
-                filterPeriods=True,
-            )
-
-        else:
-            valid_imfs_short = check_imf_periods(
-                imfs=short_imfs,
-                t=short.t,
-                filter_low_high=filter_low_high,
-                filterPeriods=False,
-            )
-
         # Setup to perform many EMDs on long dataset
         self.no_displacements = int(
             np.floor((long.t[-1] - short.t[-1]) / self.windowDisp)
@@ -814,7 +785,6 @@ class SignalFunctions(Signal):
         # If the correlation matrix is set, skip
         try:
             np.load(self.path_to_corr_matrix)
-            print(f"Loaded {self.path_to_corr_matrix}")
 
             # When it loads correctly, it either continues or returns None
             if plot_long_imfs:
@@ -822,7 +792,7 @@ class SignalFunctions(Signal):
 
             # Found files, did not want to plot long imfs
             else:
-                return None
+                return 1
 
         # Continue with the rest of the function, calculating the array
         except FileNotFoundError:
@@ -841,12 +811,44 @@ class SignalFunctions(Signal):
             # When needed to save mid_point_time
             corr_matrix = np.zeros(shape=(12, 12, short.no_displacements, 4))
 
+        short_imfs = emd_and_save(
+            s=short.s,
+            t=short.t,
+            saveFolder=f"{short.saveFolder}IMF/",
+            save_name=f"short_{short.t[0]:08d}_{short.t[-1]:08d}",
+            plot=False,
+        )
+        self.imfs = short_imfs
+
+        # Where IMFs are found to be == NAN due to missing values
+        if np.isnan(np.sum(self.imfs[0])):
+            np.save(self.path_to_signal, complete_array)  # Signal + IMFs
+            np.save(self.path_to_corr_matrix, corr_matrix)  # IMF corrs
+            return None
+
+        # Find the valid IMFs on short signal
+        if filterPeriods:
+            valid_imfs_short = check_imf_periods(
+                imfs=short_imfs,
+                t=short.t,
+                pmin=self.pmin,
+                pmax=self.pmax,
+                filterPeriods=True,
+            )
+
+        else:
+            valid_imfs_short = check_imf_periods(
+                imfs=short_imfs,
+                t=short.t,
+                filter_low_high=filter_low_high,
+                filterPeriods=False,
+            )
         # Bounds to move window
         left_bound = short.t[0]
         right_bound = short.t[-1]
 
+        # Only if short IMFs are relevant
         # While inside the long timeseries
-        prev_long = None
         while height < short.no_displacements:
             # Only do if necessary!
             if (height in long_window_imf_list and plot_long_imfs) or (
@@ -868,96 +870,83 @@ class SignalFunctions(Signal):
                 complete_array[1, height, :] = _data_long
                 complete_array[2, height, :] = deepcopy(short.s)
 
-                # Derive EMD and save to relevant folder
-                _long_imfs = emd_and_save(
-                    s=_data_long,
-                    t=_time_long,
-                    saveFolder=f"{long.saveFolder}IMF/",
-                    save_name=f"long_{_time_long[0]:08d}_{_time_long[-1]:08d}",
-                    plot=False,
-                )
-
-                # Uses pmin and pmax from short dataseries
-                if filterPeriods:
-                    _valid_imfs_long = check_imf_periods(
-                        imfs=_long_imfs,
+                # If long window not all NAN
+                if np.isnan(np.sum(_data_long)) == False:
+                    # Derive EMD and save to relevant folder
+                    _long_imfs = emd_and_save(
+                        s=_data_long,
                         t=_time_long,
-                        pmin=self.pmin,
-                        pmax=self.pmax,
-                        filterPeriods=filterPeriods,
+                        saveFolder=f"{long.saveFolder}IMF/",
+                        save_name=f"long_{_time_long[0]:08d}_{_time_long[-1]:08d}",
+                        plot=False,
                     )
 
-                else:
-                    _valid_imfs_long = check_imf_periods(
-                        imfs=_long_imfs,
-                        t=_time_long,
-                        filter_low_high=filter_low_high,
-                        filterPeriods=filterPeriods,
-                    )
-
-                # If required to plot specific IMFs
-                if plot_long_imfs and height in long_window_imf_list:
-                    __long_signal = Signal(
-                        cadence=long.cadence,
-                        custom_data=_data_long,
-                        name=f"{long.name} - Window #{height}",
-                        saveFolder="",
-                        norm=False,
-                    )
-
-                    __long_sf = SignalFunctions(
-                        __long_signal,
-                        filterIMFs=filterIMFs_on_plot,
-                        PeriodMinMax=(long.pmin, long.pmax),
-                        norm=False,
-                    )
-
-                    __long_sf.true_time = _time_long
-                    __long_sf.pmin = long.pmin
-                    __long_sf.pmax = long.pmax
-
-                    __long_sf.plot_emd_inst_freq(
-                        ncols=2,
-                        savepath=f"{long.saveFolder}IMFplots/",
-                        save_name=f"{height:08d}",
-                        with_residue=True,
-                    )
-
-                # For all of the short, long IMFs
-                for _i, row in enumerate(short_imfs):
-                    # If either the shortIMFs are NAN or longIMFs are NAN
-                    if np.isnan(np.sum(row)):
-                        for _j, col in enumerate(_long_imfs):
-                            corr_matrix[_i, _j, height, 0] = 0.01
-                            corr_matrix[_i, _j, height, 1] = 0.01
-                            corr_matrix[_i, _j, height, 2] = 0
+                    # Uses pmin and pmax from short dataseries
+                    if filterPeriods:
+                        _valid_imfs_long = check_imf_periods(
+                            imfs=_long_imfs,
+                            t=_time_long,
+                            pmin=self.pmin,
+                            pmax=self.pmax,
+                            filterPeriods=filterPeriods,
+                        )
 
                     else:
+                        _valid_imfs_long = check_imf_periods(
+                            imfs=_long_imfs,
+                            t=_time_long,
+                            filter_low_high=filter_low_high,
+                            filterPeriods=filterPeriods,
+                        )
+
+                    # If required to plot specific IMFs
+                    if plot_long_imfs and height in long_window_imf_list:
+                        __long_signal = Signal(
+                            cadence=long.cadence,
+                            custom_data=_data_long,
+                            name=f"{long.name} - Window #{height}",
+                            saveFolder="",
+                            norm=False,
+                        )
+
+                        __long_sf = SignalFunctions(
+                            __long_signal,
+                            filterIMFs=filterIMFs_on_plot,
+                            PeriodMinMax=(long.pmin, long.pmax),
+                            norm=False,
+                        )
+
+                        __long_sf.true_time = _time_long
+                        __long_sf.pmin = long.pmin
+                        __long_sf.pmax = long.pmax
+
+                        __long_sf.plot_emd_inst_freq(
+                            ncols=2,
+                            savepath=f"{long.saveFolder}IMFplots/",
+                            save_name=f"{height:08d}",
+                            with_residue=True,
+                        )
+
+                    # For all of the short, long IMFs
+                    for _i, row in enumerate(short_imfs):
                         short_valid = valid_imfs_short[_i, 0]
                         for __j, col in enumerate(_long_imfs):
-                            if np.isnan(np.sum(col)):
-                                corr_matrix[_i, __j, height, 0] = 0.01
-                                corr_matrix[_i, __j, height, 1] = 0.01
-                                corr_matrix[_i, __j, height, 2] = 0
-
+                            long_valid = _valid_imfs_long[__j, 0]
+                            if short_valid and long_valid:
+                                valid = 1
                             else:
+                                valid = 0
 
-                                long_valid = _valid_imfs_long[__j, 0]
-                                if short_valid and long_valid:
-                                    valid = 1
-                                else:
-                                    valid = 0
+                            corr_matrix[_i, __j, height, 0] = pearsonr(row, col)[
+                                0]
+                            corr_matrix[_i, __j, height, 1] = pearsonr(row, col)[
+                                1]
+                            corr_matrix[_i, __j, height, 2] = valid
 
-                                corr_matrix[_i, __j, height, 0] = pearsonr(row, col)[
-                                    0]
-                                corr_matrix[_i, __j, height, 1] = pearsonr(row, col)[
-                                    1]
-                                corr_matrix[_i, __j, height, 2] = valid
-
-                if useRealTime:  # We only have the real time in some ocasions
-                    mid_point_time = np.floor(
-                        (_time_long[-1] + _time_long[0]) / 2)
-                    corr_matrix[0, 0, height, 3] = mid_point_time
+                    if useRealTime:  # We only have the real time in some ocasions
+                        mid_point_time = np.floor(
+                            (_time_long[-1] + _time_long[0]) / 2)
+                        corr_matrix[0, 0, height, 3] = mid_point_time
 
             # Increase height by one before advancing
             height += 1
@@ -966,6 +955,7 @@ class SignalFunctions(Signal):
                 right_bound + self.windowDisp,
             )
 
+        # No longer relevant as we use entire LONG signal
         np.save(self.path_to_signal, complete_array)  # Signal + IMFs
         np.save(self.path_to_corr_matrix, corr_matrix)  # IMF corrs
         return None
@@ -1105,6 +1095,13 @@ class SignalFunctions(Signal):
         ffactor = fudgeFactor (Acceleration possible)
 
         """
+        save_name = f"{self.name}_{other.name}_Summary"
+        from os.path import isfile
+        savedSummaryPNG = f"{self.saveFolder}{save_name}.{self.saveformat}"
+
+        if isfile(savedSummaryPNG):
+            return
+
         try:
             corr_matrix = np.load(self.path_to_corr_matrix)
 
@@ -1351,7 +1348,7 @@ class SignalFunctions(Signal):
 
         # LONG
         long_signal = other
-        long_values = long_signal.s
+        # long_values = long_signal.s
         long_true_values = long_signal.base_signal
         # long_true_values
 
@@ -1592,10 +1589,9 @@ class SignalFunctions(Signal):
         ax2.grid(True)
 
         # Save, show and close
-        save_name = f"{region_string}_{long_signal.name}_Summary"
         plt.tight_layout()
         plt.savefig(
-            f"{self.saveFolder}{save_name}.{self.saveformat}",
+            savedSummaryPNG,
             dpi=300,
             bbox_inches="tight",
         )

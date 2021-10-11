@@ -148,23 +148,23 @@ class Spacecraft:
         if self.name == "SolO_Scaled_e6":
             self.df = pd.read_csv(
                 f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
-        elif self.name == "SolOpriv_e6" or self.name == "SolOsecond_Case":
+        elif self.name == "SolOpriv_e6" or self.name == "SolO_April_2020":
+            # Set the csv paths to empty
+            df_mag_csv_path = None
+            df_rpw_csv_path = None
+            df_sweap_csv_path = None
 
             if self.name == "SolOpriv_e6":
                 df_mag_csv_path = f"{BASE_PATH}Data/Prepped_csv/solo_mag_sept.csv"
                 df_rpw_csv_path = f"{BASE_PATH}Data/Prepped_csv/solo_rpw_sept.csv"
                 df_sweap_csv_path = f"{BASE_PATH}Data/Prepped_csv/solo_sweap_sept.csv"
 
-            elif self.name == "SolOsecond_Case":
-                raise NotImplementedError(
-                    "The second SolO case is not implemented yet.")
-                df_mag_csv_path = f""
-                df_rpw_csv_path = f""
-                df_sweap_csv_path = f""
-                raise ValueError("Second SolO case not implemented")
+            elif self.name == "SolO_April_2020":
+                df_mag_csv_path = f"{BASE_PATH}Data/Prepped_csv/solo_mag_sept.csv"
+                self.df = None
 
-            def RPW_prep():
-                cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L3/RPW/"
+            # Functions that process the cdfs, change cdf_path to be input if required
+            def RPW_prep(cdf_path=f"{BASE_PATH}unsafe/Resources/Solo_Data/L3/RPW/"):
 
                 _rpw_df = extractDF(
                     cdf_path, vars=["DENSITY"], info=False, resample=f"{self.obj_cad}s"
@@ -180,7 +180,7 @@ class Spacecraft:
 
                 return _rpw_df
 
-            def SWA_PAS():
+            def SWA_PAS(cdf_path=f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/GroundMom/"):
                 # SWA-PAS data
                 """Reduced list
                 'Epoch',
@@ -189,7 +189,7 @@ class Spacecraft:
                 'V_RTN',
                 'T'
                 """
-                cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/GroundMom/"
+
                 _sweap_df = extractDF(
                     cdf_path,
                     vars=["V_RTN", "N", "T", "validity"],
@@ -206,14 +206,12 @@ class Spacecraft:
 
                 return _sweap_df
 
-            def MAG_prep():
+            def MAG_prep(cdf_path):
                 """
                 Epoch
                 B_RTN
                 QUALITY_FLAG
                 """
-                cdf_path = f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/Mag/"
-
                 # Need to separate into different relevant csv
                 _mag_df = extractDF(
                     cdf_path, vars=["B_RTN", "QUALITY_FLAG"], info=False
@@ -225,14 +223,20 @@ class Spacecraft:
                 _mag_df.to_csv(df_mag_csv_path, index=False)
                 return _mag_df
 
-            _sweapdf = SWA_PAS()
-            _rpwdf = RPW_prep()
-            self.plasmadf = pd.concat([_sweapdf, _rpwdf], join="outer", axis=1).fillna(
-                np.nan
-            )
-            self.magdf = MAG_prep()
+            if df_rpw_csv_path == None:
+                self.magdf = MAG_prep(
+                    cdf_path=f"{BASE_PATH}unsafe/Resources/SolO_April_2020/SOlO_Data/L2/Mag/")
 
-            self.df = None
+            else:
+                _sweapdf = SWA_PAS()
+                _rpwdf = RPW_prep()
+                self.plasmadf = pd.concat([_sweapdf, _rpwdf], join="outer", axis=1).fillna(
+                    np.nan
+                )
+                self.magdf = MAG_prep(
+                    cdf_path=f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/Mag/")
+
+                self.df = None
 
         elif self.name == "PSP_Scaled_e6":
             # Just load the measurements
@@ -316,27 +320,52 @@ class Spacecraft:
 
             return sdo_df
 
+        elif self.name == "Earth_April_2020":
+            # Get the WIND data as a complete DF and process errors here?
+
+            from heliopy.data import ace
+
+            startTime = datetime(2020, 4, 15)
+            endTime = datetime(2020, 4, 25)
+            magdf = ace.mfi_h0(starttime=startTime,
+                               endtime=endTime).to_dataframe()
+            swedf = ace.swe_h0(starttime=startTime,
+                               endtime=endTime).to_dataframe()
+
+            magdf = magdf[["BGSM_0", "BGSM_1", "BGSM_2"]]
+            swedf = swedf[["Np", "Vp", "Tpr", "V_GSM_0", "V_GSM_1", "V_GSM_2"]]
+
+            self.df = pd.concat([swedf, magdf], join="outer", axis=1).fillna(
+                np.nan)
+
         else:
             raise NotImplementedError(f"{self.name} not implemented")
 
         # When we need to combine plasmadf and magdf
         if self.df is None:
 
-            # We need to use the Time column
-            # For PSP data, for SWEAP only cleaning
-            if "span_flag" in self.plasmadf.columns:
-                self.plasmadf[self.plasmadf["span_flag"] == 0] = np.nan
-                self.plasmadf[self.plasmadf["V_R"] > 0] = np.nan
-                self.plasmadf[self.plasmadf["V_T"] < -1000] = np.nan
-                self.plasmadf[self.plasmadf["V_N"] < -1000] = np.nan
+            try:
+                # We need to use the Time column
+                # For PSP data, for SWEAP only cleaning
+                if "span_flag" in self.plasmadf.columns:
+                    self.plasmadf[self.plasmadf["span_flag"] == 0] = np.nan
+                    self.plasmadf[self.plasmadf["V_R"] > 0] = np.nan
+                    self.plasmadf[self.plasmadf["V_T"] < -1000] = np.nan
+                    self.plasmadf[self.plasmadf["V_N"] < -1000] = np.nan
 
-                self.plasmadf[self.plasmadf["T"] < 0] = np.nan
-                self.plasmadf[self.plasmadf["N"] < 0] = np.nan
-                del self.plasmadf["span_flag"]
+                    self.plasmadf[self.plasmadf["T"] < 0] = np.nan
+                    self.plasmadf[self.plasmadf["N"] < 0] = np.nan
+                    del self.plasmadf["span_flag"]
 
-            self.plasmadf.fillna(method="pad")
-            self.plasmadf = self.plasmadf.resample(f"{self.obj_cad}s").mean()
+                self.plasmadf.fillna(method="pad")
+                self.plasmadf = self.plasmadf.resample(
+                    f"{self.obj_cad}s").mean()
 
+            # Ignore if plasmadf is missing
+            except AttributeError:
+                pass
+
+            # MAG IS GUARANTEED TO EXIST
             #############################################################
             # MAG #
             # Magnetic field measurements
@@ -356,9 +385,12 @@ class Spacecraft:
             self.magdf.fillna(method="pad")
             self.magdf = self.magdf.resample(f"{self.obj_cad}s").mean()
 
-            df = pd.concat([self.plasmadf, self.magdf], join="outer", axis=1).fillna(
-                np.nan
-            )
+            try:
+                df = pd.concat([self.plasmadf, self.magdf], join="outer", axis=1).fillna(
+                    np.nan)
+
+            except AttributeError:
+                df = self.magdf
 
             self.df = df
 
@@ -985,3 +1017,14 @@ class PSPSolO_e6(Spacecraft):
             plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
 
         plt.close()
+
+
+def test_SolO_April_2020():
+    solo = Spacecraft(name="SolO_April_2020", cadence_obj=60, show=True)
+    print(solo.df)
+
+    earth = Spacecraft(name="Earth_April_2020")
+
+
+if __name__ == "__main__":
+    test_SolO_April_2020()

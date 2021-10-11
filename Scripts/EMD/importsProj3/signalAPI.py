@@ -31,7 +31,7 @@ caseTuple = namedtuple("caseTuple", ["dirExtension", "shortTimes"])
 shortDFDic = namedtuple(
     "shortDFDic", ["df", "name", "cases", "paramList", "regionName", "kernelName"], defaults=(None,) * 6)
 longDFDic = namedtuple(
-    "longDFDic", ["df", "name", "kernelName", "accelerated", "speedSet"], defaults=(None,) * 5)
+    "longDFDic", ["df", "name", "kernelName", "accelerated", "speedSet"], defaults=(None, None, None, 1, None))
 
 ColumnColours = {
     "Btotal": "pink",
@@ -59,6 +59,12 @@ titleDic = {
     "SolO_N": "#p",
     "SolO_Mf": "Mass Flux",
     "PSP_Vr": "Vsw",
+    "V_R": "Vsw",
+    "B_R": "Vsw",
+    "BTotal": "Bt",
+    "N": "#p",
+    "T": "Tp",
+    "Mf": "Mass Flux",
     "PSP_V_R": "Vsw",
     "PSP_T": "Tp",
     "PSP_Np": "#p",
@@ -433,7 +439,6 @@ def emdAndCompareCases(
         for i, shortTimes in enumerate(splitTimes):
             dirName = f"{caseNamesList[splitIndices[i]]}"
             print(f"Starting {dirName}")
-
             _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
             _specificFolder = f"{saveFolder}{dirName}/"
 
@@ -457,8 +462,8 @@ def emdAndCompareCases(
                 showFig=showFig,
                 renormalize=False,
                 showSpeed=False,
-                HISPEED=loSpeed,
-                LOSPEED=hiSpeed,
+                HISPEED=hiSpeed,
+                LOSPEED=loSpeed,
                 SPCKernelName=longDF.name.lower(),  # Should ensure that using SPC name
             )
 
@@ -482,7 +487,6 @@ def emdAndCompareCases(
         if multiCPU == 1:
             for index, shortTimes in enumerate(shortTimesList):
                 dirName = f"{caseNamesList[index]}"
-                print(f"Starting {dirName}")
                 _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
                 _specificFolder = f"{saveFolder}{dirName}/"
 
@@ -570,11 +574,14 @@ def superSummaryPlotGeneric(shortDFDic,
     shortDFDic: namedTuple (df, name, paramList, regionName, kernelName)
     longDFDic: namedTuple (df, kernelName, accelerated)
     """
-    assert(shortDFDic.df.index[1] - shortDFDic.df.index[0]
+    assert(shortDFDic[0].df.index[1] - shortDFDic[0].df.index[0]
            == longDFDic.df.index[1] - longDFDic.df.index[0])
 
     # If we have a column called V_R, get max, min, mean values
-    if "V_R" in longDFDic.df.columns and longDFDic.speedSet != (None, None, None):
+    if longDFDic.speedSet != None:
+        HISPEED, LOSPEED, AVGSPEED = longDFDic.speedSet
+
+    elif "V_R" in longDFDic.df.columns and longDFDic.speedSet == None:
         HISPEED, LOSPEED, AVGSPEED = (
             int(longDFDic.df["V_R"].max() / longDFDic.accelerated),
             int(longDFDic.df["V_R"].min() / longDFDic.accelerated),
@@ -586,7 +593,8 @@ def superSummaryPlotGeneric(shortDFDic,
 
     figName = "accelerated" if longDFDic.accelerated != 1 else "constant"
 
-    (shortTimesList, caseNamesList, _) = extractDiscreteExamples(shortDFDic.cases)
+    (shortTimesList, caseNamesList, _) = extractDiscreteExamples(
+        shortDFDic[0].cases)
 
     # Create a list with all cases that should be split up
     allCases = []
@@ -601,15 +609,15 @@ def superSummaryPlotGeneric(shortDFDic,
             allCasesList=allCases,
             # Use all of the long dataset
             longSpan=(
-                longDFDic.df[0].to_pydatetime(),
-                longDFDic.df[-1].to_pydatetime()
+                longDFDic.df.index[0].to_pydatetime(),
+                longDFDic.df.index[-1].to_pydatetime()
             ),
-            shortParamList=shortDFDic.paramList,
+            shortParamList=shortDFDic[0].paramList,
             longObjectParam=longObjParam,
-            regions=[f"{shortDFDic.regionName}"],
+            regions=[f"{shortDFDic[0].regionName}"],
             unsafeEMDDataPath=unsafeEMDataPath,
             period=PeriodMinMax,
-            SPCKernelName=shortDFDic.kernelName,
+            SPCKernelName=shortDFDic[0].kernelName,
             otherObject=longDFDic.kernelName,
             speedSet=(HISPEED, LOSPEED, AVGSPEED),
             showFig=showFig,
@@ -662,7 +670,6 @@ def compareTS(
     varList = list(dfOther)
     random.shuffle(varList)
     for varOther in varList:
-        print(f"Starting {varOther}")
         otherPath = f"{savePath}../{labelOther}/{varOther}/"
         makedirs(otherPath, exist_ok=True)
 
@@ -821,9 +828,8 @@ def plot_super_summary(
         for case in allCasesList:
             shortStartTimes.append(case.shortTimes[0])
 
-        list_times_same_speed = []
-        list_times_vavg = []
-        list_times_same_speed_LOW = []
+        listTimesSameSpeed = []
+        listTimesSameSpeed_LOW = []
 
         # In situ times
         insituStTime = longSpan[0]
@@ -833,6 +839,8 @@ def plot_super_summary(
         )
 
         # TODO: Parallelise here
+        # Define a function which allows for multiprocessing call
+        # Use some of the shortStartTimes
         for index, (TshortDF) in enumerate(shortStartTimes):
             base_path = f"{unsafeEMDDataPath}{allCasesList[index].dirExtension}/"
 
@@ -868,7 +876,6 @@ def plot_super_summary(
                     spearman[spearman == 0] = np.nan
                     valid = corr_matrix[:, :, height, 2]
 
-                    # FIXME: Problem with how the midpoint is calculated
                     # Create the midpointTimes list to act as index
                     midpoint = corr_matrix[0, 0, height, 3]
                     midpoint_time = insituStTime + timedelta(seconds=midpoint)
@@ -922,17 +929,12 @@ def plot_super_summary(
             # Highest speeds
             closest_index = (np.abs(Vaxis - speedSuper)).argmin()
             closest_time = longARRAY[closest_index]
-            list_times_same_speed.append(closest_time)
+            listTimesSameSpeed.append(closest_time)
 
             # Lower speeds
             closest_index_LOW = (np.abs(Vaxis - speedSuperLow)).argmin()
             closest_time_LOW = longARRAY[closest_index_LOW]
-            list_times_same_speed_LOW.append(closest_time_LOW)
-
-            # Average, shown in red
-            closest_index_avg = (np.abs(Vaxis - speedAVG)).argmin()
-            closest_time_avg = longARRAY[closest_index_avg]
-            list_times_vavg.append(closest_time_avg)
+            listTimesSameSpeed_LOW.append(closest_time_LOW)
 
             # Set x axis to normal format
             ax.xaxis.set_major_locator(locator)
@@ -963,36 +965,35 @@ def plot_super_summary(
                 )
 
         # # Plot diagonal lines which highlight minimum and maximum V
+        # shortStartTimesArray = np.array(shortStartTimes)
+        timesLimits = (shortStartTimes[0], shortStartTimes[-1])
+        listTimesSameSpeed = [t.to_pydatetime()
+                              for t in listTimesSameSpeed]
+        listTimesSameSpeed_LOW = [t.to_pydatetime()
+                                  for t in listTimesSameSpeed_LOW]
+
+        # # Plot the high and low speed
         # ax.plot(
-        #     list_times_same_speed,
-        #     shortTimes,
+        #     listTimesSameSpeed,
+        #     shortStartTimes,
         #     color="orange",
         #     alpha=0.6,
         # )
 
         # ax.plot(
-        #     list_times_same_speed_LOW,
-        #     shortTimes,
+        #     listTimesSameSpeed_LOW,
+        #     shortStartTimes,
         #     color="orange",
         #     alpha=0.6,
         # )
 
-        # ax.fill_betweenx(
-        #     (TshortDF, tendDF),
-        #     list_times_same_speed,
-        #     list_times_same_speed_LOW,
-        #     color="orange",
-        #     alpha=0.2,
-        # )
-
-        # # Show average measured speed (not necessarily centre)
-        # ax.plot(
-        #     list_times_vavg,
-        #     shortTimes,
-        #     color="red",
-        #     alpha=0.8,
-        #     linewidth=2,
-        # )
+        ax.fill_betweenx(
+            shortStartTimes,
+            listTimesSameSpeed,
+            listTimesSameSpeed_LOW,
+            color="orange",
+            alpha=0.2,
+        )
 
         if showBox != None:
             box_X0, box_X1 = showBox[0]
@@ -1007,7 +1008,7 @@ def plot_super_summary(
     for j, corrThr in enumerate(corrThrPlotList):
         _mkrsize = 12 + j * 8
         _legendElement = Line2D(
-            [list_times_same_speed_LOW[0]],
+            [listTimesSameSpeed_LOW[0]],
             [TshortDF],
             marker="o",
             color="w",
@@ -1022,7 +1023,7 @@ def plot_super_summary(
     for j, var in enumerate(dfDots.columns):
         _mkrsize = 12
         _legendElement = Line2D(
-            [list_times_same_speed_LOW[0]],
+            [listTimesSameSpeed_LOW[0]],
             [TshortDF],
             marker="o",
             color="w",
@@ -1033,14 +1034,14 @@ def plot_super_summary(
 
         legend_elements.append(_legendElement)
 
-    # FIXME: Check that x axis (i.e., longARRAY) is not too long (seems to be)
-    # Decide if going in tomorrow lol
     # Or that the cadence of Short dataset is correct
     fig.legend(handles=legend_elements)
     fig.suptitle(
         f" Expected velocities {speedSuper} - {speedSuperLow} km/s in yellow")
+    longParamLegible = longObjectParam if longObjectParam not in titleDic else titleDic[
+        longObjectParam]
     fig.supxlabel(
-        f"Time at PSP ({getAvgRadius('psp', longARRAY):.2f}AU) ({titleDic[longObjectParam]})"
+        f"Time at PSP ({getAvgRadius('psp', longARRAY):.2f}AU) ({longParamLegible})"
     )
     fig.supylabel(
         f"Time at SolO ({getAvgRadius('solo', shortStartTimes):.2f}AU)"

@@ -1,12 +1,10 @@
 # This file should be used for routines and information that can be shared accross test cases
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/"
 
-from email.headerregistry import UniqueSingleAddressHeader
 from sys import path
 
-path.append(f"{BASE_PATH}Scripts/")
-path.append(
-    f"/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/")
+path.append("{BASE_PATH}Scripts/")
+path.append(f"/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/")
 
 import pandas as pd
 import numpy as np
@@ -19,6 +17,7 @@ from EMD.importsProj3.signalAPI import (
     caseCreation,
     shortDFDic,
     longDFDic,
+    superSummaryPlotGeneric,
 )
 
 
@@ -31,7 +30,8 @@ class baseEMD:
                  showFig=True,
                  detrendBoxWidth=200,
                  corrThrPlotList=np.arange(0.65, 1, 0.05),
-                 multiCPU=None
+                 multiCPU=None,
+                 speedSet=None
                  ):
 
         # The job of the init should be to get to a standardised format
@@ -41,6 +41,7 @@ class baseEMD:
         self.multiCPU = multiCPU
         self.detrendBoxWidth = detrendBoxWidth
         self.corrThrPlotList = corrThrPlotList
+        self.speedSet = speedSet
 
         possibleCaseNames = ["ISSIcasesAIA", "PSP_SolO_e6"]
         if caseName == "ISSIcasesAIA":
@@ -89,16 +90,16 @@ class baseEMD:
             shortDFParams = (df_171.columns, df_193.columns) if shortParams == None else (
                 shortParams, shortParams)
             self.shortDFDics = [
-                shortDFDic(df_171.copy(), "171", cases, shortDFParams[0]),
-                shortDFDic(df_193.copy(), "193", cases, shortDFParams[1])
+                shortDFDic(df_171.copy(), "171", cases,
+                           shortDFParams[0], "SDO_AIA", "sun"),
+                shortDFDic(df_193.copy(), "193", cases,
+                           shortDFParams[1], "SDO_AIA", "sun")
             ]
             self.longDFDic = longDFDic(df_is.copy(), "PSP")
 
         elif caseName == "PSP_SolO_e6":
-            # FIXME: Change where the EMD Results are saved
             from Imports.Spacecraft import Spacecraft
-            unsafe_dir = "/home/diegodp/Documents/PhD/Paper_2/EMD_Results/encounter6_Parker_1_5/"
-            self.saveFolder = f"{unsafe_dir}"
+            self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/encounter6_Parker_1_5/"
             objCadenceSeconds = 60
 
             # Create or read existing cases
@@ -123,16 +124,49 @@ class baseEMD:
             for _df in (long_SPC.df, short_SPC.df):
                 _df = _df.interpolate()
 
-            self.shortDFDics = [
-                shortDFDic(short_SPC.df, "SolO", cases, shortParams)
-            ]
-            self.longDFDic = longDFDic(long_SPC.df.copy(), "PSP")
+            self.shortDFDics = [shortDFDic(short_SPC.df, "SolO", cases,
+                                           shortParams, "SolO", "solo")]
+
+            self.longDFDic = longDFDic(
+                long_SPC.df.copy(), "PSP", "psp", 1, self.speedSet)
+
+        elif caseName == "SolO_Earth_April_2020":
+            from Imports.Spacecraft import Spacecraft
+            self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/SolO_Earth_April_2020/"
+            objCadenceSeconds = 60
+
+            # Create or read existing cases
+            soloEarthcases = {
+                "shortTimes": None,
+                "longTimes": None,
+                "shortDuration": None,
+                "caseName": None,
+                "shortDisplacement": None,
+                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_April_2020_SolO.pickle",
+                "forceCreate": True,
+            }
+            cases = caseCreation(**soloEarthcases)
+
+            # Long SPC (PSP)(IN-SITU)
+            # See if we can make a Spacecraft object etc, with more data to then select from it
+            long_SPC = Spacecraft(name="Earth_April_2020",
+                                  cadence_obj=objCadenceSeconds,
+                                  )
+            short_SPC = Spacecraft(name="SolO",
+                                   cadence_obj=objCadenceSeconds, )
+            for _df in (long_SPC.df, short_SPC.df):
+                _df = _df.interpolate()
+
+            self.shortDFDics = [shortDFDic(short_SPC.df, "SolO", cases,
+                                           shortParams, "SolO", "solo")]
+
+            self.longDFDic = longDFDic(long_SPC.df.copy(), "PSP", "psp")
 
         else:
             raise NotImplementedError(
                 f"{caseName} not implemented. Use one of {possibleCaseNames}")
 
-    def plotSeparately(self, showBox=None):
+    def plotSeparately(self):
         emdAndCompareCases(
             self.shortDFDics,
             self.longDFDic,
@@ -142,10 +176,20 @@ class baseEMD:
             detrendBoxWidth=self.detrendBoxWidth,
             corrThrPlotList=self.corrThrPlotList,
             multiCPU=self.multiCPU,
-
+            speedLim=self.speedSet,
         )
 
-    def superSumPlot(self):
+    def plotTogether(self, showBox=None):
+        # TODO: Fix diagonal lines
+        superSummaryPlotGeneric(
+            shortDFDic=self.shortDFDics,
+            longDFDic=self.longDFDic,
+            unsafeEMDataPath=self.saveFolder,
+            PeriodMinMax=self.PeriodMinMax,
+            corrThrPlotList=self.corrThrPlotList,
+            showFig=self.showFig,
+            showBox=showBox,
+        )
         raise NotImplementedError("Still unable to plot all together")
 
 
@@ -159,29 +203,36 @@ def PSPSolOCase():
         "showFig": True,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.65, 1, 0.05),
-        "multiCPU": 3,
-        "caseName": "PSP_SolO_e6"
+        "multiCPU": 4,
+        "caseName": "PSP_SolO_e6",
+        "speedSet": (300, 200, 250),  # High - low - mid
     }
 
+    box = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
+           (datetime(2020, 10, 1, 20, ), datetime(2020, 10, 2, 0, 13)))
     pspSolOe6EMD = baseEMD(**PSP_SolOVars)
-    pspSolOe6EMD.plotSeparately()
+    # pspSolOe6EMD.plotSeparately()
+    pspSolOe6EMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
+    pspSolOe6EMD.plotTogether(showBox=box)
 
 
 def ISSICase():
     # Is a dictionary
     ISSI_AIAVars = {
         "caseName": "ISSIcasesAIA",
+        # Use all Parameters by setting to None
         "shortParams": None,
         "longParams": None,
         "PeriodMinMax": [5, 30],
-        "showFig": True,
+        "showFig": False,
         "detrendBoxWidth": 200,
         "corrThrPlotList": np.arange(0.65, 1, 0.05),
         "multiCPU": 4,
     }
 
     issiEMD = baseEMD(**ISSI_AIAVars)
-    issiEMD.plotSeparately(showBox=None)
+    issiEMD.plotSeparately()
+    issiEMD.plotTogether(showBox=None)
 
 
 if __name__ == "__main__":
