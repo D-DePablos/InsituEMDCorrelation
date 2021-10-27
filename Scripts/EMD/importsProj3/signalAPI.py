@@ -1,4 +1,5 @@
 """Helper functions"""
+from typing import Type
 from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
 import astropy.units as u
 from collections import namedtuple
@@ -8,9 +9,7 @@ from PyEMD import EMD, Visualisation
 from glob import glob
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy.ma as ma
 import numpy as np
-from matplotlib import rc
 from os import makedirs
 import warnings
 
@@ -36,9 +35,18 @@ longDFDic = namedtuple(
 ColumnColours = {
     "Btotal": "pink",
     "B_R": "blue",
+    "B_T": "green",
+    "B_N": "red",
     "N_RPW": "green",
     "Mf": "purple",
     "V_R": "red",
+    "plume": "pink",
+    "chplume": "blue",
+    "qsun": "green",
+    "cbpoint": "purple",
+    "chole": "red",
+    "171": "blue",
+    "193": "orange",
 }
 alphaWVL = {
     "94": 0.9,
@@ -47,10 +55,17 @@ alphaWVL = {
     "211": 0.5,
     "HMI": 0.9,
     "Btotal": 0.9,
-    "B_R": 0.9,
+    "B_R": 0.7,
+    "B_T": 0.7,
+    "B_N": 0.7,
     "N_RPW": 0.9,
     "V_R": 0.9,
     "Mf": 0.9,
+    "plume": 0.9,
+    "chplume": 0.7,
+    "qsun": 0.4,
+    "cbpoint": 0.4,
+    "chole": 0.4
 }
 
 titleDic = {
@@ -60,7 +75,6 @@ titleDic = {
     "SolO_Mf": "Mass Flux",
     "PSP_Vr": "Vsw",
     "V_R": "Vsw",
-    "B_R": "Vsw",
     "BTotal": "Bt",
     "N": "#p",
     "T": "Tp",
@@ -77,7 +91,7 @@ titleDic = {
 }
 
 # Set general font size
-plt.rcParams["font.size"] = "16"
+plt.rcParams.update({'font.size': 22})
 
 # Dictionary which contains relevant axis for a 9x9 grid for each of the regions
 axDic = {
@@ -93,13 +107,19 @@ axDic = {
     "open": [0],
     "bpoint": [0],
     "BASE": [0],
+    "plume": [0, 0],
+    "cbpoint": [0, 1],
+    "chplume": [0, 2],
+    "chole": [1, 0],
+    "qsun": [1, 1],
 }
+
 
 # font = {"family": "DejaVu Sans", "weight": "normal", "size": 25}
 # rc("font", **font)
 
 
-def extractDiscreteExamples(Caselist, shortDuration=1.5, **kwargs):
+def extractDiscreteExamples(Caselist, shortDuration, **kwargs):
     """Extracts discrete PSP - longObject pairs
 
     Args:
@@ -258,6 +278,10 @@ def getAvgRadius(SPCKernelName, times):
         spicedata.get_kernel("psp")
         sp_traj = spice.Trajectory("SPP")
 
+    elif SPCKernelName == "sun":
+        spicedata.get_kernel("helio_frames")
+        sp_traj = spice.Trajectory("Sun")
+
     else:
         raise ValueError(
             f"{SPCKernelName} is not a valid spacecraft kernel, please choose one from ['solo'] "
@@ -379,7 +403,6 @@ def emdAndCompareCases(
     longDFSimpleDic,
     saveFolder,
     PeriodMinMax=[5, 20],
-    speedLim=(300, 500),
     detrendBoxWidth=None,
     showFig=True,
     corrThrPlotList=np.arange(0.65, 1, 0.05),
@@ -395,7 +418,6 @@ def emdAndCompareCases(
     speedLim: Upper and lower bounds on Speed for reference. Should be 2 numbers which do not change
     multiCPU: Either 'None' if not multiprocessing, or the number of CPUs to use
     """
-    loSpeed, hiSpeed = speedLim
     _dfLong = longDFSimpleDic.df.copy()
     _dfLong.columns = [f"{longDFSimpleDic.name}_{i}" for i in _dfLong.columns]
     cadLong = (_dfLong.index[1] - _dfLong.index[0]).seconds
@@ -412,8 +434,6 @@ def emdAndCompareCases(
                  PeriodMinMax,
                  detrendBoxWidth,
                  showFig,
-                 loSpeed,
-                 hiSpeed
                  ):
         """EMD for a set of splitTimes and Indices 
         Optimised for multiprocessing
@@ -438,7 +458,7 @@ def emdAndCompareCases(
 
         for i, shortTimes in enumerate(splitTimes):
             dirName = f"{caseNamesList[splitIndices[i]]}"
-            print(f"Starting {dirName}")
+            print(f"Starting {dirName} -- to save in {saveFolder}")
             _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
             _specificFolder = f"{saveFolder}{dirName}/"
 
@@ -462,8 +482,6 @@ def emdAndCompareCases(
                 showFig=showFig,
                 renormalize=False,
                 showSpeed=False,
-                HISPEED=hiSpeed,
-                LOSPEED=loSpeed,
                 SPCKernelName=longDF.name.lower(),  # Should ensure that using SPC name
             )
 
@@ -474,6 +492,7 @@ def emdAndCompareCases(
             refLocations,
         ) = extractDiscreteExamples(
             dfCase.cases,
+            shortDuration=dfCase.cases[0]["shortDurn"],
         )
         _dfShort = dfCase.df.copy()
         _dfShort.columns = [f"{dfCase.name}_{i}" for i in _dfShort.columns]
@@ -513,8 +532,6 @@ def emdAndCompareCases(
                     showFig=showFig,
                     renormalize=False,
                     showSpeed=False,
-                    HISPEED=loSpeed,
-                    LOSPEED=hiSpeed,
                     SPCKernelName=longDFSimpleDic.name.lower(),  # Should ensure that using SPC name
                 )
         else:
@@ -544,8 +561,6 @@ def emdAndCompareCases(
                         PeriodMinMax,
                         detrendBoxWidth,
                         showFig,
-                        loSpeed,
-                        hiSpeed,
                     ),
                 )
                 procs.append(proc)
@@ -564,7 +579,10 @@ def superSummaryPlotGeneric(shortDFDic,
                             PeriodMinMax,
                             corrThrPlotList,
                             showFig,
-                            showBox=None
+                            showBox=None,
+                            gridRegions=False,
+                            shortName="",
+                            longName="",
                             ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -591,10 +609,12 @@ def superSummaryPlotGeneric(shortDFDic,
     else:
         HISPEED, LOSPEED, AVGSPEED = (None, None, None)
 
-    figName = "accelerated" if longDFDic.accelerated != 1 else "constant"
+    figName = f"{shortDFDic[0].cases[0]['caseName'].partition('/')[0]}/"
+    figName += "accelerated" if longDFDic.accelerated != 1 else "constant"
+    figName += f"_P{PeriodMinMax[0]}_{PeriodMinMax[1]}"
 
     (shortTimesList, caseNamesList, _) = extractDiscreteExamples(
-        shortDFDic[0].cases)
+        shortDFDic[0].cases, shortDuration=shortDFDic[0].cases[0]["shortDurn"])
 
     # Create a list with all cases that should be split up
     allCases = []
@@ -604,6 +624,7 @@ def superSummaryPlotGeneric(shortDFDic,
             caseTuple(dirExtension, shortTimes)
         )
 
+    # Each of the parameters in long dataset
     for longObjParam in longDFDic.df.columns:
         plot_super_summary(
             allCasesList=allCases,
@@ -614,7 +635,7 @@ def superSummaryPlotGeneric(shortDFDic,
             ),
             shortParamList=shortDFDic[0].paramList,
             longObjectParam=longObjParam,
-            regions=[f"{shortDFDic[0].regionName}"],
+            regions=shortDFDic[0].regionName,
             unsafeEMDDataPath=unsafeEMDataPath,
             period=PeriodMinMax,
             SPCKernelName=shortDFDic[0].kernelName,
@@ -624,6 +645,10 @@ def superSummaryPlotGeneric(shortDFDic,
             figName=figName,
             corrThrPlotList=corrThrPlotList,
             showBox=showBox,
+            gridRegions=gridRegions,
+            cadence=f"{(longDFDic.df.index[1] - longDFDic.df.index[0]).seconds}s",
+            shortName=shortName,
+            longName=longName,
         )
 
 
@@ -762,6 +787,8 @@ def plot_super_summary(
     insituArrayFreq="1min",
     otherObject="Sun",
     showBox=None,
+    shortName="",
+    longName="",
 ):
     """Plots a "super" summary with info about all selected regions
     Does not take dataframes as input, instead finds the data through
@@ -794,12 +821,21 @@ def plot_super_summary(
     #     a.set_aspect('equal')
 
     # Makes Figure here
+    # TODO: Change gridRegions to autoGrid or sth
     if gridRegions == True:
-        nrowsCols = int(np.sqrt(len(regions)))
+        # This way makes sure there is space
+        nrowsCols = np.sqrt(len(regions))
+        if nrowsCols > int(nrowsCols):
+            nrows = int(nrowsCols)
+            ncols = int(nrowsCols) + 1
+        else:
+            nrows = int(nrowsCols)
+            ncols = int(nrowsCols)
         fig, axs = plt.subplots(
-            nrowsCols, nrowsCols, figsize=(16, 10), sharex=True, sharey=True
+            nrows, ncols, figsize=(20, 10), sharex=True, sharey=True
         )
     else:
+        # TODO: Add some text for each subplot in the grid
         nrows = gridRegions[0]
         ncols = gridRegions[1]
         fig, axs = plt.subplots(
@@ -807,21 +843,23 @@ def plot_super_summary(
             ncols=ncols,
             sharex=gridRegions[2],
             sharey=gridRegions[3],
-            figsize=(10, 10),
+            figsize=(18, 12),
         )
 
+    used_ax = []
     for i, region in enumerate(regions):
 
-        if gridRegions == True:
-            # 2-d position in grid
-            if type(axs) is list:
-                row, col = axDic[region]
-                ax = axs[row, col]
+        if type(axs) is np.ndarray:
+            row, col = axDic[region]
+            ax = axs[row, col]
 
-            else:
-                ax = axs
         else:
-            ax = axs[i]
+            try:
+                ax = axs[i]
+            except TypeError:
+                ax = axs
+
+        used_ax.append(ax)
 
         # Take the starting point for AIA Times
         shortStartTimes = []
@@ -838,7 +876,6 @@ def plot_super_summary(
             start=insituStTime, end=insituEndTime, freq=insituArrayFreq
         )
 
-        # TODO: Parallelise here
         # Define a function which allows for multiprocessing call
         # Use some of the shortStartTimes
         for index, (TshortDF) in enumerate(shortStartTimes):
@@ -855,8 +892,14 @@ def plot_super_summary(
                         f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
                     )
                 except FileNotFoundError:
-                    raise FileNotFoundError(
-                        f"The correlation Matrix cannot be found at {wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy")
+                    try:
+                        wvlPath = f"{base_path}{_shortVar}_{region}/"
+                        corr_matrix = np.load(
+                            f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
+                        )
+                    except FileNotFoundError:
+                        raise FileNotFoundError(
+                            f"The correlation Matrix cannot be found at {wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy")
 
                 # List of how big dots should be in comparison.
                 # Smallest dot is 0, when correlation does not reach 0.70.
@@ -937,12 +980,14 @@ def plot_super_summary(
             listTimesSameSpeed_LOW.append(closest_time_LOW)
 
             # Set x axis to normal format
-            ax.xaxis.set_major_locator(locator)
-            ax.xaxis.set_major_formatter(formatter)
+            longLocator = mdates.HourLocator([0])
+            longFormatter = mdates.ConciseDateFormatter(locator)
+            ax.xaxis.set_major_locator(longLocator)
+            ax.xaxis.set_major_formatter(longFormatter)
 
             # Locators for the y axis (short dframe)
-            shortlocator = mdates.HourLocator([0, 6, 12, 18])
-            shortformatter = mdates.ConciseDateFormatter(locator)
+            shortlocator = mdates.HourLocator([0, 12])
+            shortformatter = mdates.ConciseDateFormatter(shortlocator)
             ax.yaxis.set_major_locator(shortlocator)
             ax.yaxis.set_major_formatter(shortformatter)
 
@@ -965,28 +1010,13 @@ def plot_super_summary(
                 )
 
         # # Plot diagonal lines which highlight minimum and maximum V
-        # shortStartTimesArray = np.array(shortStartTimes)
-        timesLimits = (shortStartTimes[0], shortStartTimes[-1])
-        listTimesSameSpeed = [t.to_pydatetime()
-                              for t in listTimesSameSpeed]
-        listTimesSameSpeed_LOW = [t.to_pydatetime()
-                                  for t in listTimesSameSpeed_LOW]
+        # # shortStartTimesArray = np.array(shortStartTimes)
+        # listTimesSameSpeed = [t.to_pydatetime()
+        #                       for t in listTimesSameSpeed]
+        # listTimesSameSpeed_LOW = [t.to_pydatetime()
+        #                           for t in listTimesSameSpeed_LOW]
 
-        # # Plot the high and low speed
-        # ax.plot(
-        #     listTimesSameSpeed,
-        #     shortStartTimes,
-        #     color="orange",
-        #     alpha=0.6,
-        # )
-
-        # ax.plot(
-        #     listTimesSameSpeed_LOW,
-        #     shortStartTimes,
-        #     color="orange",
-        #     alpha=0.6,
-        # )
-
+        # Compared to plotting lines, this does not plot outside of necessary area
         ax.fill_betweenx(
             shortStartTimes,
             listTimesSameSpeed,
@@ -994,6 +1024,8 @@ def plot_super_summary(
             color="orange",
             alpha=0.2,
         )
+        ax.set_ylabel(f"{shortName}")
+        ax.set_xlabel(f"{longName}")
 
         if showBox != None:
             box_X0, box_X1 = showBox[0]
@@ -1034,18 +1066,24 @@ def plot_super_summary(
 
         legend_elements.append(_legendElement)
 
+    if type(axs) == np.ndarray:
+        for row in axs:
+            for _ax in row:
+                if _ax not in used_ax:
+                    fig.delaxes(_ax)
     # Or that the cadence of Short dataset is correct
-    fig.legend(handles=legend_elements)
-    fig.suptitle(
-        f" Expected velocities {speedSuper} - {speedSuperLow} km/s in yellow")
+    fig.legend(handles=legend_elements, prop={"size": 20})
     longParamLegible = longObjectParam if longObjectParam not in titleDic else titleDic[
         longObjectParam]
-    fig.supxlabel(
-        f"Time at PSP ({getAvgRadius('psp', longARRAY):.2f}AU) ({longParamLegible})"
-    )
-    fig.supylabel(
-        f"Time at SolO ({getAvgRadius('solo', shortStartTimes):.2f}AU)"
-    )
+    fig.suptitle(
+        f" Correlating against {longParamLegible} | in yellow {speedSuper} - {speedSuperLow} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.")
+
+    # fig.supxlabel(
+    #     f"Time at {other.name} ({getAvgRadius('psp', longARRAY):.2f}AU) ({longParamLegible})"
+    # )
+    # fig.supylabel(
+    #     f"Time at {self.name} ({getAvgRadius('solo', shortStartTimes):.2f}AU)"
+    # )
 
     plt.savefig(f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png")
 

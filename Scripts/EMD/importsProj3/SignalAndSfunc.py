@@ -1,9 +1,12 @@
 """Helper functions"""
 from multiprocessing.pool import TERMINATE
 from multiprocessing.sharedctypes import Value
+from time import time
+from black import Index
 from matplotlib import rc
 from os import makedirs
 import warnings
+
 
 warnings.filterwarnings("ignore")
 
@@ -23,7 +26,7 @@ from glob import glob
 from collections import namedtuple
 import astropy.units as u
 
-locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
 formatter = mdates.ConciseDateFormatter(locator)
 
 emd = EMD()
@@ -37,11 +40,14 @@ def normalize_signal(s: np.ndarray):
     :param s: Input signal
     """
 
-    _min = np.nanmin(s)
-    _max = np.nanmax(s)
+    try:
+        _min = np.nanmin(s)
+        _max = np.nanmax(s)
 
-    for i, x_i in enumerate(s):
-        s[i] = (x_i - _min) / (_max - _min)
+        for i, x_i in enumerate(s):
+            s[i] = (x_i - _min) / (_max - _min)
+    except ValueError as v:
+        pass
 
     return s
 
@@ -156,9 +162,13 @@ def transformTimeAxistoVelocity(
         spicedata.get_kernel("psp")
         sp_traj = spice.Trajectory("SPP")
 
+    elif SPCKernelName == "sun":
+        spicedata.get_kernel("helio_frames")
+        sp_traj = spice.Trajectory("Sun")
+
     else:
         raise ValueError(
-            f"{SPCKernelName} is not a valid spacecraft kernel, please choose one from ['solo'] "
+            f"{SPCKernelName} is not a valid spacecraft kernel, please choose one from ['solo', 'psp'] "
         )
 
     # Generate a list of times with timeAxis info
@@ -171,6 +181,17 @@ def transformTimeAxistoVelocity(
 
     if ObjBody == "Sun":
         vSwAxis = R.value / dtAxis  # In km / s
+        return vSwAxis
+
+    elif ObjBody == "L1":
+        from sys import path
+        path.append(
+            "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts")
+        # Get wind data for relevant times
+        from Imports.Spacecraft import Spacecraft
+        spc = Spacecraft(name="Earth_April_2020")
+        R_body = spc.df["R"].mean() * u.km
+        R = R - R_body
 
     else:
         trajName = "Solar Orbiter" if ObjBody == "solo" else "SPP"
@@ -183,9 +204,9 @@ def transformTimeAxistoVelocity(
         # Reduce the distance required
         R = R - R_body
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            vSwAxis = -R.value / dtAxis
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        vSwAxis = -R.value / dtAxis
 
     return vSwAxis
 
@@ -764,9 +785,12 @@ class SignalFunctions(Signal):
         Generate array of relevant windows with two timeseries of different length
         """
         # Note: The difference between self.data and self.s is that S may be normalised
-        assert (
-            self.t[-1] < other.t[-1]
-        ), f"Other Signal Object {other.t[-1]} is shorter than {self.t[-1]}. Please alter order"
+        try:
+            assert (
+                self.t[-1] < other.t[-1]
+            ), f"Other Signal Object {other.t[-1]} is shorter than {self.t[-1]}. Please alter order"
+        except IndexError:
+            pass
 
         # Once asserted that the first signal is smaller, continue
         short = self
@@ -777,10 +801,13 @@ class SignalFunctions(Signal):
         self.path_to_corr_matrix = f"{short.saveFolder}IMF/Corr_matrix_all.npy"
         self.windowDisp = windowDisp
 
-        # Setup to perform many EMDs on long dataset
-        self.no_displacements = int(
-            np.floor((long.t[-1] - short.t[-1]) / self.windowDisp)
-        )  # In seconds
+        try:
+            # Setup to perform many EMDs on long dataset
+            self.no_displacements = int(
+                np.floor((long.t[-1] - short.t[-1]) / self.windowDisp)
+            )  # In seconds
+        except IndexError:
+            self.no_displacements = 0
 
         # If the correlation matrix is set, skip
         try:

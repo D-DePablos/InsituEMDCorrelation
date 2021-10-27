@@ -31,7 +31,9 @@ class baseEMD:
                  detrendBoxWidth=200,
                  corrThrPlotList=np.arange(0.65, 1, 0.05),
                  multiCPU=None,
-                 speedSet=None
+                 speedSet=None,
+                 shortDuration=1.5,
+                 shortDisplacement=1.5,
                  ):
 
         # The job of the init should be to get to a standardised format
@@ -42,8 +44,11 @@ class baseEMD:
         self.detrendBoxWidth = detrendBoxWidth
         self.corrThrPlotList = corrThrPlotList
         self.speedSet = speedSet
+        self.shortDuration = shortDuration
+        self.shortDisplacement = shortDisplacement
 
-        possibleCaseNames = ["ISSIcasesAIA", "PSP_SolO_e6"]
+        possibleCaseNames = ["ISSIcasesAIA",
+                             "PSP_SolO_e6", "April2020_SolO_WIND"]
         if caseName == "ISSIcasesAIA":
             # The directories and save folders are on a per-case basis
             unsafe_dir = "/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/unsafe/"
@@ -61,7 +66,7 @@ class baseEMD:
                 "caseName": "SDO_AIA",
                 "shortDisplacement": 3,
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/Scripts/ISSI/cases/AIAcases.pickle",
-                "forceCreate": True,
+                "forceCreate": False,
             }
             cases = caseCreation(**AIACases)
 
@@ -91,11 +96,12 @@ class baseEMD:
                 shortParams, shortParams)
             self.shortDFDics = [
                 shortDFDic(df_171.copy(), "171", cases,
-                           shortDFParams[0], "SDO_AIA", "sun"),
+                           ["171", "193"], shortDFParams[0], "sun"),
                 shortDFDic(df_193.copy(), "193", cases,
-                           shortDFParams[1], "SDO_AIA", "sun")
+                           shortDFParams[1], "193", "sun")
             ]
-            self.longDFDic = longDFDic(df_is.copy(), "PSP")
+            self.longDFDic = longDFDic(
+                df_is.copy(), "PSP", "psp", 1, self.speedSet)
 
         elif caseName == "PSP_SolO_e6":
             from Imports.Spacecraft import Spacecraft
@@ -125,23 +131,23 @@ class baseEMD:
                 _df = _df.interpolate()
 
             self.shortDFDics = [shortDFDic(short_SPC.df, "SolO", cases,
-                                           shortParams, "SolO", "solo")]
+                                           shortParams, ["SolO"], "solo")]
 
             self.longDFDic = longDFDic(
                 long_SPC.df.copy(), "PSP", "psp", 1, self.speedSet)
 
-        elif caseName == "SolO_Earth_April_2020":
+        elif caseName == "April2020_SolO_WIND":
             from Imports.Spacecraft import Spacecraft
             self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/SolO_Earth_April_2020/"
-            objCadenceSeconds = 60
+            objCadenceSeconds = 92
 
             # Create or read existing cases
             soloEarthcases = {
-                "shortTimes": None,
-                "longTimes": None,
-                "shortDuration": None,
-                "caseName": None,
-                "shortDisplacement": None,
+                "longTimes": (datetime(2020, 4, 15), datetime(2020, 4, 23)),
+                "shortTimes": (datetime(2020, 4, 15), datetime(2020, 4, 20, 23, 58)),
+                "shortDuration": self.shortDuration,
+                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
+                "shortDisplacement": self.shortDisplacement,
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_April_2020_SolO.pickle",
                 "forceCreate": True,
             }
@@ -152,15 +158,20 @@ class baseEMD:
             long_SPC = Spacecraft(name="Earth_April_2020",
                                   cadence_obj=objCadenceSeconds,
                                   )
-            short_SPC = Spacecraft(name="SolO",
+            short_SPC = Spacecraft(name="SolO_April_2020",
                                    cadence_obj=objCadenceSeconds, )
+
+            long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
+            short_SPC.df = short_SPC.df[shortParams] if shortParams != None else short_SPC.df
+
             for _df in (long_SPC.df, short_SPC.df):
                 _df = _df.interpolate()
 
             self.shortDFDics = [shortDFDic(short_SPC.df, "SolO", cases,
-                                           shortParams, "SolO", "solo")]
+                                           shortParams, ["SolO"], "solo")]
 
-            self.longDFDic = longDFDic(long_SPC.df.copy(), "PSP", "psp")
+            self.longDFDic = longDFDic(
+                long_SPC.df.copy(), "WIND", "L1", 1, self.speedSet)
 
         else:
             raise NotImplementedError(
@@ -176,11 +187,9 @@ class baseEMD:
             detrendBoxWidth=self.detrendBoxWidth,
             corrThrPlotList=self.corrThrPlotList,
             multiCPU=self.multiCPU,
-            speedLim=self.speedSet,
         )
 
-    def plotTogether(self, showBox=None):
-        # TODO: Fix diagonal lines
+    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName=""):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
             longDFDic=self.longDFDic,
@@ -189,18 +198,20 @@ class baseEMD:
             corrThrPlotList=self.corrThrPlotList,
             showFig=self.showFig,
             showBox=showBox,
+            gridRegions=gridRegions,
+            shortName=shortName,
+            longName=longName,
         )
-        raise NotImplementedError("Still unable to plot all together")
 
 
-def PSPSolOCase():
+def PSPSolOCase(show=False):
     # Dictionary intro
     PSP_SolOVars = {
         "caseName": "PSP_SolO_e6",
         "shortParams": ["Btotal", "B_R", "V_R", "Mf", "N_RPW"],
         "longParams": ["Btotal", "B_R", "V_R", "Mf", "N"],
         "PeriodMinMax": [5, 22],
-        "showFig": True,
+        "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.65, 1, 0.05),
         "multiCPU": 4,
@@ -213,10 +224,10 @@ def PSPSolOCase():
     pspSolOe6EMD = baseEMD(**PSP_SolOVars)
     # pspSolOe6EMD.plotSeparately()
     pspSolOe6EMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
-    pspSolOe6EMD.plotTogether(showBox=box)
+    pspSolOe6EMD.plotTogether(showBox=box, gridRegions=True)
 
 
-def ISSICase():
+def ISSICase(show=False):
     # Is a dictionary
     ISSI_AIAVars = {
         "caseName": "ISSIcasesAIA",
@@ -224,17 +235,43 @@ def ISSICase():
         "shortParams": None,
         "longParams": None,
         "PeriodMinMax": [5, 30],
-        "showFig": False,
+        "showFig": show,
         "detrendBoxWidth": 200,
-        "corrThrPlotList": np.arange(0.65, 1, 0.05),
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 4,
+        "speedSet": None,
     }
 
     issiEMD = baseEMD(**ISSI_AIAVars)
-    issiEMD.plotSeparately()
-    issiEMD.plotTogether(showBox=None)
+    # issiEMD.plotSeparately()
+    # issiEMD.plotTogether(showBox=None, gridRegions=(2, 3, True, True))
+    issiEMD.plotTogether(showBox=None, gridRegions=True)
+
+
+# TODO: Add info about window length
+def SolOEarth2020Case(show=True):
+    Vars = {
+        "caseName": "April2020_SolO_WIND",
+        "shortParams": ["B_R", "B_T", "B_N"],
+        "longParams": ["B_R", "B_T", "B_N", "V_R"],
+        "PeriodMinMax": [60, 12 * 60],  # Very long periods
+        "showFig": show,
+        "detrendBoxWidth": None,
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "multiCPU": 6,
+        "speedSet": None,
+        "shortDuration": 24,  # In hours
+        "shortDisplacement": 2,
+
+    }
+
+    soloAprilEMD = baseEMD(**Vars)
+    soloAprilEMD.plotSeparately()
+    soloAprilEMD.plotTogether(
+        showBox=None, gridRegions=True, shortName="SolO (0.8A.U.)", longName="WIND (1 A.U.)")
 
 
 if __name__ == "__main__":
-    # ISSICase()
-    PSPSolOCase()
+    # ISSICase(show=False)
+    SolOEarth2020Case(show=False)
+    # PSPSolOCase()

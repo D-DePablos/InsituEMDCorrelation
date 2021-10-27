@@ -7,16 +7,16 @@ BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 
 path.append(f"{BASE_PATH}Scripts/")
 
-from Imports.Spacecraft import PSPSolO_e6
+from Imports.Spacecraft import PSPSolO_e6, EarthApril2020
 
 
-def psp_e6():
+def psp_e6(show=False):
     """
     Additional encounter possibly currently. Check data
     """
     OBJ_CADENCE = 60  # To one minute resolution
     PLOT_ORBITS = False
-    SHOW_PLOTS = True
+    SHOW_PLOTS = show
     stepMinutes = 60
 
     psp_e6_overview = {
@@ -40,26 +40,26 @@ def psp_e6():
         "start_time": datetime(2020, 9, 27, 11, 30),
         "end_time": datetime(2020, 10, 4, 11, 53),
         "stepMinutes": stepMinutes,
-        "color": "black",
+        "color": "red",
     }
 
     psp_zoomed = {
         "start_time": datetime(2020, 9, 25),
         "end_time": datetime(2020, 9, 30),
         "stepMinutes": stepMinutes,
-        "color": "red",
+        "color": "black",
     }
 
     solo_paper = {
         "start_time": datetime(2020, 10, 1, 22, 40),
         "end_time": datetime(2020, 10, 2, 0, 13),
-        "color": "black",
+        "color": "red",
     }
 
     psp_paper = {
         "start_time": datetime(2020, 9, 27, 3, 30),
         "end_time": datetime(2020, 9, 27, 5),
-        "color": "red",
+        "color": "black",
     }
 
     # Here we save the scaled DF
@@ -109,23 +109,22 @@ def psp_e6():
             )
 
 
-def solo_Earth_April_2020():
-    """
-    Additional encounter possibly currently. Check data
-    Likely we can implement it in the other area
-    """
+def solo_Earth_April_2020(show=False):
+    solo = EarthApril2020(name="SolO_April_2020",
+                          cadence_obj=92, show=show, remakeCSV=False)
+    earth = EarthApril2020(name="Earth_April_2020",
+                           cadence_obj=92, show=show, remakeCSV=False)
+
+    earth.plot_solo_earth_df(solo)
     pass
-
-
-def psp_sda_2019():
-    pass
-
-# %%
 
 
 if __name__ == "__main__":
     # Do twice so it saves with Radius hopefully
+    show = True
     try:
-        psp_e6()
+        psp_e6(show=show)
+        solo_Earth_April_2020(show=show)
     except AttributeError or ValueError:
-        psp_e6()
+        psp_e6(show=show)
+        solo_Earth_April_2020(show=show)

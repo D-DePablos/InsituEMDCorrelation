@@ -2,6 +2,8 @@ from email.headerregistry import UniqueSingleAddressHeader
 from sys import path
 from os import makedirs
 from copy import deepcopy
+from black import E
+import matplotlib
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,6 +34,18 @@ unitsTable = {
     "R": u.km,
 }
 SOLROTRATE = 24.47 / 86400
+
+from cycler import cycler
+
+import matplotlib
+plt.style.use("seaborn-paper")
+
+matplotlib.rcParams["axes.titlesize"] = 18
+matplotlib.rcParams["axes.labelsize"] = 18
+matplotlib.rcParams["figure.titlesize"] = 20
+matplotlib.rcParams["xtick.labelsize"] = 16
+matplotlib.rcParams["ytick.labelsize"] = 16
+matplotlib.rcParams['axes.prop_cycle'] = cycler(color='krgby')
 
 
 def lineCalc(P1, P2):
@@ -89,6 +103,11 @@ def _alignmentIdentification(soloDF, pspDF, vSWPSP):
     return (tPSP, tSolo, (pspTrueLon - phiPSP))
 
 
+def gse_calculate_rad(coords):
+    r = np.sqrt(coords[0]**2 + coords[1]**2 + coords[2]**2)
+    return r
+
+
 class Spacecraft:
     """
     The intention of this class is to enable similar download and
@@ -101,6 +120,8 @@ class Spacecraft:
         name="NONE",
         cadence_obj=None,
         show=False,
+        sunEarthDist=150111200.76,
+        remakeCSV=False,
     ):
         """
         :param name: Spacecraft name from one of [WIND, PSP, ST-A]
@@ -111,35 +132,35 @@ class Spacecraft:
         self.show = show
         self.completeCSVPath = f"{BASE_PATH}Data/Prepped_csv/{self.name}.csv"
         self.scaledCSVPath = f"{BASE_PATH}Data/Prepped_csv/{self.name}.csv"
+        self.sunEarthDist = sunEarthDist
 
-        try:
-            self.df = pd.read_csv(self.completeCSVPath)
-            self.df.index = pd.to_datetime(self.df["Time"])
+        if not remakeCSV:
+            try:
+                self.df = pd.read_csv(self.completeCSVPath)
+                self.df.index = pd.to_datetime(self.df["Time"])
 
-            if "R" not in self.df.columns and "Scaled" not in self.name:
-                self.saveWithRadius()
-                raise ValueError(
-                    f"Saved {self.name} With Radius added to {self.completeCSVPath}. Please re-run")
+                if "R" not in self.df.columns and "Scaled" not in self.name:
+                    self.saveWithRadius()
+                    raise ValueError(
+                        f"Saved {self.name} With Radius added to {self.completeCSVPath}. Please re-run")
 
-            del self.df["Time"]
-            self.dfUnits = QTable.from_pandas(self.df, index=True)
+                del self.df["Time"]
+                self.dfUnits = QTable.from_pandas(self.df, index=True)
 
-            for _i in self.dfUnits.colnames:
-                if _i == "N":
-                    self.dfUnits["N"] = self.dfUnits["N"] * u.cm ** (-3)
+                for _i in self.dfUnits.colnames:
+                    if _i == "N":
+                        self.dfUnits["N"] = self.dfUnits["N"] * u.cm ** (-3)
 
-                elif _i == "N_RPW":
-                    self.dfUnits["N_RPW"] = self.dfUnits["N_RPW"] * \
-                        u.cm ** (-3)
+                    elif _i == "N_RPW":
+                        self.dfUnits["N_RPW"] = self.dfUnits["N_RPW"] * \
+                            u.cm ** (-3)
 
-                elif _i in unitsTable:
-                    self.dfUnits[_i] = self.dfUnits[_i] * unitsTable[_i]
-            return None
+                    elif _i in unitsTable:
+                        self.dfUnits[_i] = self.dfUnits[_i] * unitsTable[_i]
+                return None
 
-        except FileNotFoundError:
-            pass
-
-        from glob import glob
+            except FileNotFoundError:
+                pass
 
         self.sp_coords_carrington = None  # Set a param which is empty to then fill
 
@@ -322,21 +343,31 @@ class Spacecraft:
 
         elif self.name == "Earth_April_2020":
             # Get the WIND data as a complete DF and process errors here?
-
-            from heliopy.data import ace
+            from heliopy.data import ace, wind
 
             startTime = datetime(2020, 4, 15)
-            endTime = datetime(2020, 4, 25)
-            magdf = ace.mfi_h0(starttime=startTime,
-                               endtime=endTime).to_dataframe()
-            swedf = ace.swe_h0(starttime=startTime,
-                               endtime=endTime).to_dataframe()
+            endTime = datetime(2020, 4, 24)
+            # magdf = ace.mfi_h0(starttime=startTime,
+            #                    endtime=endTime).to_dataframe()
+            # swedf = ace.swe_h0(starttime=startTime,
+            #                    endtime=endTime).to_dataframe()
 
-            magdf = magdf[["BGSM_0", "BGSM_1", "BGSM_2"]]
-            swedf = swedf[["Np", "Vp", "Tpr", "V_GSM_0", "V_GSM_1", "V_GSM_2"]]
+            magdf = wind.mfi_h0(
+                starttime=startTime, endtime=endTime).to_dataframe()
+            swedf = wind.swe_h1(
+                starttime=startTime, endtime=endTime).to_dataframe()
+
+            magdf = magdf[["BGSE_0", "BGSE_1", "BGSE_2"]]
+            swedf = swedf[["Proton_Np_moment",
+                           "Proton_V_moment", "Proton_W_moment", "xgse", "ygse", "zgse"]]
 
             self.df = pd.concat([swedf, magdf], join="outer", axis=1).fillna(
                 np.nan)
+            self.df.set_axis(
+                ["N V_R T X_GSE Y_GSE Z_GSE B_GSE_0 B_GSE_1 B_GSE_2".split()], axis=1, inplace=True)
+
+            # raise ValueError("Not continuing yet. Debug!")
+            self.__gse_to_rtn()
 
         else:
             raise NotImplementedError(f"{self.name} not implemented")
@@ -395,9 +426,12 @@ class Spacecraft:
             self.df = df
 
         else:
-            # After loading it breaks datetime format -> We save as the csv for ease of use
-            self.df.index = pd.to_datetime(self.df["Time"])
-            del self.df["Time"]
+            try:
+                # After loading it breaks datetime format -> We save as the csv for ease of use
+                self.df.index = pd.to_datetime(self.df["Time"])
+                del self.df["Time"]
+            except KeyError:
+                pass
 
         self.df = self.df.resample(f"{self.obj_cad}s").mean()
 
@@ -464,13 +498,50 @@ class Spacecraft:
 
         return fline
 
+    def __gse_to_rtn(self):
+        assert "earth" in self.name.lower(
+        ), "The GSE to RTN coordinate conversion is only necessary for Earth-based observers."
+        from sunpy.coordinates import sun
+        times = self.df.index
+
+        X = self.df["B_GSE_0"]
+        Y = self.df["B_GSE_1"].values
+        Z = self.df["B_GSE_2"].values
+
+        r = - X
+        Ps = sun.P(times)
+
+        t, n = [], []
+        tp, nep = [], []
+
+        for P, y, z in zip(Ps.value, Y, Z):
+            t.append(np.sin(P) * y[0] + np.cos(P) * z[0])
+            n.append(np.cos(P) * z[0] - np.sin(P) * y[0])
+
+        # Radial mag field
+        self.df["B_R"] = r
+        self.df["B_T"] = t
+        self.df["B_N"] = n
+
+        del self.df["B_GSE_0"]
+        del self.df["B_GSE_1"]
+        del self.df["B_GSE_2"]
+
+        return None
+
     def saveWithRadius(self):
         """
         Save a new csv with the radius information
         """
-        self.extract_orbit_data(from_data=True, stepMinutes=self.obj_cad / 60)
-        self.df = self.df[:-1]
-        self.df["R"] = (self.sp_traj.r.to(u.km)).value
+        try:
+            self.extract_orbit_data(
+                from_data=True, stepMinutes=self.obj_cad / 60)
+            self.df = self.df[:-1]
+            self.df["R"] = (self.sp_traj.r.to(u.km)).value
+
+        except NotImplementedError:
+            self.df["R"] = gse_calculate_rad(
+                [self.sunEarthDist - self.df["X_GSE"].values, self.df["Y_GSE"].values, self.df["Z_GSE"].values])
         self.df["Time"] = self.df.index
         self.df.to_csv(
             self.completeCSVPath,
@@ -493,6 +564,9 @@ class Spacecraft:
             spicedata.get_kernel("solo")
             sp_traj = spice.Trajectory("SolO")
 
+        elif "earth" in self.name.lower():
+            raise NotImplementedError(
+                "Earth L1 spacecraft do not have a spice kernel")
         else:
             raise ValueError(f"{self.name} not identified")
 
@@ -755,7 +829,6 @@ class Spacecraft:
         self,
         start_time: datetime,
         end_time: datetime,
-        color=None,
         stepMinutes=30,
         extractOrbit=True,
     ):
@@ -790,16 +863,7 @@ class PSPSolO_e6(Spacecraft):
         zone 1 and zone 2 will be highlighted in SolO and PSP respectively
         """
         assert "solo" in self.name.lower(), "Please ensure SolO is object with f call"
-        import matplotlib
         from astropy import constants as c
-
-        plt.style.use("seaborn-paper")
-
-        matplotlib.rcParams["axes.titlesize"] = 18
-        matplotlib.rcParams["axes.labelsize"] = 18
-        matplotlib.rcParams["figure.titlesize"] = 20
-        matplotlib.rcParams["xtick.labelsize"] = 16
-        matplotlib.rcParams["ytick.labelsize"] = 16
 
         # Figure
         # Width and marker size
@@ -890,7 +954,7 @@ class PSPSolO_e6(Spacecraft):
         ax0.semilogy(
             ts,
             Bt,
-            "k-",
+            "r-",
             label="SolO_MAG",
             alpha=1,
             linewidth=1,
@@ -898,7 +962,7 @@ class PSPSolO_e6(Spacecraft):
         ax0.semilogy(
             ots,
             oBTUnscaled,
-            "r-",
+            "k-",
             label="PSP_FLD",
             alpha=1,
         )
@@ -915,11 +979,11 @@ class PSPSolO_e6(Spacecraft):
         ax2.semilogy(
             ts,
             T,
-            color="black",
+            "r-",
             label=r"$T_p$",
             linewidth=1,
         )
-        ax2.semilogy(ots, oT, color="red")
+        ax2.semilogy(ots, oT, "k-")
         ax2.set_ylabel(r"$T_p (K)$")
 
         # Proton Density
@@ -927,12 +991,12 @@ class PSPSolO_e6(Spacecraft):
         ax4.semilogy(
             ts,
             Np,
-            color="black",
+            "r-",
             label="Np_SolO_SWA_PAS",
             linewidth=1,
         )
         ax4.semilogy(ts, NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
-        ax4.semilogy(ots, oNp, color="red", label="Np_PSP_SPAN")
+        ax4.semilogy(ots, oNp, "k-", label="Np_PSP_SPAN")
         ax4.set_ylabel(r"$n_p$ (# $cm^{-3}$)")
         ax4.legend()
 
@@ -941,11 +1005,11 @@ class PSPSolO_e6(Spacecraft):
         axMf.semilogy(
             ts,
             Mf,
+            "r-",
             label="Mass Flux",
-            color="black",
             linewidth=1,
         )
-        axMf.semilogy(ots, oMf, color="red")
+        axMf.semilogy(ots, oMf, "k-")
         axMf.set_ylabel(r"$Mf$")
 
         # Magnetic field components
@@ -953,13 +1017,13 @@ class PSPSolO_e6(Spacecraft):
         axs[5].plot(
             ts,
             BtScaled,
-            "k-",
+            "r-",
             label=r"$R^2$ Scaled Btotal SolO",
         )
         axs[5].plot(
             ots,
             oBtScaled,
-            "r-",
+            "k-",
             label=r"$R^2$ Scaled Btotal PSP",
         )
         axs[5].legend()
@@ -968,7 +1032,7 @@ class PSPSolO_e6(Spacecraft):
         axs[6].plot(
             ts,
             NpScaled,
-            color="black",
+            "r-",
             label=r"$R^2$ Scaled Np (PAS)",
             linewidth=1,
         )
@@ -982,15 +1046,15 @@ class PSPSolO_e6(Spacecraft):
         axs[6].plot(
             ots,
             oNpScaled,
-            color="red",
+            "k-",
             label=r"$R^2$ Scaled Np (PSP_SWEAP)",
         )
         axs[6].set_ylabel(r"$n_p$ (# $m^{-3}$)")
         axs[6].legend()
 
-        axs[7].plot(ts, MfScaled, color="black", linewidth=1,
+        axs[7].plot(ts, MfScaled, "r-", linewidth=1,
                     label=r"$R^2$ Scaled Mf SolO")
-        axs[7].plot(ots, oMfScaled, color="red", label=r"$R^2$ Scaled Mf PSP")
+        axs[7].plot(ots, oMfScaled, "k-", label=r"$R^2$ Scaled Mf PSP")
         axs[7].set_ylabel(r"$Mf$")
         axs[7].legend()
 
@@ -1019,12 +1083,93 @@ class PSPSolO_e6(Spacecraft):
         plt.close()
 
 
-def test_SolO_April_2020():
-    solo = Spacecraft(name="SolO_April_2020", cadence_obj=60, show=True)
-    print(solo.df)
+class EarthApril2020(Spacecraft):
+    def __init__(self, name="NONE", cadence_obj=None, show=False, sunEarthDist=150111200.76, remakeCSV=False):
+        super().__init__(name=name, cadence_obj=cadence_obj,
+                         show=show, sunEarthDist=sunEarthDist, remakeCSV=remakeCSV)
 
-    earth = Spacecraft(name="Earth_April_2020")
+    def plot_solo_earth_df(self, other, zones=[]):
+        assert "earth" in self.name.lower(), "Please ensure Earth is object with f call"
+        from astropy import constants as c
+
+        ts = self.df.index
+        ots = other.df.index
+
+        R = (self.dfUnits["R"].to(u.m) - const.R_sun).value
+        oR = (other.dfUnits["R"].to(u.m) - const.R_sun).value
+
+        Bx, By, Bz = self.df["B_R"], self.df["B_T"], self.df["B_N"]
+        oBx, oBy, oBz = other.df["B_R"], other.df["B_T"], other.df["B_N"]
+        Bt = np.sqrt(Bx ** 2 + By ** 2 + Bz ** 2)
+        oBt = np.sqrt(oBx ** 2 + oBy ** 2 + oBz ** 2)
+
+        # Figure
+        # Width and marker size
+        _, axs = plt.subplots(
+            7, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
+        )
+
+        # Plots
+        axs[0].set_ylabel("R (AU)")
+        axs[0].plot(ts, R * u.m.to(u.AU), label="WIND")
+        axs[0].plot(ots, oR * u.m.to(u.AU), label="SolO")
+        axs[0].grid(True)
+        axs[0].set_ylim(0.7, 1.1)
+        axs[0].legend()
+
+        # Bx
+        axs[1].set_ylabel(r"$\hat{B}_{R}$")
+        axs[1].plot(ts, Bx, label="ACE")
+        axs[1].plot(ots, oBx, label="SolO")
+
+        # By
+        axs[2].set_ylabel(r"$\hat{B}_{T}$")
+        axs[2].plot(ts, By)
+        axs[2].plot(ots, oBy)
+
+        # Bz
+        axs[3].set_ylabel(r"$\hat{B}_{N}$")
+        axs[3].plot(ts, Bz)
+        axs[3].plot(ots, oBz)
+
+        # Btotal
+        axs[4].set_ylabel(r"$\hat{B}_T$")
+        axs[4].plot(ts, Bt)
+        axs[4].plot(ots, oBt)
+
+        # V
+        axs[5].set_ylabel(r"$\hat{V}_R$")
+        axs[5].plot(ts, self.df["V_R"])
+
+        axs[6].set_ylabel(r"$T_p$")
+        axs[6].plot(ts, self.df["T"])
+
+        # # Plot the relevant columns
+        for ax in axs:
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
+
+        # Plot the zones being considered
+        for zone in zones:
+            for ax in axs:
+                ax.axvspan(
+                    zone["start_time"], zone["end_time"], color=zone["color"], alpha=0.3
+                )
+
+        # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
+        # print(f"Saving to {self}")
+        # plt.savefig(f"{save_folder}B_Br_V_sb_matrix_highlighted.pdf")
+        if self.show:
+            plt.show()
+        else:
+            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            makedirs(plotPath, exist_ok=True)
+            print(f"Saving to {plotPath}")
+            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
+
+        plt.close()
 
 
 if __name__ == "__main__":
-    test_SolO_April_2020()
+    raise ImportError(
+        "Please use Scripts/Plots/createCSVsAndOrbits to generate CSV plots.")
