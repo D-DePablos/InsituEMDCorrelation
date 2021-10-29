@@ -150,6 +150,8 @@ class baseEMD:
                 "shortDisplacement": self.shortDisplacement,
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_April_2020_SolO.pickle",
                 "forceCreate": True,
+                "firstRelevantLongTime": datetime(2020, 4, 15, 20),
+                "MARGIN": 48,
             }
             cases = caseCreation(**soloEarthcases)
 
@@ -171,7 +173,7 @@ class baseEMD:
                                            shortParams, ["SolO"], "solo")]
 
             self.longDFDic = longDFDic(
-                long_SPC.df.copy(), "WIND", "L1", 1, self.speedSet)
+                long_SPC.df, "WIND", "L1", 1, self.speedSet)
 
         else:
             raise NotImplementedError(
@@ -248,7 +250,9 @@ def ISSICase(show=False):
     issiEMD.plotTogether(showBox=None, gridRegions=True)
 
 
-# TODO: Add info about window length
+# TODO: Check if can pad SolO data to fit
+# TODO: Change how much data using at once (ballpark estimate of speeds which make physical sense)
+
 def SolOEarth2020Case(show=True):
     Vars = {
         "caseName": "April2020_SolO_WIND",
@@ -258,13 +262,14 @@ def SolOEarth2020Case(show=True):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 6,
+        "multiCPU": 3,
         "speedSet": None,
-        "shortDuration": 24,  # In hours
-        "shortDisplacement": 2,
+        "shortDuration": 3,  # In hours
+        "shortDisplacement": 20,
 
     }
 
+    # FIXME: Need to check that the window length is working as intended, and that file names are correct
     soloAprilEMD = baseEMD(**Vars)
     soloAprilEMD.plotSeparately()
     soloAprilEMD.plotTogether(

@@ -6,6 +6,7 @@ from black import Index
 from matplotlib import rc
 from os import makedirs
 import warnings
+import datetime
 
 
 warnings.filterwarnings("ignore")
@@ -133,7 +134,10 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
         # plt.show()
 
     # Find relevant timeID
-    time_id = f"time_{t[0]:08d}-{t[-1]:08d}"
+    if "short" in save_name:
+        time_id = f"time_{t[0]:08d}-{t[-1]:08d}"
+    else:
+        time_id = f"time_{save_name[5:]}"
     np.save(f"{saveFolder}{time_id}.npy", t)
     np.save(saved_npy, imfs)  # Keeps noise as we can do filtering later
 
@@ -845,10 +849,13 @@ class SignalFunctions(Signal):
             save_name=f"short_{short.t[0]:08d}_{short.t[-1]:08d}",
             plot=False,
         )
+
+        # Store the IMFs in the object for other functions
         self.imfs = short_imfs
 
-        # Where IMFs are found to be == NAN due to missing values
-        if np.isnan(np.sum(self.imfs[0])):
+        # If all short IMFs contain NAN / are NAN
+        if np.isnan(np.sum(short_imfs)):
+            # Where IMFs are found to be == NAN due to missing values
             np.save(self.path_to_signal, complete_array)  # Signal + IMFs
             np.save(self.path_to_corr_matrix, corr_matrix)  # IMF corrs
             return None
@@ -891,6 +898,11 @@ class SignalFunctions(Signal):
                 _data_long = normalize_signal(
                     _data_long) if renormalize else _data_long
                 _time_long = deepcopy(long.t[i: j + 1])
+                _true_time_long = deepcopy(long.true_time[i: j + 1])
+
+                # if np.nan in _data_long:
+                #     print("NAN found")
+                #     pass
 
                 # Set values for array
                 complete_array[0, height, :] = _time_long
@@ -900,11 +912,16 @@ class SignalFunctions(Signal):
                 # If long window not all NAN
                 if np.isnan(np.sum(_data_long)) == False:
                     # Derive EMD and save to relevant folder
+                    # TODO: Probably need to change how the files are saved
+                    _true_start = datetime.datetime.strftime(
+                        _true_time_long[0], format="%Y%m%d_%H:%M")
+                    _true_end = datetime.datetime.strftime(
+                        _true_time_long[-1], format="%Y%m%d_%H:%M")
                     _long_imfs = emd_and_save(
                         s=_data_long,
                         t=_time_long,
                         saveFolder=f"{long.saveFolder}IMF/",
-                        save_name=f"long_{_time_long[0]:08d}_{_time_long[-1]:08d}",
+                        save_name=f"long_{_true_start}_{_true_end}",
                         plot=False,
                     )
 
@@ -964,11 +981,15 @@ class SignalFunctions(Signal):
                             else:
                                 valid = 0
 
-                            corr_matrix[_i, __j, height, 0] = pearsonr(row, col)[
-                                0]
-                            corr_matrix[_i, __j, height, 1] = pearsonr(row, col)[
-                                1]
-                            corr_matrix[_i, __j, height, 2] = valid
+                            try:
+                                corr_matrix[_i, __j, height, 0] = pearsonr(row, col)[
+                                    0]
+                                corr_matrix[_i, __j, height, 1] = pearsonr(row, col)[
+                                    1]
+                                corr_matrix[_i, __j, height, 2] = valid
+                            except ValueError as E:
+                                # TODO: Fix behaviour when pearsonR not calculable
+                                pass
 
                     if useRealTime:  # We only have the real time in some ocasions
                         mid_point_time = np.floor(

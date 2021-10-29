@@ -151,6 +151,7 @@ def extractDiscreteExamples(Caselist, shortDuration, **kwargs):
         }
 
     shortTimes = []
+    longTimes = []
     matchTimes = []
     caseNames = []
     refLocations = []
@@ -170,6 +171,16 @@ def extractDiscreteExamples(Caselist, shortDuration, **kwargs):
         matchAvg = matchStart + (matchEnd - matchStart) / 2
         matchTimes.append((matchStart, matchEnd))
 
+        if case["margin"] != 0:
+            _startLong = matchStart - timedelta(hours=case["margin"] / 2)
+            _endLong = matchStart + timedelta(hours=case["margin"] / 2)
+
+        else:
+            _startLong = None
+            _endLong = None
+
+        longTimes.append((_startLong, _endLong))
+
         # Get the specific case Name
         caseNames.append(case["caseName"])
 
@@ -177,7 +188,7 @@ def extractDiscreteExamples(Caselist, shortDuration, **kwargs):
             _constructExpectedLocation(_times=(matchStart, matchEnd), **kwargs)
         )
 
-    return shortTimes, caseNames, refLocations
+    return shortTimes, longTimes, caseNames, refLocations
 
 
 def caseCreation(
@@ -188,6 +199,8 @@ def caseCreation(
     savePicklePath,
     shortDisplacement=None,
     forceCreate=False,
+    firstRelevantLongTime=False,
+    MARGIN=None,
 ):
     """Creates cases given times of short and long datasets
 
@@ -232,12 +245,19 @@ def caseCreation(
     while _tShort <= (endSHORT - timedelta(hours=shortDuration)):
         _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
 
+        if firstRelevantLongTime != False:
+            _matchTime = firstRelevantLongTime + \
+                timedelta(hours=shortDisplacement) * i
+        else:
+            _matchTime = baseLONG
+
         cases.append(
             {
                 "shortTime": _tShort,
-                "matchTime": baseLONG,
+                "matchTime": _matchTime,
                 "shortDurn": shortDuration,
                 "caseName": f"{caseName}_{_tShort.day}_T{_tShort.hour:02d}",
+                "margin": MARGIN,  # +- some number of hours
             }
         )
 
@@ -418,7 +438,7 @@ def emdAndCompareCases(
     speedLim: Upper and lower bounds on Speed for reference. Should be 2 numbers which do not change
     multiCPU: Either 'None' if not multiprocessing, or the number of CPUs to use
     """
-    _dfLong = longDFSimpleDic.df.copy()
+    _dfLong = longDFSimpleDic.df
     _dfLong.columns = [f"{longDFSimpleDic.name}_{i}" for i in _dfLong.columns]
     cadLong = (_dfLong.index[1] - _dfLong.index[0]).seconds
 
@@ -434,8 +454,9 @@ def emdAndCompareCases(
                  PeriodMinMax,
                  detrendBoxWidth,
                  showFig,
+                 splitLongTimes=None,
                  ):
-        """EMD for a set of splitTimes and Indices 
+        """EMD for a set of splitTimes and Indices
         Optimised for multiprocessing
 
         Args:
@@ -455,18 +476,23 @@ def emdAndCompareCases(
         """
 
         cadShort, cadLong = cads
+        _dfLong = longDF.df.copy()
 
         for i, shortTimes in enumerate(splitTimes):
             dirName = f"{caseNamesList[splitIndices[i]]}"
             print(f"Starting {dirName} -- to save in {saveFolder}")
             _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
+            if splitLongTimes is not None:
+                _dfLongCut = _dfLong[splitLongTimes[i][0]:splitLongTimes[i][1]]
+            else:
+                _dfLongCut = _dfLong
             _specificFolder = f"{saveFolder}{dirName}/"
 
             _expectedLocationList = False
 
             compareTS(
                 dfSelf=_dfShortCut,
-                dfOther=longDF.df,
+                dfOther=_dfLongCut,
                 cadSelf=cadShort,
                 cadOther=cadLong,
                 labelOther=longDF.name,
@@ -485,9 +511,11 @@ def emdAndCompareCases(
                 SPCKernelName=longDF.name.lower(),  # Should ensure that using SPC name
             )
 
+    # For each of the "wavelengths" or "shortParameters"
     for dfCase in shortDFDic:
         (
             shortTimesList,
+            longTimesList,
             caseNamesList,
             refLocations,
         ) = extractDiscreteExamples(
@@ -506,9 +534,16 @@ def emdAndCompareCases(
         if multiCPU == 1:
             for index, shortTimes in enumerate(shortTimesList):
                 dirName = f"{caseNamesList[index]}"
+                if longTimesList[index][0] != None:
+                    longTimes = longTimesList[index]
+                    _dfLongCut = _dfLong[longTimes[0]: longTimes[1]]
+                else:
+                    _dfLongCut = _dfLong
+
                 _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
                 _specificFolder = f"{saveFolder}{dirName}/"
 
+                # TODO: Check if there is a problem with _expectedLocationList
                 if refLocations != []:
                     _expectedLocationList = refLocations[index]
                 else:
@@ -516,7 +551,7 @@ def emdAndCompareCases(
 
                 compareTS(
                     dfSelf=_dfShortCut,
-                    dfOther=_dfLong,
+                    dfOther=_dfLongCut,
                     cadSelf=cadShort,
                     cadOther=cadLong,
                     labelOther=longDFSimpleDic.name,
@@ -540,13 +575,14 @@ def emdAndCompareCases(
             shortTimesList
             indices = np.arange(len(shortTimesList))
             splitTimes = np.array_split(np.array(shortTimesList), multiCPU)
+            splitLongTimes = np.array_split(np.array(longTimesList), multiCPU)
             splitIndices = np.array_split(indices, multiCPU)
 
             # Now create a process that handles a range of these
 
             procs = []
 
-            for _splitTimes, _splitIndices in zip(splitTimes, splitIndices):
+            for _splitTimes, _splitIndices, _splitLongTimes in zip(splitTimes, splitIndices, splitLongTimes):
                 proc = multiprocessing.Process(
                     target=multiEMD,
                     args=(
@@ -561,6 +597,7 @@ def emdAndCompareCases(
                         PeriodMinMax,
                         detrendBoxWidth,
                         showFig,
+                        _splitLongTimes,
                     ),
                 )
                 procs.append(proc)
@@ -613,7 +650,7 @@ def superSummaryPlotGeneric(shortDFDic,
     figName += "accelerated" if longDFDic.accelerated != 1 else "constant"
     figName += f"_P{PeriodMinMax[0]}_{PeriodMinMax[1]}"
 
-    (shortTimesList, caseNamesList, _) = extractDiscreteExamples(
+    (shortTimesList, longTimesList, caseNamesList, _) = extractDiscreteExamples(
         shortDFDic[0].cases, shortDuration=shortDFDic[0].cases[0]["shortDurn"])
 
     # Create a list with all cases that should be split up
@@ -694,6 +731,8 @@ def compareTS(
     # For all of the lightcurves
     varList = list(dfOther)
     random.shuffle(varList)
+    # TODO: Need to check that if we shorten the long dataset the
+    # Numpy files continue working
     for varOther in varList:
         otherPath = f"{savePath}../{labelOther}/{varOther}/"
         makedirs(otherPath, exist_ok=True)
