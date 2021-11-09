@@ -842,6 +842,7 @@ class SignalFunctions(Signal):
             # When needed to save mid_point_time
             corr_matrix = np.zeros(shape=(12, 12, short.no_displacements, 4))
 
+        # TODO: Verify that cases do not go over limit
         short_imfs = emd_and_save(
             s=short.s,
             t=short.t,
@@ -912,7 +913,6 @@ class SignalFunctions(Signal):
                 # If long window not all NAN
                 if np.isnan(np.sum(_data_long)) == False:
                     # Derive EMD and save to relevant folder
-                    # TODO: Probably need to change how the files are saved
                     _true_start = datetime.datetime.strftime(
                         _true_time_long[0], format="%Y%m%d_%H:%M")
                     _true_end = datetime.datetime.strftime(
@@ -988,7 +988,7 @@ class SignalFunctions(Signal):
                                     1]
                                 corr_matrix[_i, __j, height, 2] = valid
                             except ValueError as E:
-                                # TODO: Fix behaviour when pearsonR not calculable
+                                # IF there is a ValueError we can just skip this line
                                 pass
 
                     if useRealTime:  # We only have the real time in some ocasions

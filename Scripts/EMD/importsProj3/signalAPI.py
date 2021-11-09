@@ -26,11 +26,15 @@ emd = EMD()
 vis = Visualisation()
 
 # Named tuples
-caseTuple = namedtuple("caseTuple", ["dirExtension", "shortTimes"])
+caseTuple = namedtuple(
+    "caseTuple", ["dirExtension", "shortTimes", "longTimes"])
 shortDFDic = namedtuple(
     "shortDFDic", ["df", "name", "cases", "paramList", "regionName", "kernelName"], defaults=(None,) * 6)
 longDFDic = namedtuple(
     "longDFDic", ["df", "name", "kernelName", "accelerated", "speedSet"], defaults=(None, None, None, 1, None))
+
+missingData = namedtuple("missingData", [
+                         "shortMissing", "longMissing", "colour"], defaults=(None, None, "red"))
 
 ColumnColours = {
     "Btotal": "pink",
@@ -242,7 +246,13 @@ def caseCreation(
     shortDisplacement = (
         shortDuration if shortDisplacement == None else shortDisplacement
     )
-    while _tShort <= (endSHORT - timedelta(hours=shortDuration)):
+
+    if shortDuration > shortDisplacement:
+        refFactor = shortDuration
+    else:
+        refFactor = shortDisplacement
+    # If displacement longer than duration it breaks
+    while _tShort <= (endSHORT - timedelta(hours=refFactor)):
         _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
 
         if firstRelevantLongTime != False:
@@ -543,7 +553,6 @@ def emdAndCompareCases(
                 _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
                 _specificFolder = f"{saveFolder}{dirName}/"
 
-                # TODO: Check if there is a problem with _expectedLocationList
                 if refLocations != []:
                     _expectedLocationList = refLocations[index]
                 else:
@@ -620,6 +629,7 @@ def superSummaryPlotGeneric(shortDFDic,
                             gridRegions=False,
                             shortName="",
                             longName="",
+                            missingData=None,
                             ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -632,19 +642,22 @@ def superSummaryPlotGeneric(shortDFDic,
     assert(shortDFDic[0].df.index[1] - shortDFDic[0].df.index[0]
            == longDFDic.df.index[1] - longDFDic.df.index[0])
 
+    missingData = missingData or None
+
+    matchingColumn = [s for s in longDFDic.df.columns if "V_R" in s]
     # If we have a column called V_R, get max, min, mean values
     if longDFDic.speedSet != None:
         HISPEED, LOSPEED, AVGSPEED = longDFDic.speedSet
 
-    elif "V_R" in longDFDic.df.columns and longDFDic.speedSet == None:
+    elif longDFDic.speedSet == None:
         HISPEED, LOSPEED, AVGSPEED = (
-            int(longDFDic.df["V_R"].max() / longDFDic.accelerated),
-            int(longDFDic.df["V_R"].min() / longDFDic.accelerated),
-            int(longDFDic.df["V_R"].mean() / longDFDic.accelerated),
+            int(longDFDic.df[matchingColumn].max() / longDFDic.accelerated),
+            int(longDFDic.df[matchingColumn].min() / longDFDic.accelerated),
+            int(longDFDic.df[matchingColumn].mean() / longDFDic.accelerated),
         )
 
-    else:
-        HISPEED, LOSPEED, AVGSPEED = (None, None, None)
+        if HISPEED == None:
+            raise ValueError("Could not extract Speeds")
 
     figName = f"{shortDFDic[0].cases[0]['caseName'].partition('/')[0]}/"
     figName += "accelerated" if longDFDic.accelerated != 1 else "constant"
@@ -655,12 +668,16 @@ def superSummaryPlotGeneric(shortDFDic,
 
     # Create a list with all cases that should be split up
     allCases = []
-    for caseName, shortTimes in zip(caseNamesList, shortTimesList):
+    for caseName, shortTimes, longTimes in zip(caseNamesList, shortTimesList, longTimesList):
         dirExtension = f"{caseName}"
         allCases.append(
-            caseTuple(dirExtension, shortTimes)
+            caseTuple(dirExtension, shortTimes, longTimes)
         )
 
+    shortInfo = shortDFDic[0]
+    shortParams = shortInfo.paramList
+    shortRegion = shortInfo.regionName
+    shortKernel = shortInfo.kernelName
     # Each of the parameters in long dataset
     for longObjParam in longDFDic.df.columns:
         plot_super_summary(
@@ -670,12 +687,12 @@ def superSummaryPlotGeneric(shortDFDic,
                 longDFDic.df.index[0].to_pydatetime(),
                 longDFDic.df.index[-1].to_pydatetime()
             ),
-            shortParamList=shortDFDic[0].paramList,
+            shortParamList=shortParams,
             longObjectParam=longObjParam,
-            regions=shortDFDic[0].regionName,
+            regions=shortRegion,
             unsafeEMDDataPath=unsafeEMDataPath,
             period=PeriodMinMax,
-            SPCKernelName=shortDFDic[0].kernelName,
+            SPCKernelName=shortKernel,
             otherObject=longDFDic.kernelName,
             speedSet=(HISPEED, LOSPEED, AVGSPEED),
             showFig=showFig,
@@ -683,6 +700,7 @@ def superSummaryPlotGeneric(shortDFDic,
             corrThrPlotList=corrThrPlotList,
             showBox=showBox,
             gridRegions=gridRegions,
+            # Cadence of long dataset
             cadence=f"{(longDFDic.df.index[1] - longDFDic.df.index[0]).seconds}s",
             shortName=shortName,
             longName=longName,
@@ -731,8 +749,6 @@ def compareTS(
     # For all of the lightcurves
     varList = list(dfOther)
     random.shuffle(varList)
-    # TODO: Need to check that if we shorten the long dataset the
-    # Numpy files continue working
     for varOther in varList:
         otherPath = f"{savePath}../{labelOther}/{varOther}/"
         makedirs(otherPath, exist_ok=True)
@@ -845,7 +861,7 @@ def plot_super_summary(
         gridRegions = (nrows, ncols, sharex, sharey)
         showBox = ([X0, XF], [Y0, YF]) - in datetime
     """
-    speedSuper, speedSuperLow, speedAVG = speedSet
+    highSpeed, lowSpeed, _ = speedSet
     from matplotlib.lines import Line2D
 
     # Gapless subplots figure
@@ -901,23 +917,20 @@ def plot_super_summary(
         used_ax.append(ax)
 
         # Take the starting point for AIA Times
-        shortStartTimes = []
+        shortStartTimes, longTimes = [], []
         for case in allCasesList:
             shortStartTimes.append(case.shortTimes[0])
+            longTimes.append(case.longTimes)
 
         listTimesSameSpeed = []
         listTimesSameSpeed_LOW = []
 
-        # In situ times
-        insituStTime = longSpan[0]
-        insituEndTime = longSpan[1]
-        longARRAY = pd.date_range(
-            start=insituStTime, end=insituEndTime, freq=insituArrayFreq
-        )
-
         # Define a function which allows for multiprocessing call
         # Use some of the shortStartTimes
         for index, (TshortDF) in enumerate(shortStartTimes):
+            insituStTime, insituEndTime = longTimes[index]
+            longARRAY = pd.date_range(
+                insituStTime, insituEndTime, freq=insituArrayFreq)
             base_path = f"{unsafeEMDDataPath}{allCasesList[index].dirExtension}/"
 
             # Dataframe with all times, all dotSizes, for each wavelength
@@ -950,7 +963,6 @@ def plot_super_summary(
                 # Find time and necessary size of dots
                 for height in range(len(corr_matrix[0, 0, :, 0])):
                     if midpoint_time > insituEndTime:
-                        print("BREAK!")
                         break
 
                     pearson = corr_matrix[:, :, height, 0]
@@ -1009,12 +1021,12 @@ def plot_super_summary(
 
             # Create lines to delineate highest speeds
             # Highest speeds
-            closest_index = (np.abs(Vaxis - speedSuper)).argmin()
+            closest_index = (np.abs(Vaxis - highSpeed)).argmin()
             closest_time = longARRAY[closest_index]
             listTimesSameSpeed.append(closest_time)
 
             # Lower speeds
-            closest_index_LOW = (np.abs(Vaxis - speedSuperLow)).argmin()
+            closest_index_LOW = (np.abs(Vaxis - lowSpeed)).argmin()
             closest_time_LOW = longARRAY[closest_index_LOW]
             listTimesSameSpeed_LOW.append(closest_time_LOW)
 
@@ -1040,6 +1052,7 @@ def plot_super_summary(
                 if len(corrThrPlotList) == 1:
                     _msize = 100
 
+                # TODO: Add crosshairs
                 ax.scatter(
                     x=dfDots.index,
                     y=np.repeat(TshortDF, len(dfDots.index)),
@@ -1047,13 +1060,6 @@ def plot_super_summary(
                     alpha=alphaList,
                     c=ColumnColours[f"{_shortVar}"],
                 )
-
-        # # Plot diagonal lines which highlight minimum and maximum V
-        # # shortStartTimesArray = np.array(shortStartTimes)
-        # listTimesSameSpeed = [t.to_pydatetime()
-        #                       for t in listTimesSameSpeed]
-        # listTimesSameSpeed_LOW = [t.to_pydatetime()
-        #                           for t in listTimesSameSpeed_LOW]
 
         # Compared to plotting lines, this does not plot outside of necessary area
         ax.fill_betweenx(
@@ -1115,7 +1121,7 @@ def plot_super_summary(
     longParamLegible = longObjectParam if longObjectParam not in titleDic else titleDic[
         longObjectParam]
     fig.suptitle(
-        f" Correlating against {longParamLegible} | in yellow {speedSuper} - {speedSuperLow} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.")
+        f" Correlating against {longParamLegible} | in yellow {highSpeed} - {lowSpeed} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.")
 
     # fig.supxlabel(
     #     f"Time at {other.name} ({getAvgRadius('psp', longARRAY):.2f}AU) ({longParamLegible})"

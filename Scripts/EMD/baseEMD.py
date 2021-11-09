@@ -34,6 +34,7 @@ class baseEMD:
                  speedSet=None,
                  shortDuration=1.5,
                  shortDisplacement=1.5,
+                 MARGIN=48,
                  ):
 
         # The job of the init should be to get to a standardised format
@@ -151,7 +152,7 @@ class baseEMD:
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_April_2020_SolO.pickle",
                 "forceCreate": True,
                 "firstRelevantLongTime": datetime(2020, 4, 15, 20),
-                "MARGIN": 48,
+                "MARGIN": MARGIN,
             }
             cases = caseCreation(**soloEarthcases)
 
@@ -191,7 +192,7 @@ class baseEMD:
             multiCPU=self.multiCPU,
         )
 
-    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName=""):
+    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
             longDFDic=self.longDFDic,
@@ -199,10 +200,11 @@ class baseEMD:
             PeriodMinMax=self.PeriodMinMax,
             corrThrPlotList=self.corrThrPlotList,
             showFig=self.showFig,
-            showBox=showBox,
+            showBox=showBox,  # showBox = ([X0, XF], [Y0, YF]) - in datetime
             gridRegions=gridRegions,
             shortName=shortName,
             longName=longName,
+            missingData=missingData,
         )
 
 
@@ -221,6 +223,7 @@ def PSPSolOCase(show=False):
         "speedSet": (300, 200, 250),  # High - low - mid
     }
 
+    # showBox = ([X0, XF], [Y0, YF]) - in datetime
     box = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
            (datetime(2020, 10, 1, 20, ), datetime(2020, 10, 2, 0, 13)))
     pspSolOe6EMD = baseEMD(**PSP_SolOVars)
@@ -250,30 +253,42 @@ def ISSICase(show=False):
     issiEMD.plotTogether(showBox=None, gridRegions=True)
 
 
-# TODO: Check if can pad SolO data to fit
-# TODO: Change how much data using at once (ballpark estimate of speeds which make physical sense)
-
 def SolOEarth2020Case(show=True):
+    MARGIN = 48
     Vars = {
         "caseName": "April2020_SolO_WIND",
         "shortParams": ["B_R", "B_T", "B_N"],
         "longParams": ["B_R", "B_T", "B_N", "V_R"],
-        "PeriodMinMax": [60, 12 * 60],  # Very long periods
+        "PeriodMinMax": [60, 720],  # Very long periods
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 3,
         "speedSet": None,
-        "shortDuration": 3,  # In hours
-        "shortDisplacement": 20,
-
+        "shortDuration": 30,  # In hours
+        "shortDisplacement": 1,
+        "MARGIN": MARGIN,
     }
 
-    # FIXME: Need to check that the window length is working as intended, and that file names are correct
+    # showBox = ([X0, XF], [Y0, YF]) - in datetime
+
+    # from datetime import timedelta
+    # box = ([datetime(2020, 4, 20, 1, 0) - timedelta(hours=MARGIN), datetime(2020, 4, 21, 0, 0) - timedelta(hours=MARGIN)],
+    #    [datetime(2020, 4, 19, 8, 50) - timedelta(hours=MARGIN), datetime(2020, 4, 20, 9) - timedelta(hours=MARGIN)])
+    box = None
+
+    # missingData = namedtuple("missingData", [
+    #                          "shortMissing", "longMissing", "colour"], defaults=(None, None, "red"))
+    shortDataGaps = None
+    longDataGaps = None
+    # For SolO - Earth there is no missing data essentially
+
+    mData = None
+
     soloAprilEMD = baseEMD(**Vars)
     soloAprilEMD.plotSeparately()
     soloAprilEMD.plotTogether(
-        showBox=None, gridRegions=True, shortName="SolO (0.8A.U.)", longName="WIND (1 A.U.)")
+        showBox=box, gridRegions=True, shortName="SolO (0.8A.U.)", longName="WIND (1 A.U.)", missingData=mData)
 
 
 if __name__ == "__main__":
