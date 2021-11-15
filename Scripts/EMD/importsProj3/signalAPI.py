@@ -437,6 +437,7 @@ def emdAndCompareCases(
     showFig=True,
     corrThrPlotList=np.arange(0.65, 1, 0.05),
     multiCPU=1,
+    inKind=False,
 ):
     """
     Perform EMD and Compare a short and a Long dataframe
@@ -519,6 +520,7 @@ def emdAndCompareCases(
                 renormalize=False,
                 showSpeed=False,
                 SPCKernelName=longDF.name.lower(),  # Should ensure that using SPC name
+                inKind=inKind,
             )
 
     # For each of the "wavelengths" or "shortParameters"
@@ -728,6 +730,7 @@ def compareTS(
     HISPEED=285,
     SPCKernelName=None,
     corrThrPlotList=np.arange(0.75, 0.901, 0.05),
+    inKind=False,
 ):
     """
     Takes two dataframes sampled at same cadence
@@ -771,57 +774,61 @@ def compareTS(
             corrThrPlotList=corrThrPlotList,
         )
 
+        # TODO: Get rid of NAN values when under a certain percentage!
+
         # For each of the in-situ variables
         for varSelf in dfSelf:
-            selfPath = f"{savePath}{varSelf}/{varOther}/"
-            makedirs(selfPath, exist_ok=True)
+            # If inKind is true, only compare equivalent values
+            if not inKind or varSelf.split("_", 1)[1] == varOther.split("_", 1)[1]:
+                selfPath = f"{savePath}{varSelf}/{varOther}/"
+                makedirs(selfPath, exist_ok=True)
 
-            dataSelf = dfSelf[varSelf]
-            signalSelf = Signal(
-                cadence=cadSelf,
-                custom_data=dataSelf,
-                saveFolder=selfPath,
-                name=varSelf,
-            )
-            signalSelf.detrend(box_width=detrend_box_width)
-            selfSigFunc = SignalFunctions(
-                signalSelf,
-                filterIMFs=True,
-                PeriodMinMax=PeriodMinMax,
-                corrThrPlotList=corrThrPlotList,
-            )
+                dataSelf = dfSelf[varSelf]
+                signalSelf = Signal(
+                    cadence=cadSelf,
+                    custom_data=dataSelf,
+                    saveFolder=selfPath,
+                    name=varSelf,
+                )
+                signalSelf.detrend(box_width=detrend_box_width)
+                selfSigFunc = SignalFunctions(
+                    signalSelf,
+                    filterIMFs=True,
+                    PeriodMinMax=PeriodMinMax,
+                    corrThrPlotList=corrThrPlotList,
+                )
 
-            for windowDisp in winDispList:
-                otherWinFolder = f"{otherPath}{windowDisp}s/"
-                selfWinFolder = (
-                    f"{selfPath}{windowDisp}s/{PeriodMinMax[0]} - {PeriodMinMax[1]}/"
-                )
-                otherSigFunc.saveFolder = otherWinFolder
-                selfSigFunc.saveFolder = selfWinFolder
+                for windowDisp in winDispList:
+                    otherWinFolder = f"{otherPath}{windowDisp}s/"
+                    selfWinFolder = (
+                        f"{selfPath}{windowDisp}s/{PeriodMinMax[0]} - {PeriodMinMax[1]}/"
+                    )
+                    otherSigFunc.saveFolder = otherWinFolder
+                    selfSigFunc.saveFolder = selfWinFolder
 
-                selfSigFunc.generate_windows(
-                    other=otherSigFunc,
-                    windowDisp=windowDisp,
-                    useRealTime=useRealTime,
-                    filterPeriods=filterPeriods,
-                    renormalize=renormalize,
-                )
-                selfSigFunc.plot_all_results(
-                    other=otherSigFunc,
-                    Label_long_ts=varOther,
-                    plot_heatmaps=False,
-                    savePath=f"{otherSigFunc.saveFolder}corr_matrix/",
-                    bar_width=None,
-                    useRealTime=useRealTime,
-                    expectedLocationList=expectedLocationList,
-                    showLocationList=showLocationList,
-                    showFig=showFig,
-                    showSpeed=showSpeed,
-                    SPCKernelName=SPCKernelName,
-                    LOSPEED=LOSPEED,
-                    HISPEED=HISPEED,
-                    # ffactor=4 / 3,
-                )
+                    selfSigFunc.generate_windows(
+                        other=otherSigFunc,
+                        windowDisp=windowDisp,
+                        useRealTime=useRealTime,
+                        filterPeriods=filterPeriods,
+                        renormalize=renormalize,
+                    )
+                    selfSigFunc.plot_all_results(
+                        other=otherSigFunc,
+                        Label_long_ts=varOther,
+                        plot_heatmaps=False,
+                        savePath=f"{otherSigFunc.saveFolder}corr_matrix/",
+                        bar_width=None,
+                        useRealTime=useRealTime,
+                        expectedLocationList=expectedLocationList,
+                        showLocationList=showLocationList,
+                        showFig=showFig,
+                        showSpeed=showSpeed,
+                        SPCKernelName=SPCKernelName,
+                        LOSPEED=LOSPEED,
+                        HISPEED=HISPEED,
+                        # ffactor=4 / 3,
+                    )
 
 
 def plot_super_summary(

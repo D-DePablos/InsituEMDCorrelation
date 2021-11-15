@@ -35,6 +35,7 @@ class baseEMD:
                  shortDuration=1.5,
                  shortDisplacement=1.5,
                  MARGIN=48,
+                 inKind=False,
                  ):
 
         # The job of the init should be to get to a standardised format
@@ -47,6 +48,7 @@ class baseEMD:
         self.speedSet = speedSet
         self.shortDuration = shortDuration
         self.shortDisplacement = shortDisplacement
+        self.inKind = inKind
 
         possibleCaseNames = ["ISSIcasesAIA",
                              "PSP_SolO_e6", "April2020_SolO_WIND"]
@@ -190,6 +192,7 @@ class baseEMD:
             detrendBoxWidth=self.detrendBoxWidth,
             corrThrPlotList=self.corrThrPlotList,
             multiCPU=self.multiCPU,
+            inKind=self.inKind,
         )
 
     def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None):
@@ -262,12 +265,13 @@ def SolOEarth2020Case(show=True):
         "PeriodMinMax": [60, 720],  # Very long periods
         "showFig": show,
         "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "corrThrPlotList": np.arange(0.35, 1, 0.1),
         "multiCPU": 3,
         "speedSet": None,
         "shortDuration": 30,  # In hours
-        "shortDisplacement": 1,
+        "shortDisplacement": 20,
         "MARGIN": MARGIN,
+        "inKind": True,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
