@@ -186,14 +186,14 @@ class baseEMD:
             self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/STA_PSP/"
             objCadenceSeconds = 60
             staPSPCases = {
-                "longTimes": (datetime(2019, 10, 10), datetime(2019, 10, 20)),
-                "shortTimes": (datetime(2019, 10, 10), datetime(2019, 10, 20)),
+                "longTimes": (datetime(2019, 11, 11), datetime(2019, 11, 20)),
+                "shortTimes": (datetime(2019, 11, 12), datetime(2019, 11, 20)),
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
-                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/STA/",
+                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/PSP",
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_STA_PSP.pickle",
                 "forceCreate": True,
-                "firstRelevantLongTime": datetime(2019, 10, 10),
+                "firstRelevantLongTime": datetime(2019, 11, 10),
                 "MARGIN": MARGIN,
             }
             cases = caseCreation(**staPSPCases)
@@ -213,7 +213,7 @@ class baseEMD:
                                            shortParams, ["PSP"], "psp")]
 
             self.longDFDic = longDFDic(
-                long_SPC.df, "STA", "STA", 1, self.speedSet)
+                long_SPC.df.copy(), "STA", "sta", 1, self.speedSet)
         else:
             raise NotImplementedError(
                 f"{caseName} not implemented. Use one of {possibleCaseNames}")
@@ -309,10 +309,10 @@ def STAPSPCase(show=True):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 3,
+        "multiCPU": 5,
         "speedSet": None,
         "shortDuration": 30,  # In hours
-        "shortDisplacement": 1,
+        "shortDisplacement": 6,
         "MARGIN": MARGIN,
         "inKind": True,
         "windDispParam": 10,
@@ -322,8 +322,6 @@ def STAPSPCase(show=True):
     mData = None
 
     stapspEMD = baseEMD(**Kwargs)
-
-    # TODO: Bug in name being used in _10_T00
     stapspEMD.plotSeparately()
     stapspEMD.plotTogether(showBox=box, gridRegions=True,
                            missingData=mData, shortName="ST-A (0.95A.U.)", longName="PSP")
@@ -370,8 +368,10 @@ def SolOEarth2020Case(show=True):
 
 
 if __name__ == "__main__":
+    # TODO: Need to plot some more SolO - WIND cases
+    # Need to write up the paper
+    # Shoould make summary plot
     # ISSICase(show=False)
-    # SolOEarth2020Case(show=False)
+    # SolOEarth2020Case(show=True)
     # PSPSolOCase()
-    # TODO: Need to check if we can change the steps taken for each comparison (1 min very small for so much data at once)
-    STAPSPCase(show=True)
+    STAPSPCase(show=False)

@@ -609,6 +609,7 @@ def superSummaryPlotGeneric(shortDFDic,
     shortDFDic: namedTuple (df, name, paramList, regionName, kernelName)
     longDFDic: namedTuple (df, kernelName, accelerated)
     """
+    windDispParam = baseEMDObject.windDispParam
     assert(shortDFDic[0].df.index[1] - shortDFDic[0].df.index[0]
            == longDFDic.df.index[1] - longDFDic.df.index[0])
 
@@ -675,7 +676,7 @@ def superSummaryPlotGeneric(shortDFDic,
             showBox=showBox,
             gridRegions=gridRegions,
             # Cadence of long dataset
-            cadence=f"{(longDFDic.df.index[1] - longDFDic.df.index[0]).seconds}s",
+            jumpCadence=f"{(longDFDic.df.index[1] - longDFDic.df.index[0]).seconds * windDispParam}s",
             shortName=shortName,
             longName=longName,
             inKind=inKind,
@@ -752,8 +753,6 @@ def compareTS(
             corrThrPlotList=corrThrPlotList,
         )
 
-        # TODO: Get rid of NAN values when under a certain percentage!
-
         # For each of the in-situ variables
         for varSelf in dfSelf:
             # If inKind is true, only compare equivalent values
@@ -823,7 +822,7 @@ def plot_super_summary(
     SPCKernelName,
     baseEMDObject,
     corrThrPlotList=np.arange(0.65, 1, 0.05),
-    cadence="60s",
+    jumpCadence="60s",
     speedSet=(300, 200, 250),
     showFig=False,
     figName="",
@@ -931,17 +930,17 @@ def plot_super_summary(
                     wvlPath = f"{base_path}{region}_{_shortVar}/"
                     try:
                         corr_matrix = np.load(
-                            f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
+                            f"{wvlPath}{longObjectParam}/{jumpCadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
                         )
                     except FileNotFoundError:
                         try:
                             wvlPath = f"{base_path}{_shortVar}_{region}/"
                             corr_matrix = np.load(
-                                f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
+                                f"{wvlPath}{longObjectParam}/{jumpCadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
                             )
                         except FileNotFoundError:
                             raise FileNotFoundError(
-                                f"The correlation Matrix cannot be found at {wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy")
+                                f"The correlation Matrix cannot be found at {wvlPath}{longObjectParam}/{jumpCadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy")
 
                     # List of how big dots should be in comparison.
                     # Smallest dot is 0, when correlation does not reach 0.70.
@@ -1108,7 +1107,7 @@ def plot_super_summary(
             for _ax in row:
                 if _ax not in used_ax:
                     fig.delaxes(_ax)
-    # Or that the cadence of Short dataset is correct
+    # Or that the jumpCadence of Short dataset is correct
     fig.legend(handles=legend_elements, prop={"size": 20})
     longParamLegible = longObjectParam if longObjectParam not in titleDic else titleDic[
         longObjectParam]

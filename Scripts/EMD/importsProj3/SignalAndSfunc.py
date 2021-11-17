@@ -846,7 +846,6 @@ class SignalFunctions(Signal):
             # When needed to save mid_point_time
             corr_matrix = np.zeros(shape=(12, 12, short.no_displacements, 4))
 
-        # TODO: Verify that cases do not go over limit
         short_imfs = emd_and_save(
             s=short.s,
             t=short.t,
