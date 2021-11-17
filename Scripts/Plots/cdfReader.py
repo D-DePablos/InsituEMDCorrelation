@@ -3,9 +3,9 @@ import cdflib
 from glob import glob
 
 
-def extractDF(CDFfolder, vars, timeIndex="Epoch", info=False, resample=False):
+def extractDF(CDFfolder, dfVars, timeIndex="Epoch", info=False, resample=False):
     firstFile = True
-    for fileName in sorted(glob(f"{CDFfolder}*.cdf")):
+    for fileName in sorted(glob(CDFfolder + "*.cdf")):
         _cdf = cdflib.CDF(fileName)
 
         if info and firstFile:
@@ -17,7 +17,7 @@ def extractDF(CDFfolder, vars, timeIndex="Epoch", info=False, resample=False):
 
         varDic = {}
 
-        for var in vars:
+        for var in dfVars:
             if (
                 var != "VEL"
                 and var != "vp_moment_RTN"
@@ -60,7 +60,7 @@ def openSDAplasma():
     'HEE_LABL_1', 'HEEQ_LABL_1', 'CARR_LABL_1', 'RTN_LABL_1']
     """
     sdaVars = ["BFIELDRTN", "BTOTAL", "Np", "Tp", "Vp_RTN"]
-    df = extractDF(CDFfolder=path, vars=sdaVars)
+    df = extractDF(CDFfolder=path, dfVars=sdaVars)
     print(df)
 
 
@@ -69,7 +69,7 @@ def openSDAMag():
     """
     path = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/Resources/STA_Data/mag/"
     sdaVars = ["BFIELD"]
-    df = extractDF(CDFfolder=path, vars=sdaVars)
+    df = extractDF(CDFfolder=path, dfVars=sdaVars)
     print(df)
 
 

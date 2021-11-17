@@ -36,6 +36,7 @@ class baseEMD:
                  shortDisplacement=1.5,
                  MARGIN=48,
                  inKind=False,
+                 windDispParam: int = 1,  # How many measurements to move by
                  ):
 
         # The job of the init should be to get to a standardised format
@@ -49,9 +50,10 @@ class baseEMD:
         self.shortDuration = shortDuration
         self.shortDisplacement = shortDisplacement
         self.inKind = inKind
+        self.windDispParam = windDispParam
 
         possibleCaseNames = ["ISSIcasesAIA",
-                             "PSP_SolO_e6", "April2020_SolO_WIND"]
+                             "PSP_SolO_e6", "April2020_SolO_WIND", "STA_PSP"]
         if caseName == "ISSIcasesAIA":
             # The directories and save folders are on a per-case basis
             unsafe_dir = "/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/unsafe/"
@@ -178,9 +180,46 @@ class baseEMD:
             self.longDFDic = longDFDic(
                 long_SPC.df, "WIND", "L1", 1, self.speedSet)
 
+        # NOTE: Need to fix error in saving / opening files
+        elif caseName == "STA_PSP":
+            from Imports.Spacecraft import Spacecraft
+            self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/STA_PSP/"
+            objCadenceSeconds = 60
+            staPSPCases = {
+                "longTimes": (datetime(2019, 10, 10), datetime(2019, 10, 20)),
+                "shortTimes": (datetime(2019, 10, 10), datetime(2019, 10, 20)),
+                "shortDuration": self.shortDuration,
+                "shortDisplacement": self.shortDisplacement,
+                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/STA/",
+                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_STA_PSP.pickle",
+                "forceCreate": True,
+                "firstRelevantLongTime": datetime(2019, 10, 10),
+                "MARGIN": MARGIN,
+            }
+            cases = caseCreation(**staPSPCases)
+
+            long_SPC = Spacecraft(name="STA_Nov_2019",
+                                  cadence_obj=objCadenceSeconds, remakeCSV=True)
+            short_SPC = Spacecraft(name="PSP_Nov_2019",
+                                   cadence_obj=objCadenceSeconds)
+
+            long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
+            short_SPC.df = short_SPC.df[shortParams] if shortParams != None else short_SPC.df
+
+            for _df in (long_SPC.df, short_SPC.df):
+                _df = _df.interpolate()
+
+            self.shortDFDics = [shortDFDic(short_SPC.df, "PSP", cases,
+                                           shortParams, ["PSP"], "psp")]
+
+            self.longDFDic = longDFDic(
+                long_SPC.df, "STA", "STA", 1, self.speedSet)
         else:
             raise NotImplementedError(
                 f"{caseName} not implemented. Use one of {possibleCaseNames}")
+
+    def __repr__(self) -> str:
+        return "{self.__class__.__name__}({self.caseName},{self.shortParams}, {self.longParams},{self.PeriodMinMax})".format(self)
 
     def plotSeparately(self):
         emdAndCompareCases(
@@ -193,9 +232,10 @@ class baseEMD:
             corrThrPlotList=self.corrThrPlotList,
             multiCPU=self.multiCPU,
             inKind=self.inKind,
+            windDispParam=self.windDispParam,
         )
 
-    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None):
+    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None, skipParams=[]):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
             longDFDic=self.longDFDic,
@@ -208,6 +248,9 @@ class baseEMD:
             shortName=shortName,
             longName=longName,
             missingData=missingData,
+            inKind=self.inKind,
+            baseEMDObject=self,
+            skipParams=skipParams,
         )
 
 
@@ -256,8 +299,38 @@ def ISSICase(show=False):
     issiEMD.plotTogether(showBox=None, gridRegions=True)
 
 
-def SolOEarth2020Case(show=True):
+def STAPSPCase(show=True):
     MARGIN = 48
+    Kwargs = {
+        "caseName": "STA_PSP",
+        "shortParams": ["B_R", "B_T", "B_N"],
+        "longParams": ["B_R", "B_T", "B_N", "V_R"],
+        "PeriodMinMax": [60, 720],  # Very long periods
+        "showFig": show,
+        "detrendBoxWidth": None,
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "multiCPU": 3,
+        "speedSet": None,
+        "shortDuration": 30,  # In hours
+        "shortDisplacement": 1,
+        "MARGIN": MARGIN,
+        "inKind": True,
+        "windDispParam": 10,
+    }
+
+    box = None
+    mData = None
+
+    stapspEMD = baseEMD(**Kwargs)
+
+    # TODO: Bug in name being used in _10_T00
+    stapspEMD.plotSeparately()
+    stapspEMD.plotTogether(showBox=box, gridRegions=True,
+                           missingData=mData, shortName="ST-A (0.95A.U.)", longName="PSP")
+
+
+def SolOEarth2020Case(show=True):
+    MARGIN = 72
     Vars = {
         "caseName": "April2020_SolO_WIND",
         "shortParams": ["B_R", "B_T", "B_N"],
@@ -265,13 +338,14 @@ def SolOEarth2020Case(show=True):
         "PeriodMinMax": [60, 720],  # Very long periods
         "showFig": show,
         "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.35, 1, 0.1),
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 3,
         "speedSet": None,
-        "shortDuration": 30,  # In hours
-        "shortDisplacement": 20,
+        "shortDuration": 25,  # In hours
+        "shortDisplacement": 1,
         "MARGIN": MARGIN,
         "inKind": True,
+        "windDispParam": 10,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
@@ -292,10 +366,12 @@ def SolOEarth2020Case(show=True):
     soloAprilEMD = baseEMD(**Vars)
     soloAprilEMD.plotSeparately()
     soloAprilEMD.plotTogether(
-        showBox=box, gridRegions=True, shortName="SolO (0.8A.U.)", longName="WIND (1 A.U.)", missingData=mData)
+        showBox=box, gridRegions=True, shortName="SolO (0.8A.U.)", longName="WIND (1 A.U.)", missingData=mData, skipParams=["WIND_V_R"])
 
 
 if __name__ == "__main__":
     # ISSICase(show=False)
-    SolOEarth2020Case(show=False)
+    # SolOEarth2020Case(show=False)
     # PSPSolOCase()
+    # TODO: Need to check if we can change the steps taken for each comparison (1 min very small for so much data at once)
+    STAPSPCase(show=True)

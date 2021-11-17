@@ -216,6 +216,7 @@ def caseCreation(
         savePicklePath ([type]): [description]
         shortDisplacement ([type], optional): [description]. Defaults to None.
         forceCreate (bool, optional): [description]. Defaults to False.
+        firstRelevantLongTime (bool, optional): If needed to skip some time from long dataset. Defaults to False.
 
     Returns:
         [type]: [description]
@@ -438,6 +439,7 @@ def emdAndCompareCases(
     corrThrPlotList=np.arange(0.65, 1, 0.05),
     multiCPU=1,
     inKind=False,
+    windDispParam=10,
 ):
     """
     Perform EMD and Compare a short and a Long dataframe
@@ -507,7 +509,7 @@ def emdAndCompareCases(
                 cadSelf=cadShort,
                 cadOther=cadLong,
                 labelOther=longDF.name,
-                winDispList=[cadShort],
+                winDispList=[cadShort * windDispParam],
                 corrThrPlotList=corrThrPlotList,
                 PeriodMinMax=PeriodMinMax,
                 showLocationList=False,
@@ -543,82 +545,45 @@ def emdAndCompareCases(
         ), "Cadence of short object not equal to cad. of long Object"
 
         # Old functionality
-        if multiCPU == 1:
-            for index, shortTimes in enumerate(shortTimesList):
-                dirName = f"{caseNamesList[index]}"
-                if longTimesList[index][0] != None:
-                    longTimes = longTimesList[index]
-                    _dfLongCut = _dfLong[longTimes[0]: longTimes[1]]
-                else:
-                    _dfLongCut = _dfLong
 
-                _dfShortCut = _dfShort[shortTimes[0]: shortTimes[1]]
-                _specificFolder = f"{saveFolder}{dirName}/"
+        import multiprocessing
+        # Take shortTimesList and transform to array?
+        # shortTimesList
+        indices = np.arange(len(shortTimesList))
+        splitTimes = np.array_split(np.array(shortTimesList), multiCPU)
+        splitLongTimes = np.array_split(np.array(longTimesList), multiCPU)
+        splitIndices = np.array_split(indices, multiCPU)
 
-                if refLocations != []:
-                    _expectedLocationList = refLocations[index]
-                else:
-                    _expectedLocationList = False
+        # Now create a process that handles a range of these
 
-                compareTS(
-                    dfSelf=_dfShortCut,
-                    dfOther=_dfLongCut,
-                    cadSelf=cadShort,
-                    cadOther=cadLong,
-                    labelOther=longDFSimpleDic.name,
-                    winDispList=[cadShort],
-                    corrThrPlotList=corrThrPlotList,
-                    PeriodMinMax=PeriodMinMax,
-                    showLocationList=False,
-                    filterPeriods=True,
-                    savePath=_specificFolder,
-                    useRealTime=True,
-                    expectedLocationList=_expectedLocationList,
-                    detrend_box_width=detrendBoxWidth,
-                    showFig=showFig,
-                    renormalize=False,
-                    showSpeed=False,
-                    SPCKernelName=longDFSimpleDic.name.lower(),  # Should ensure that using SPC name
-                )
-        else:
-            import multiprocessing
-            # Take shortTimesList and transform to array?
-            shortTimesList
-            indices = np.arange(len(shortTimesList))
-            splitTimes = np.array_split(np.array(shortTimesList), multiCPU)
-            splitLongTimes = np.array_split(np.array(longTimesList), multiCPU)
-            splitIndices = np.array_split(indices, multiCPU)
+        procs = []
 
-            # Now create a process that handles a range of these
+        for _splitTimes, _splitIndices, _splitLongTimes in zip(splitTimes, splitIndices, splitLongTimes):
+            proc = multiprocessing.Process(
+                target=multiEMD,
+                args=(
+                    _splitTimes,
+                    _splitIndices,
+                    caseNamesList,
+                    _dfShort,
+                    longDFSimpleDic,
+                    saveFolder,
+                    [cadShort, cadLong],
+                    corrThrPlotList,
+                    PeriodMinMax,
+                    detrendBoxWidth,
+                    showFig,
+                    _splitLongTimes,
+                ),
+            )
+            procs.append(proc)
+            try:
+                proc.start()
+            except Exception as e:
+                raise e
 
-            procs = []
-
-            for _splitTimes, _splitIndices, _splitLongTimes in zip(splitTimes, splitIndices, splitLongTimes):
-                proc = multiprocessing.Process(
-                    target=multiEMD,
-                    args=(
-                        _splitTimes,
-                        _splitIndices,
-                        caseNamesList,
-                        _dfShort,
-                        longDFSimpleDic,
-                        saveFolder,
-                        [cadShort, cadLong],
-                        corrThrPlotList,
-                        PeriodMinMax,
-                        detrendBoxWidth,
-                        showFig,
-                        _splitLongTimes,
-                    ),
-                )
-                procs.append(proc)
-                try:
-                    proc.start()
-                except Exception as e:
-                    raise e
-
-            for proc in procs:
-                proc.join()
+        for proc in procs:
+            proc.join()
 
 
 def superSummaryPlotGeneric(shortDFDic,
@@ -627,11 +592,14 @@ def superSummaryPlotGeneric(shortDFDic,
                             PeriodMinMax,
                             corrThrPlotList,
                             showFig,
+                            baseEMDObject,
                             showBox=None,
                             gridRegions=False,
                             shortName="",
                             longName="",
                             missingData=None,
+                            inKind=False,
+                            skipParams=[],
                             ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -681,14 +649,18 @@ def superSummaryPlotGeneric(shortDFDic,
     shortRegion = shortInfo.regionName
     shortKernel = shortInfo.kernelName
     # Each of the parameters in long dataset
+    if skipParams != []:
+        for param in skipParams:
+            longDFDic.df.pop(param)
+
     for longObjParam in longDFDic.df.columns:
         plot_super_summary(
             allCasesList=allCases,
             # Use all of the long dataset
-            longSpan=(
-                longDFDic.df.index[0].to_pydatetime(),
-                longDFDic.df.index[-1].to_pydatetime()
-            ),
+            # longSpan=(
+            #     longDFDic.df.index[0].to_pydatetime(),
+            #     longDFDic.df.index[-1].to_pydatetime()
+            # ),
             shortParamList=shortParams,
             longObjectParam=longObjParam,
             regions=shortRegion,
@@ -706,6 +678,8 @@ def superSummaryPlotGeneric(shortDFDic,
             cadence=f"{(longDFDic.df.index[1] - longDFDic.df.index[0]).seconds}s",
             shortName=shortName,
             longName=longName,
+            inKind=inKind,
+            baseEMDObject=baseEMDObject,
         )
 
 
@@ -756,12 +730,16 @@ def compareTS(
         otherPath = f"{savePath}../{labelOther}/{varOther}/"
         makedirs(otherPath, exist_ok=True)
 
+        nanPercentage = np.isnan(
+            dfOther[varOther]).sum() / len(dfOther[varOther])
+        ignoreNANs = True if nanPercentage < 0.15 else False
         signalOther = Signal(
             cadence=cadOther,
             custom_data=dfOther[varOther],
             name=varOther,
             time=dfOther.index,
             saveFolder=otherPath,
+            ignoreNANs=ignoreNANs,
         )
 
         signalOther.detrend(box_width=detrend_box_width)
@@ -784,11 +762,15 @@ def compareTS(
                 makedirs(selfPath, exist_ok=True)
 
                 dataSelf = dfSelf[varSelf]
+                # calculate percentage of NANs
+                nanPercentage = np.isnan(dataSelf).sum() / len(dataSelf)
+                ignoreNANs = True if nanPercentage < 0.3 else False
                 signalSelf = Signal(
                     cadence=cadSelf,
                     custom_data=dataSelf,
                     saveFolder=selfPath,
                     name=varSelf,
+                    ignoreNANs=ignoreNANs,
                 )
                 signalSelf.detrend(box_width=detrend_box_width)
                 selfSigFunc = SignalFunctions(
@@ -833,13 +815,13 @@ def compareTS(
 
 def plot_super_summary(
     allCasesList,
-    longSpan,
     shortParamList,
     longObjectParam,
     regions,
     unsafeEMDDataPath,
     period,
     SPCKernelName,
+    baseEMDObject,
     corrThrPlotList=np.arange(0.65, 1, 0.05),
     cadence="60s",
     speedSet=(300, 200, 250),
@@ -851,6 +833,7 @@ def plot_super_summary(
     showBox=None,
     shortName="",
     longName="",
+    inKind=False,
 ):
     """Plots a "super" summary with info about all selected regions
     Does not take dataframes as input, instead finds the data through
@@ -883,7 +866,6 @@ def plot_super_summary(
     #     a.set_aspect('equal')
 
     # Makes Figure here
-    # TODO: Change gridRegions to autoGrid or sth
     if gridRegions == True:
         # This way makes sure there is space
         nrowsCols = np.sqrt(len(regions))
@@ -945,71 +927,74 @@ def plot_super_summary(
 
             # shortParamList not necessarily equal to short df
             for _shortVar in shortParamList:
-                wvlPath = f"{base_path}{region}_{_shortVar}/"
-                try:
-                    corr_matrix = np.load(
-                        f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
-                    )
-                except FileNotFoundError:
+                if not inKind or _shortVar == longObjectParam.split("_", 1)[1]:
+                    wvlPath = f"{base_path}{region}_{_shortVar}/"
                     try:
-                        wvlPath = f"{base_path}{_shortVar}_{region}/"
                         corr_matrix = np.load(
                             f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
                         )
                     except FileNotFoundError:
-                        raise FileNotFoundError(
-                            f"The correlation Matrix cannot be found at {wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy")
+                        try:
+                            wvlPath = f"{base_path}{_shortVar}_{region}/"
+                            corr_matrix = np.load(
+                                f"{wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy"
+                            )
+                        except FileNotFoundError:
+                            raise FileNotFoundError(
+                                f"The correlation Matrix cannot be found at {wvlPath}{longObjectParam}/{cadence}/{period[0]} - {period[1]}/IMF/Corr_matrix_all.npy")
 
-                # List of how big dots should be in comparison.
-                # Smallest dot is 0, when correlation does not reach 0.70.
-                # Does not grow more if multiple matches at same corr thr.
-                dotSizeList = []
-                midpoint_time = insituStTime
-                midpointTimes = []
+                    # List of how big dots should be in comparison.
+                    # Smallest dot is 0, when correlation does not reach 0.70.
+                    # Does not grow more if multiple matches at same corr thr.
+                    dotSizeList = []
+                    midpoint_time = insituStTime
+                    midpointTimes = []
 
-                # Find time and necessary size of dots
-                for height in range(len(corr_matrix[0, 0, :, 0])):
-                    if midpoint_time > insituEndTime:
-                        break
+                    # Find time and necessary size of dots
+                    for height in range(len(corr_matrix[0, 0, :, 0])):
+                        if midpoint_time > insituEndTime:
+                            break
 
-                    pearson = corr_matrix[:, :, height, 0]
-                    spearman = corr_matrix[:, :, height, 1]
-                    spearman[spearman == 0] = np.nan
-                    valid = corr_matrix[:, :, height, 2]
+                        pearson = corr_matrix[:, :, height, 0]
+                        spearman = corr_matrix[:, :, height, 1]
+                        spearman[spearman == 0] = np.nan
+                        valid = corr_matrix[:, :, height, 2]
 
-                    # Create the midpointTimes list to act as index
-                    midpoint = corr_matrix[0, 0, height, 3]
-                    midpoint_time = insituStTime + timedelta(seconds=midpoint)
-                    midpointTimes.append(midpoint_time)
+                        # Create the midpointTimes list to act as index
+                        midpoint = corr_matrix[0, 0, height, 3]
+                        midpoint_time = insituStTime + \
+                            timedelta(seconds=midpoint)
+                        midpointTimes.append(midpoint_time)
 
-                    # Transform to real time
-                    # Get rid of borders
-                    pearson[pearson == 0] = np.nan
-                    spearman[spearman == 0] = np.nan
+                        # Transform to real time
+                        # Get rid of borders
+                        pearson[pearson == 0] = np.nan
+                        spearman[spearman == 0] = np.nan
 
-                    # Pearson and Spearman Valid
-                    pvalid = pearson[valid == 1]
-                    rvalid = spearman[valid == 1]
-                    # After getting rid of some pearson and spearman values
-                    # Necessary to count how many are above each given threshold
-                    dotSize = 0
-                    for corrIndex, corr_thr in enumerate(corrThrPlotList):
-                        _number_high_pe = len(
-                            pvalid[np.abs(pvalid) >= corr_thr])
-                        # corr_locations[height, index, 1] = _number_high_pe
-                        _number_high_sp = len(
-                            rvalid[np.abs(rvalid) >= corr_thr])
-                        # corr_locations[height, index, 2] = _number_high_sp
+                        # Pearson and Spearman Valid
+                        pvalid = pearson[valid == 1]
+                        rvalid = spearman[valid == 1]
+                        # After getting rid of some pearson and spearman values
+                        # Necessary to count how many are above each given threshold
+                        dotSize = 0
+                        for corrIndex, corr_thr in enumerate(corrThrPlotList):
+                            _number_high_pe = len(
+                                pvalid[np.abs(pvalid) >= corr_thr])
+                            # corr_locations[height, index, 1] = _number_high_pe
+                            _number_high_sp = len(
+                                rvalid[np.abs(rvalid) >= corr_thr])
+                            # corr_locations[height, index, 2] = _number_high_sp
 
-                        if _number_high_pe > 0:
-                            dotSize += 1
+                            if _number_high_pe > 0:
+                                dotSize += 1
 
-                    dotSizeList.append(dotSize)
+                        dotSizeList.append(dotSize)
 
-                dfDots[f"{_shortVar}"] = dotSizeList
+                    dfDots[f"{_shortVar}"] = dotSizeList
 
-            # Set the index of the Dots dataframe to midPoints
+            # After all shortVars Set the index of the Dots dataframe to midPoints
             dfDots.index = midpointTimes
+
             # Plot inside each of the squares
             ax.plot(
                 longARRAY,
@@ -1130,12 +1115,38 @@ def plot_super_summary(
     fig.suptitle(
         f" Correlating against {longParamLegible} | in yellow {highSpeed} - {lowSpeed} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.")
 
-    # fig.supxlabel(
-    #     f"Time at {other.name} ({getAvgRadius('psp', longARRAY):.2f}AU) ({longParamLegible})"
-    # )
-    # fig.supylabel(
-    #     f"Time at {self.name} ({getAvgRadius('solo', shortStartTimes):.2f}AU)"
-    # )
+    # Plot the datasets if inKind:
+    if inKind:
+        from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+        # HERE
+        shortDataSet = baseEMDObject.shortDFDics[0].df[longObjectParam.split('_', 1)[
+            1]]
+        longDataSet = baseEMDObject.longDFDic.df[longObjectParam]
+
+        # inset axes along bottom
+        x_axis_df = inset_axes(
+            axs,
+            width="100%",  # width = 30% of parent_bbox
+            height=1,  # height : 1 inch
+            loc="lower center",
+        )
+        plt.axis("off")
+
+        y_axis_df = inset_axes(
+            axs,
+            width="5%",
+            height="100%",
+            loc="center left",)
+        plt.axis("off")
+
+        # duplicate x axis
+        x_axis_df.plot(longDataSet.values,
+                       color=ColumnColours[longObjectParam.split('_', 1)[1]])
+        y_axis_df.plot(shortDataSet.values, shortDataSet.index,
+                       color=ColumnColours[longObjectParam.split('_', 1)[1]])
+
+        # TODO: Check that the axis limits are correct.
 
     plt.savefig(f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png")
 

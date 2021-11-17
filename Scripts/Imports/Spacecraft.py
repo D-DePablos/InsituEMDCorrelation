@@ -188,7 +188,7 @@ class Spacecraft:
             def RPW_prep(cdf_path=f"{BASE_PATH}unsafe/Resources/Solo_Data/L3/RPW/"):
 
                 _rpw_df = extractDF(
-                    cdf_path, vars=["DENSITY"], info=False, resample=f"{self.obj_cad}s"
+                    cdf_path, dfVars=["DENSITY"], info=False, resample=f"{self.obj_cad}s"
                 )
 
                 _rpw_df[_rpw_df["DENSITY"] < 1] = np.nan
@@ -213,7 +213,7 @@ class Spacecraft:
 
                 _sweap_df = extractDF(
                     cdf_path,
-                    vars=["V_RTN", "N", "T", "validity"],
+                    dfVars=["V_RTN", "N", "T", "validity"],
                     info=False,
                     resample=f"{self.obj_cad}s",
                 )
@@ -235,7 +235,7 @@ class Spacecraft:
                 """
                 # Need to separate into different relevant csv
                 _mag_df = extractDF(
-                    cdf_path, vars=["B_RTN", "QUALITY_FLAG"], info=False
+                    cdf_path, dfVars=["B_RTN", "QUALITY_FLAG"], info=False
                 )
                 _mag_df["mag_flag"] = _mag_df["QUALITY_FLAG"]
                 del _mag_df["QUALITY_FLAG"]
@@ -264,21 +264,27 @@ class Spacecraft:
             self.df = pd.read_csv(
                 f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
 
-        elif self.name == "PSPpriv_e6":
+        elif self.name == "PSPpriv_e6" or self.name == "PSP_Nov_2019":
             """
             This is the Encounter 6 data
             """
-            df_fld_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_mag_sept.csv"
-            df_span_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_span_sept.csv"
+            if self.name == "PSPPriv_e6":
+                df_fld_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_mag_sept.csv"
+                df_span_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_span_sept.csv"
+                fldCDFPath = f"{BASE_PATH}unsafe/Resources/PSP_Data/FIELDS/"
+
+            elif self.name == "PSP_Nov_2019":
+                df_fld_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_mag_nov.csv"
+                fldCDFPath = f"{BASE_PATH}unsafe/Resources/STA_PSP_Nov_2019/PSP/"
 
             def FLD_prep():
                 # When file not available, derive it
-                cdf_path = f"{BASE_PATH}unsafe/Resources/PSP_Data/FIELDS/"
+                cdf_path = fldCDFPath
 
                 _fld_df = extractDF(
                     CDFfolder=cdf_path,
-                    vars=["psp_fld_l2_mag_RTN_1min",
-                          "psp_fld_l2_quality_flags"],
+                    dfVars=["psp_fld_l2_mag_RTN_1min",
+                            "psp_fld_l2_quality_flags"],
                     timeIndex="epoch_mag_RTN_1min",
                     info=False,
                 )
@@ -302,7 +308,7 @@ class Spacecraft:
 
                 _span_df = extractDF(
                     CDFfolder=cdf_path,
-                    vars=["DENS", "VEL", "TEMP", "QUALITY_FLAG"],
+                    dfVars=["DENS", "VEL", "TEMP", "QUALITY_FLAG"],
                     timeIndex="Epoch",
                     info=False,
                     resample=f"{self.obj_cad}s",
@@ -321,37 +327,49 @@ class Spacecraft:
                 )
                 return _span_df
 
-            self.magdf = FLD_prep()
-            self.plasmadf = SPAN_AI_prep()
-            self.df = None
+            if self.name == "PSPpriv_e6":
+                self.magdf = FLD_prep()
+                self.plasmadf = SPAN_AI_prep()
+                self.df = None
 
-        elif self.name == "SDOAhead":
-            df_sda_csv_path = f"{BASE_PATH}Data/Prepped_csv/sdo_comb_nov19.csv"
-            sdo_df = extractDF(
-                CDFfolder=df_sda_csv_path,
-                vars=["BFIELDRTN", "BTOTAL", "Np", "Tp", "Vp_RTN"],
+            elif self.name == "PSP_Nov_2019":
+                self.magdf = FLD_prep()
+                self.df = None
+
+        elif self.name == "STA_Nov_2019":
+            dataPath = f"{BASE_PATH}unsafe/Resources/STA_PSP_Nov_2019/"
+            makedirs(f"{BASE_PATH}Data/Prepped_csv/STA_PSP_Nov19/",
+                     exist_ok=True)
+            df_sta_csv_path = f"{BASE_PATH}Data/Prepped_csv/STA_PSP_Nov19/sta_comb_nov19.csv"
+
+            self.df = extractDF(
+                dataPath,
+                dfVars=["Vp_RTN", "BFIELDRTN", "BTOTAL", "R"],
                 info=False,
             )
 
-            sdo_df["Time"] = sdo_df.index
-            sdo_df.to_csv(
-                df_sda_csv_path,
-                index=False,
-            )
+            self.df = self.df[datetime(2019, 11, 1): datetime(2019, 11, 30)]
 
-            return sdo_df
+            for col in self.df.columns:
+                self.df[col][self.df[col] < -10000] = np.nan
+
+            self.df["V_R"] = self.df["Vp_RTN"]
+            del self.df["Vp_RTN"]
+
+            # Rename Btotal and Vp
+            self.df["B_TOTAL"] = self.df["BTOTAL"]
+            del self.df["BTOTAL"]
+
+            self.df["Time"] = self.df.index
+            self.df.to_csv(df_sta_csv_path, index=False)
+            del self.df["Time"]
 
         elif self.name == "Earth_April_2020":
             # Get the WIND data as a complete DF and process errors here?
-            from heliopy.data import ace, wind
+            from heliopy.data import wind
 
             startTime = datetime(2020, 4, 15)
             endTime = datetime(2020, 4, 24)
-            # magdf = ace.mfi_h0(starttime=startTime,
-            #                    endtime=endTime).to_dataframe()
-            # swedf = ace.swe_h0(starttime=startTime,
-            #                    endtime=endTime).to_dataframe()
-
             magdf = wind.mfi_h0(
                 starttime=startTime, endtime=endTime).to_dataframe()
             swedf = wind.swe_h1(
@@ -398,14 +416,17 @@ class Spacecraft:
 
             # MAG IS GUARANTEED TO EXIST
             #############################################################
-            # MAG #
             # Magnetic field measurements
             self.magdf.index = pd.to_datetime(self.magdf["Time"])
             del self.magdf["Time"]
 
             # For PSP data cleaning
             if "fld_flag" in self.magdf.columns:
-                self.magdf[self.magdf["fld_flag"] >= 1] = np.nan
+                if self.name == "PSP_Nov_2019":
+                    # Special handling of Nov 2019 data due to different error code
+                    self.magdf[self.magdf["fld_flag"] > 128] = np.nan
+                else:
+                    self.magdf[self.magdf["fld_flag"] >= 1] = np.nan
                 del self.magdf["fld_flag"]
 
             # For SolO data cleaning
@@ -447,7 +468,7 @@ class Spacecraft:
 
         del self.df["Time"]
 
-    @staticmethod
+    @ staticmethod
     def traceFlines(lon, lat, r, vSW, rf=0.0046547454 * u.AU, accelerated=False):
         """
         For each of the positions in self, track to solar surface and return field lines

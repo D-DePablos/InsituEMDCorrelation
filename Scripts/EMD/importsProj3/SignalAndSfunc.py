@@ -374,6 +374,7 @@ class Signal:
         name="Unnamed Signal",
         custom_data=False,
         saveformat="png",
+        ignoreNANs=False,
         **kwargs,
     ):
         """
@@ -450,7 +451,10 @@ class Signal:
                     f"Did not pass a valid type {type(custom_data)}")
 
             # Generate constant long_signal_time array for IMFs
-            self.duration = self.cadence * len(self.data)
+            if ignoreNANs:
+                self.data = np.nan_to_num(self.data, nan=np.nanmean(self.data))
+
+            self.duration = len(self.data) * self.cadence
             self.long_signal_time = np.arange(
                 0, self.duration, step=self.cadence)
 
@@ -459,7 +463,7 @@ class Signal:
         Good representation of the object
         """
 
-        return f"Signal({self.saveFolder}, cadence={self.cadence})"
+        return f"{self.__class__.__name__}({self.saveFolder}, cadence={self.cadence})"
 
     def __str__(self):
         """
@@ -493,7 +497,7 @@ class Signal:
 
         if self.true_time is not None:
             self.true_time = self.true_time[
-                ::cad_factor
+                :: cad_factor
             ]  # Lose long_signal_time information
 
         # Get rid of NA values
@@ -501,7 +505,7 @@ class Signal:
         nans, x = np.isnan(_data), lambda z: z.nonzero()[0]
         _data[nans] = np.interp(x(nans), x(~nans), _data[~nans])
 
-        _data = _data[::cad_factor]
+        _data = _data[:: cad_factor]
         self.data = _data
 
         # Cadence and long_signal_time
