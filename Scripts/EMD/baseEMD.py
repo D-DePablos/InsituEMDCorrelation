@@ -187,7 +187,7 @@ class baseEMD:
             objCadenceSeconds = 60
             staPSPCases = {
                 "longTimes": (datetime(2019, 11, 11), datetime(2019, 11, 20)),
-                "shortTimes": (datetime(2019, 11, 12), datetime(2019, 11, 20)),
+                "shortTimes": (datetime(2019, 11, 12, 6), datetime(2019, 11, 18, 6)),
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/PSP",
@@ -213,10 +213,16 @@ class baseEMD:
                                            shortParams, ["PSP"], "psp")]
 
             self.longDFDic = longDFDic(
-                long_SPC.df.copy(), "STA", "sta", 1, self.speedSet)
+                long_SPC.df.copy(), "STA", "stereo_a", 1, self.speedSet)
         else:
             raise NotImplementedError(
                 f"{caseName} not implemented. Use one of {possibleCaseNames}")
+
+    def fixDFNames(self, name):
+        for column in list(self.longDFDic.df):
+            if name not in column:
+                self.longDFDic.df[f"{name}_{column}"] = self.longDFDic.df[column]
+                del self.longDFDic.df[column]
 
     def __repr__(self) -> str:
         return "{self.__class__.__name__}({self.caseName},{self.shortParams}, {self.longParams},{self.PeriodMinMax})".format(self)
@@ -309,7 +315,7 @@ def STAPSPCase(show=True):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 5,
+        "multiCPU": 4,
         "speedSet": None,
         "shortDuration": 30,  # In hours
         "shortDisplacement": 6,
@@ -323,12 +329,13 @@ def STAPSPCase(show=True):
 
     stapspEMD = baseEMD(**Kwargs)
     stapspEMD.plotSeparately()
+    stapspEMD.fixDFNames("STA")
     stapspEMD.plotTogether(showBox=box, gridRegions=True,
-                           missingData=mData, shortName="ST-A (0.95A.U.)", longName="PSP")
+                           missingData=mData, shortName="ST-A (0.95A.U.)", longName="PSP", skipParams=["STA_V_R"])
 
 
 def SolOEarth2020Case(show=True):
-    MARGIN = 72
+    MARGIN = 60
     Vars = {
         "caseName": "April2020_SolO_WIND",
         "shortParams": ["B_R", "B_T", "B_N"],
@@ -339,7 +346,7 @@ def SolOEarth2020Case(show=True):
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 3,
         "speedSet": None,
-        "shortDuration": 25,  # In hours
+        "shortDuration": 20,  # In hours
         "shortDisplacement": 1,
         "MARGIN": MARGIN,
         "inKind": True,
@@ -358,20 +365,27 @@ def SolOEarth2020Case(show=True):
     shortDataGaps = None
     longDataGaps = None
     # For SolO - Earth there is no missing data essentially
-
     mData = None
 
     soloAprilEMD = baseEMD(**Vars)
     soloAprilEMD.plotSeparately()
+    soloAprilEMD.fixDFNames("WIND")
     soloAprilEMD.plotTogether(
-        showBox=box, gridRegions=True, shortName="SolO (0.8A.U.)", longName="WIND (1 A.U.)", missingData=mData, skipParams=["WIND_V_R"])
+        showBox=box,
+        gridRegions=True,
+        shortName="SolO (0.8A.U.)",
+        longName="WIND (1 A.U.)",
+        missingData=mData,
+        skipParams=["WIND_V_R"]
+    )
 
 
 if __name__ == "__main__":
     # TODO: Need to plot some more SolO - WIND cases
     # Need to write up the paper
     # Shoould make summary plot
+
     # ISSICase(show=False)
-    # SolOEarth2020Case(show=True)
+    # SolOEarth2020Case(show=False)
     # PSPSolOCase()
     STAPSPCase(show=False)

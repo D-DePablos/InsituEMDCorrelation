@@ -258,12 +258,10 @@ class Spacecraft:
                     cdf_path=f"{BASE_PATH}unsafe/Resources/Solo_Data/L2/Mag/")
 
                 self.df = None
-
         elif self.name == "PSP_Scaled_e6":
             # Just load the measurements
             self.df = pd.read_csv(
                 f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
-
         elif self.name == "PSPpriv_e6" or self.name == "PSP_Nov_2019":
             """
             This is the Encounter 6 data
@@ -335,7 +333,6 @@ class Spacecraft:
             elif self.name == "PSP_Nov_2019":
                 self.magdf = FLD_prep()
                 self.df = None
-
         elif self.name == "STA_Nov_2019":
             dataPath = f"{BASE_PATH}unsafe/Resources/STA_PSP_Nov_2019/"
             makedirs(f"{BASE_PATH}Data/Prepped_csv/STA_PSP_Nov19/",
@@ -363,7 +360,6 @@ class Spacecraft:
             self.df["Time"] = self.df.index
             self.df.to_csv(df_sta_csv_path, index=False)
             del self.df["Time"]
-
         elif self.name == "Earth_April_2020":
             # Get the WIND data as a complete DF and process errors here?
             from heliopy.data import wind
@@ -520,6 +516,7 @@ class Spacecraft:
         return fline
 
     def __gse_to_rtn(self):
+        """Verified against J.O Kane 2021 paper with same case study"""
         assert "earth" in self.name.lower(
         ), "The GSE to RTN coordinate conversion is only necessary for Earth-based observers."
         from sunpy.coordinates import sun
@@ -531,9 +528,7 @@ class Spacecraft:
 
         r = - X
         Ps = sun.P(times)
-
         t, n = [], []
-        tp, nep = [], []
 
         for P, y, z in zip(Ps.value, Y, Z):
             t.append(np.sin(P) * y[0] + np.cos(P) * z[0])

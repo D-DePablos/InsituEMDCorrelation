@@ -614,8 +614,8 @@ def superSummaryPlotGeneric(shortDFDic,
            == longDFDic.df.index[1] - longDFDic.df.index[0])
 
     missingData = missingData or None
-
     matchingColumn = [s for s in longDFDic.df.columns if "V_R" in s]
+
     # If we have a column called V_R, get max, min, mean values
     if longDFDic.speedSet != None:
         HISPEED, LOSPEED, AVGSPEED = longDFDic.speedSet
@@ -923,10 +923,12 @@ def plot_super_summary(
 
             # Dataframe with all times, all dotSizes, for each wavelength
             dfDots = pd.DataFrame({})
+            worked = False
 
             # shortParamList not necessarily equal to short df
             for _shortVar in shortParamList:
                 if not inKind or _shortVar == longObjectParam.split("_", 1)[1]:
+                    worked = True
                     wvlPath = f"{base_path}{region}_{_shortVar}/"
                     try:
                         corr_matrix = np.load(
@@ -991,6 +993,7 @@ def plot_super_summary(
 
                     dfDots[f"{_shortVar}"] = dotSizeList
 
+            assert worked is True, f"{shortParamList} does not include {longObjectParam.split('_', 1)}"
             # After all shortVars Set the index of the Dots dataframe to midPoints
             dfDots.index = midpointTimes
 
@@ -1145,8 +1148,6 @@ def plot_super_summary(
         y_axis_df.plot(shortDataSet.values, shortDataSet.index,
                        color=ColumnColours[longObjectParam.split('_', 1)[1]])
 
-        # TODO: Check that the axis limits are correct.
-
     plt.savefig(f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png")
 
     if showFig:
@@ -1154,7 +1155,7 @@ def plot_super_summary(
 
     plt.close()
 
-    print(f"Saved {longObjectParam} to {unsafeEMDDataPath}")
+    print(f"Saved {longObjectParam} to {unsafeEMDDataPath}{figName}")
 
 
 def new_plot_format(
