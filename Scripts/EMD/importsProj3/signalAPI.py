@@ -1,6 +1,6 @@
 """Helper functions"""
 from typing import Type
-from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
+from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity, emd, vis
 import astropy.units as u
 from collections import namedtuple
 from datetime import timedelta
@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 from os import makedirs
 import warnings
+from random import shuffle
 
 warnings.filterwarnings("ignore")
 
@@ -21,9 +22,6 @@ formatter = mdates.ConciseDateFormatter(locator)
 
 Hmin = mdates.DateFormatter("%H:%M")
 # Quick fix for cross-package import
-
-emd = EMD()
-vis = Visualisation()
 
 # Named tuples
 caseTuple = namedtuple(
@@ -294,28 +292,28 @@ def massFluxCalc(Vsw, Np):
     return (NshortM3 * mp * VxshortMS).value
 
 
-def getAvgRadius(SPCKernelName, times):
+def getAvgRadius(shortKernelName, times):
     """
     Find average radius for a time period
     """
     import heliopy.data.spice as spicedata
     import heliopy.spice as spice
 
-    if SPCKernelName == "solo":
+    if shortKernelName == "solo":
         spicedata.get_kernel("solo")
         sp_traj = spice.Trajectory("Solar Orbiter")
 
-    elif SPCKernelName == "psp":
+    elif shortKernelName == "psp":
         spicedata.get_kernel("psp")
         sp_traj = spice.Trajectory("SPP")
 
-    elif SPCKernelName == "sun":
+    elif shortKernelName == "sun":
         spicedata.get_kernel("helio_frames")
         sp_traj = spice.Trajectory("Sun")
 
     else:
         raise ValueError(
-            f"{SPCKernelName} is not a valid spacecraft kernel, please choose one from ['solo'] "
+            f"{shortKernelName} is not a valid spacecraft kernel, please choose one from ['solo'] "
         )
     sp_traj.generate_positions(times, "Sun", "IAU_SUN")  # Is in Km
     R = sp_traj.coords.radius
@@ -521,7 +519,7 @@ def emdAndCompareCases(
                 showFig=showFig,
                 renormalize=False,
                 showSpeed=False,
-                SPCKernelName=longDF.name.lower(),  # Should ensure that using SPC name
+                shortKernelName=longDF.name.lower(),  # Should ensure that using SPC name
                 inKind=inKind,
             )
 
@@ -600,6 +598,7 @@ def superSummaryPlotGeneric(shortDFDic,
                             missingData=None,
                             inKind=False,
                             skipParams=[],
+                            forceRemake=True,
                             ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -654,7 +653,10 @@ def superSummaryPlotGeneric(shortDFDic,
         for param in skipParams:
             longDFDic.df.pop(param)
 
-    for longObjParam in longDFDic.df.columns:
+    longParams = list(longDFDic.df.columns)
+    shuffle(longParams)
+
+    for longObjParam in longParams:
         plot_super_summary(
             allCasesList=allCases,
             # Use all of the long dataset
@@ -667,7 +669,7 @@ def superSummaryPlotGeneric(shortDFDic,
             regions=shortRegion,
             unsafeEMDDataPath=unsafeEMDataPath,
             period=PeriodMinMax,
-            SPCKernelName=shortKernel,
+            shortKernelName=shortKernel,
             otherObject=longDFDic.kernelName,
             speedSet=(HISPEED, LOSPEED, AVGSPEED),
             showFig=showFig,
@@ -681,6 +683,7 @@ def superSummaryPlotGeneric(shortDFDic,
             longName=longName,
             inKind=inKind,
             baseEMDObject=baseEMDObject,
+            forceRemake=forceRemake,
         )
 
 
@@ -703,7 +706,7 @@ def compareTS(
     showSpeed=False,
     LOSPEED=255,
     HISPEED=285,
-    SPCKernelName=None,
+    shortKernelName=None,
     corrThrPlotList=np.arange(0.75, 0.901, 0.05),
     inKind=False,
 ):
@@ -805,7 +808,7 @@ def compareTS(
                         showLocationList=showLocationList,
                         showFig=showFig,
                         showSpeed=showSpeed,
-                        SPCKernelName=SPCKernelName,
+                        shortKernelName=shortKernelName,
                         LOSPEED=LOSPEED,
                         HISPEED=HISPEED,
                         # ffactor=4 / 3,
@@ -819,7 +822,7 @@ def plot_super_summary(
     regions,
     unsafeEMDDataPath,
     period,
-    SPCKernelName,
+    shortKernelName,
     baseEMDObject,
     corrThrPlotList=np.arange(0.65, 1, 0.05),
     jumpCadence="60s",
@@ -833,6 +836,7 @@ def plot_super_summary(
     shortName="",
     longName="",
     inKind=False,
+    forceRemake=True,
 ):
     """Plots a "super" summary with info about all selected regions
     Does not take dataframes as input, instead finds the data through
@@ -845,13 +849,23 @@ def plot_super_summary(
         regions (List): List of regions that should be plotted. Good to be square
         unsafeEMDDataPath (String (Path)): The path under which all the numpy arrays are found
         period (Tuple): [description]
-        SPCKernelName ([type], optional): SpacecraftKernel name for psp or solo. Defaults to None.
+        shortKernelName ([type], optional): SpacecraftKernel name for psp or solo. Defaults to None.
         showFig (bool, optional): [description]. Defaults to False.
         gridRegions = (nrows, ncols, sharex, sharey)
         showBox = ([X0, XF], [Y0, YF]) - in datetime
     """
     highSpeed, lowSpeed, _ = speedSet
+    figSavePath = f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png"
     from matplotlib.lines import Line2D
+    from os.path import isfile
+
+    if not forceRemake and isfile(figSavePath):
+        print(
+            f"File exists at {figSavePath}, set forceRemake to True if it should be recreated.")
+        return
+
+    shortDuration = allCasesList[0].shortTimes[1] - \
+        allCasesList[0].shortTimes[0]
 
     # Gapless subplots figure
     # import matplotlib.pyplot as plt
@@ -916,6 +930,7 @@ def plot_super_summary(
         # Define a function which allows for multiprocessing call
         # Use some of the shortStartTimes
         for index, (TshortDF) in enumerate(shortStartTimes):
+
             insituStTime, insituEndTime = longTimes[index]
             longARRAY = pd.date_range(
                 insituStTime, insituEndTime, freq=insituArrayFreq)
@@ -993,7 +1008,7 @@ def plot_super_summary(
 
                     dfDots[f"{_shortVar}"] = dotSizeList
 
-            assert worked is True, f"{shortParamList} does not include {longObjectParam.split('_', 1)}"
+            assert worked is True, f"{shortParamList} does not include {longObjectParam.split('_', 1)[1]}"
             # After all shortVars Set the index of the Dots dataframe to midPoints
             dfDots.index = midpointTimes
 
@@ -1006,15 +1021,17 @@ def plot_super_summary(
                 alpha=0.5,
             )
 
-            Vaxis = transformTimeAxistoVelocity(
+            Vaxis, rDist = transformTimeAxistoVelocity(
                 longARRAY,
                 originTime=TshortDF,
-                SPCKernelName=SPCKernelName,
+                shortKernelName=shortKernelName,
                 ObjBody=otherObject,
             )
 
             # Create lines to delineate highest speeds
             # Highest speeds
+
+            # FIXME: THere might be a problem with how speed is calculated: Showing very small results. Maybe KM wrong?
             closest_index = (np.abs(Vaxis - highSpeed)).argmin()
             closest_time = longARRAY[closest_index]
             listTimesSameSpeed.append(closest_time)
@@ -1031,7 +1048,7 @@ def plot_super_summary(
             ax.xaxis.set_major_formatter(longFormatter)
 
             # Locators for the y axis (short dframe)
-            shortlocator = mdates.HourLocator([0, 12])
+            shortlocator = mdates.HourLocator([0])
             shortformatter = mdates.ConciseDateFormatter(shortlocator)
             ax.yaxis.set_major_locator(shortlocator)
             ax.yaxis.set_major_formatter(shortformatter)
@@ -1046,7 +1063,6 @@ def plot_super_summary(
                 if len(corrThrPlotList) == 1:
                     _msize = 100
 
-                # TODO: Add crosshairs
                 ax.scatter(
                     x=dfDots.index,
                     y=np.repeat(TshortDF, len(dfDots.index)),
@@ -1054,6 +1070,28 @@ def plot_super_summary(
                     alpha=alphaList,
                     c=ColumnColours[f"{_shortVar}"],
                 )
+
+                # FIXME: The cross hairs don't work
+                # Add a plot with short duration
+                # plt.plot([dfDots.index - shortDuration / 2, dfDots.index + shortDuration / 2],
+                #          [TshortDF, TshortDF],
+                #          "p--",
+                #          alpha=0.4,
+                #          )
+
+        # After all of the cases are done, use the last cases info
+        # Create lines to delineate highest speeds
+
+        print("BOOP")
+        # # Highest speeds
+        # closest_index = (np.abs(Vaxis - highSpeed)).argmin()
+        # closest_time = longARRAY[closest_index]
+        # listTimesSameSpeed.append(closest_time)
+
+        # # Lower speeds
+        # closest_index_LOW = (np.abs(Vaxis - lowSpeed)).argmin()
+        # closest_time_LOW = longARRAY[closest_index_LOW]
+        # listTimesSameSpeed_LOW.append(closest_time_LOW)
 
         # Compared to plotting lines, this does not plot outside of necessary area
         ax.fill_betweenx(
@@ -1137,7 +1175,7 @@ def plot_super_summary(
 
         y_axis_df = inset_axes(
             axs,
-            width="5%",
+            width=1,
             height="100%",
             loc="center left",)
         plt.axis("off")
@@ -1145,17 +1183,18 @@ def plot_super_summary(
         # duplicate x axis
         x_axis_df.plot(longDataSet.values,
                        color=ColumnColours[longObjectParam.split('_', 1)[1]])
-        y_axis_df.plot(shortDataSet.values, shortDataSet.index,
+        y_axis_df.plot(-shortDataSet.values, shortDataSet.index,
                        color=ColumnColours[longObjectParam.split('_', 1)[1]])
 
-    plt.savefig(f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png")
+    plt.savefig(figSavePath)
 
     if showFig:
         plt.show()
 
     plt.close()
 
-    print(f"Saved {longObjectParam} to {unsafeEMDDataPath}{figName}")
+    print(
+        f"Saved {longObjectParam} to {unsafeEMDDataPath}{figName.split(' / ')[0]}")
 
 
 def new_plot_format(
@@ -1167,7 +1206,7 @@ def new_plot_format(
     corrThrPlotList=np.arange(0.65, 1, 0.05),
     addResidual=True,
     addEMDLcurves=True,
-    SPCKernelName=None,
+    shortKernelName=None,
     spcSpeeds=(200, 300),
     showFig=False,
     windDisp="60s",
@@ -1315,7 +1354,7 @@ def new_plot_format(
                 vSWAxis = transformTimeAxistoVelocity(
                     isTuple.isData.index,
                     originTime=isTuple.shortTime[0].to_pydatetime(),
-                    SPCKernelName=SPCKernelName,
+                    shortKernelName=shortKernelName,
                 )
                 axV = axIS.twiny()
                 axV.plot(vSWAxis, isTuple.isData, alpha=0)

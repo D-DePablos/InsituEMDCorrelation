@@ -1,1 +1,0 @@
-# For STEREO-A encounter

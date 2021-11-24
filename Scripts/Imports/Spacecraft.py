@@ -272,7 +272,7 @@ class Spacecraft:
                 fldCDFPath = f"{BASE_PATH}unsafe/Resources/PSP_Data/FIELDS/"
 
             elif self.name == "PSP_Nov_2019":
-                df_fld_csv_path = f"{BASE_PATH}Data/Prepped_csv/psp_mag_nov.csv"
+                df_fld_csv_path = self.completeCSVPath
                 fldCDFPath = f"{BASE_PATH}unsafe/Resources/STA_PSP_Nov_2019/PSP/"
 
             def FLD_prep():
@@ -335,9 +335,7 @@ class Spacecraft:
                 self.df = None
         elif self.name == "STA_Nov_2019":
             dataPath = f"{BASE_PATH}unsafe/Resources/STA_PSP_Nov_2019/"
-            makedirs(f"{BASE_PATH}Data/Prepped_csv/STA_PSP_Nov19/",
-                     exist_ok=True)
-            df_sta_csv_path = f"{BASE_PATH}Data/Prepped_csv/STA_PSP_Nov19/sta_comb_nov19.csv"
+            df_sta_csv_path = self.completeCSVPath
 
             self.df = extractDF(
                 dataPath,
@@ -1094,6 +1092,93 @@ class PSPSolO_e6(Spacecraft):
         else:
             plotPath = f"{BASE_PATH}Figures/Timeseries/"
             makedirs(plotPath, exist_ok=True)
+            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
+
+        plt.close()
+
+
+class STA_psp(Spacecraft):
+    def __init__(self, name="NONE", cadence_obj=None, show=False, sunEarthDist=150111200.76, remakeCSV=False):
+        super().__init__(name=name, cadence_obj=cadence_obj,
+                         show=show, sunEarthDist=sunEarthDist, remakeCSV=remakeCSV)
+
+    def plot_solo_earth_df(self, other, zones=[]):
+        assert "earth" in self.name.lower(), "Please ensure Earth is object with f call"
+        from astropy import constants as c
+
+        ts = self.df.index
+        ots = other.df.index
+
+        R = (self.dfUnits["R"].to(u.m) - const.R_sun).value
+        oR = (other.dfUnits["R"].to(u.m) - const.R_sun).value
+
+        Bx, By, Bz = self.df["B_R"], self.df["B_T"], self.df["B_N"]
+        oBx, oBy, oBz = other.df["B_R"], other.df["B_T"], other.df["B_N"]
+        Bt = np.sqrt(Bx ** 2 + By ** 2 + Bz ** 2)
+        oBt = np.sqrt(oBx ** 2 + oBy ** 2 + oBz ** 2)
+
+        # Figure
+        # Width and marker size
+        _, axs = plt.subplots(
+            7, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
+        )
+
+        # Plots
+        axs[0].set_ylabel("R (AU)")
+        axs[0].plot(ts, R * u.m.to(u.AU), label="WIND")
+        axs[0].plot(ots, oR * u.m.to(u.AU), label="SolO")
+        axs[0].grid(True)
+        axs[0].set_ylim(0.7, 1.1)
+        axs[0].legend()
+
+        # Bx
+        axs[1].set_ylabel(r"$\hat{B}_{R}$")
+        axs[1].plot(ts, Bx, label="ACE")
+        axs[1].plot(ots, oBx, label="SolO")
+
+        # By
+        axs[2].set_ylabel(r"$\hat{B}_{T}$")
+        axs[2].plot(ts, By)
+        axs[2].plot(ots, oBy)
+
+        # Bz
+        axs[3].set_ylabel(r"$\hat{B}_{N}$")
+        axs[3].plot(ts, Bz)
+        axs[3].plot(ots, oBz)
+
+        # Btotal
+        axs[4].set_ylabel(r"$\hat{B}_T$")
+        axs[4].plot(ts, Bt)
+        axs[4].plot(ots, oBt)
+
+        # V
+        axs[5].set_ylabel(r"$\hat{V}_R$")
+        axs[5].plot(ts, self.df["V_R"])
+
+        axs[6].set_ylabel(r"$T_p$")
+        axs[6].plot(ts, self.df["T"])
+
+        # # Plot the relevant columns
+        for ax in axs:
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
+
+        # Plot the zones being considered
+        for zone in zones:
+            for ax in axs:
+                ax.axvspan(
+                    zone["start_time"], zone["end_time"], color=zone["color"], alpha=0.3
+                )
+
+        # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
+        # print(f"Saving to {self}")
+        # plt.savefig(f"{save_folder}B_Br_V_sb_matrix_highlighted.pdf")
+        if self.show:
+            plt.show()
+        else:
+            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            makedirs(plotPath, exist_ok=True)
+            print(f"Saving to {plotPath}")
             plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
 
         plt.close()

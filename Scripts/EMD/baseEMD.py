@@ -184,22 +184,25 @@ class baseEMD:
         elif caseName == "STA_PSP":
             from Imports.Spacecraft import Spacecraft
             self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/STA_PSP/"
+            # Long = STA
+            # Short = PSP
+
             objCadenceSeconds = 60
             staPSPCases = {
-                "longTimes": (datetime(2019, 11, 11), datetime(2019, 11, 20)),
-                "shortTimes": (datetime(2019, 11, 12, 6), datetime(2019, 11, 18, 6)),
+                "longTimes": (datetime(2019, 11, 1), datetime(2019, 11, 15)),
+                "shortTimes": (datetime(2019, 11, 1), datetime(2019, 11, 15)),
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/PSP",
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_STA_PSP.pickle",
                 "forceCreate": True,
-                "firstRelevantLongTime": datetime(2019, 11, 10),
+                "firstRelevantLongTime": datetime(2019, 11, 3),
                 "MARGIN": MARGIN,
             }
             cases = caseCreation(**staPSPCases)
 
             long_SPC = Spacecraft(name="STA_Nov_2019",
-                                  cadence_obj=objCadenceSeconds, remakeCSV=True)
+                                  cadence_obj=objCadenceSeconds, remakeCSV=False)
             short_SPC = Spacecraft(name="PSP_Nov_2019",
                                    cadence_obj=objCadenceSeconds)
 
@@ -241,7 +244,7 @@ class baseEMD:
             windDispParam=self.windDispParam,
         )
 
-    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None, skipParams=[]):
+    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None, skipParams=[], forceRemake=True):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
             longDFDic=self.longDFDic,
@@ -257,6 +260,7 @@ class baseEMD:
             inKind=self.inKind,
             baseEMDObject=self,
             skipParams=skipParams,
+            forceRemake=forceRemake,
         )
 
 
@@ -306,7 +310,7 @@ def ISSICase(show=False):
 
 
 def STAPSPCase(show=True):
-    MARGIN = 48
+    MARGIN = 72
     Kwargs = {
         "caseName": "STA_PSP",
         "shortParams": ["B_R", "B_T", "B_N"],
@@ -316,12 +320,12 @@ def STAPSPCase(show=True):
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 4,
-        "speedSet": None,
-        "shortDuration": 30,  # In hours
-        "shortDisplacement": 6,
+        # "speedSet": (100, 1000, 500),  # Low, high, mid
+        "shortDuration": 25,  # In hours
+        "shortDisplacement": 10,  # In hours
         "MARGIN": MARGIN,
         "inKind": True,
-        "windDispParam": 10,
+        "windDispParam": 30,
     }
 
     box = None
@@ -331,7 +335,7 @@ def STAPSPCase(show=True):
     stapspEMD.plotSeparately()
     stapspEMD.fixDFNames("STA")
     stapspEMD.plotTogether(showBox=box, gridRegions=True,
-                           missingData=mData, shortName="ST-A (0.95A.U.)", longName="PSP", skipParams=["STA_V_R"])
+                           missingData=mData, shortName="PSP (~0.95A.U.)", longName="ST-A (0.95A.U.)", skipParams=["STA_V_R"], forceRemake=True)
 
 
 def SolOEarth2020Case(show=True):
@@ -376,16 +380,18 @@ def SolOEarth2020Case(show=True):
         shortName="SolO (0.8A.U.)",
         longName="WIND (1 A.U.)",
         missingData=mData,
-        skipParams=["WIND_V_R"]
+        skipParams=["WIND_V_R"],
     )
 
 
 if __name__ == "__main__":
-    # TODO: Need to plot some more SolO - WIND cases
-    # Need to write up the paper
     # Shoould make summary plot
 
+    # Need to make the presentation! Prepare some Intro content that would be good and write it up.
+
     # ISSICase(show=False)
-    # SolOEarth2020Case(show=False)
+    # SolOEarth2020Case(show=True)
     # PSPSolOCase()
+
+    # FIXME: Problem with number of kernels for the ST-A case
     STAPSPCase(show=False)

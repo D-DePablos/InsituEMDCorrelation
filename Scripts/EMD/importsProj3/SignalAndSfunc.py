@@ -7,7 +7,7 @@ from matplotlib import rc
 from os import makedirs
 import warnings
 import datetime
-
+from Imports.Spacecraft import Spacecraft
 
 warnings.filterwarnings("ignore")
 
@@ -30,7 +30,8 @@ import astropy.units as u
 locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
 formatter = mdates.ConciseDateFormatter(locator)
 
-emd = EMD()
+# We may limit the number of IMFs and therefore help not hang etc!
+emd = EMD(max_imf=10)
 vis = Visualisation()
 
 
@@ -115,7 +116,7 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
 
     try:
         imfs = np.load(saved_npy)
-        return deepcopy(imfs)
+        return deepcopy(imfs), True
 
     # When not found, must create (pass)
     except FileNotFoundError:
@@ -125,7 +126,7 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
         pass
 
     # Will always use EMD. Will always get imfs and residue separately
-    imfs = emd.emd(S=s, T=t)
+    imfs = emd.emd(S=s, T=t, max_imf=10)
 
     if plot:
         plt.figure()
@@ -141,11 +142,11 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
     np.save(f"{saveFolder}{time_id}.npy", t)
     np.save(saved_npy, imfs)  # Keeps noise as we can do filtering later
 
-    return deepcopy(imfs)
+    return deepcopy(imfs), False
 
 
 def transformTimeAxistoVelocity(
-    timeAxis, originTime, SPCKernelName=None, ObjBody="Sun"
+    timeAxis, originTime, shortKernelName=None, ObjBody="Sun"
 ):
     """
     Gives a corresponding velocity axis for a time axis and originTime
@@ -153,26 +154,26 @@ def transformTimeAxistoVelocity(
     Args:
         timeAxis: X axis with time values
         originTime: Time that is to be compared (hour of AIA images)
-        SPCKernelName: Kernel name for spacecraft
+        shortKernelName: Kernel name for spacecraft
     """
     import heliopy.data.spice as spicedata
     import heliopy.spice as spice
 
-    if SPCKernelName == "solo":
+    if shortKernelName == "solo":
         spicedata.get_kernel("solo")
         sp_traj = spice.Trajectory("Solar Orbiter")
 
-    elif SPCKernelName == "psp":
+    elif shortKernelName == "psp":
         spicedata.get_kernel("psp")
         sp_traj = spice.Trajectory("SPP")
 
-    elif SPCKernelName == "sun":
+    elif shortKernelName == "sun":
         spicedata.get_kernel("helio_frames")
         sp_traj = spice.Trajectory("Sun")
 
     else:
         raise ValueError(
-            f"{SPCKernelName} is not a valid spacecraft kernel, please choose one from ['solo', 'psp'] "
+            f"{shortKernelName} is not a valid spacecraft kernel, please choose one from ['solo', 'psp'] "
         )
 
     # Generate a list of times with timeAxis info
@@ -192,9 +193,14 @@ def transformTimeAxistoVelocity(
         path.append(
             "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts")
         # Get wind data for relevant times
-        from Imports.Spacecraft import Spacecraft
         spc = Spacecraft(name="Earth_April_2020")
         R_body = spc.df["R"].mean() * u.km
+        R = R - R_body
+
+    elif ObjBody == "stereo_a":
+        spc = Spacecraft(name="STA_Nov_2019")
+        R_body = (spc.df["R"].mean() * u.au).to(u.km)
+        # R_body is the one further from Sun
         R = R - R_body
 
     else:
@@ -212,7 +218,7 @@ def transformTimeAxistoVelocity(
         warnings.simplefilter("ignore")
         vSwAxis = -R.value / dtAxis
 
-    return vSwAxis
+    return vSwAxis, -R.value
 
 
 def heatmap(
@@ -840,13 +846,13 @@ class SignalFunctions(Signal):
 
         if not useRealTime:
             # generate 10 by 10 matrix for IMF correlation
-            corr_matrix = np.zeros(shape=(12, 12, short.no_displacements, 3))
+            corr_matrix = np.zeros(shape=(11, 11, short.no_displacements, 3))
 
         else:
             # When needed to save mid_point_time
-            corr_matrix = np.zeros(shape=(12, 12, short.no_displacements, 4))
+            corr_matrix = np.zeros(shape=(11, 11, short.no_displacements, 4))
 
-        short_imfs = emd_and_save(
+        short_imfs, loaded = emd_and_save(
             s=short.s,
             t=short.t,
             saveFolder=f"{short.saveFolder}IMF/",
@@ -904,10 +910,6 @@ class SignalFunctions(Signal):
                 _time_long = deepcopy(long.t[i: j + 1])
                 _true_time_long = deepcopy(long.true_time[i: j + 1])
 
-                # if np.nan in _data_long:
-                #     print("NAN found")
-                #     pass
-
                 # Set values for array
                 complete_array[0, height, :] = _time_long
                 complete_array[1, height, :] = _data_long
@@ -920,13 +922,21 @@ class SignalFunctions(Signal):
                         _true_time_long[0], format="%Y%m%d_%H:%M")
                     _true_end = datetime.datetime.strftime(
                         _true_time_long[-1], format="%Y%m%d_%H:%M")
-                    _long_imfs = emd_and_save(
+                    _long_imfs, loaded = emd_and_save(
                         s=_data_long,
                         t=_time_long,
                         saveFolder=f"{long.saveFolder}IMF/",
                         save_name=f"long_{_true_start}_{_true_end}",
                         plot=False,
                     )
+
+                    if len(_long_imfs) > 11:
+                        # Find the valid IMFs on long signal
+                        print("LONG!")
+                        pass
+
+                    assert len(
+                        _long_imfs) <= 11, f"\n Too many IMFs {len(_long_imfs)} \n Loaded == {loaded} \n datetime = {_true_start}"
 
                     # Uses pmin and pmax from short dataseries
                     if filterPeriods:
@@ -992,6 +1002,9 @@ class SignalFunctions(Signal):
                                 corr_matrix[_i, __j, height, 2] = valid
                             except ValueError as E:
                                 # IF there is a ValueError we can just skip this line
+                                pass
+
+                            except IndexError:
                                 pass
 
                     if useRealTime:  # We only have the real time in some ocasions
@@ -1130,7 +1143,7 @@ class SignalFunctions(Signal):
         filterPeriods=True,
         showFig=False,
         showSpeed=True,  # Whether to show speed instead of time
-        SPCKernelName="solo",
+        shortKernelName="solo",
         LOSPEED=255,
         HISPEED=285,
         showLocationList=False,
@@ -1600,7 +1613,7 @@ class SignalFunctions(Signal):
             vSWAxis = transformTimeAxistoVelocity(
                 longTime_axis,
                 originTime=short_signal.true_time[0].to_pydatetime(),
-                SPCKernelName=SPCKernelName,
+                shortKernelName=shortKernelName,
                 ObjBody="psp" if "psp" in other.name.lower() else "Sun",
             )
 
