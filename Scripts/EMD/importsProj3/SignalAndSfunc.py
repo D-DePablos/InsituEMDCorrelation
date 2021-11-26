@@ -35,7 +35,15 @@ emd = EMD(max_imf=10)
 vis = Visualisation()
 
 
+def BodyUnknownError(body):
+    """
+    Error for when body is not known
+    """
+    raise ValueError(f"Body {body} is not a known SPICE kernel name.")
+
 # Local helper functions
+
+
 def normalize_signal(s: np.ndarray):
     """
     Normalised an input signal
@@ -179,7 +187,7 @@ def transformTimeAxistoVelocity(
     # Generate a list of times with timeAxis info
     times = list(timeAxis)
     sp_traj.generate_positions(times, "Sun", "IAU_SUN")  # Is in Km
-    R = sp_traj.coords.radius
+    R = sp_traj.coords.radius + 696340 * u.km  # Add to get to solar surface
 
     # Calculate dt Necessary for each of the positions. Only uses radius at the time, compares to AIA.
     dtAxis = [(t - originTime).total_seconds() for t in timeAxis]
@@ -203,7 +211,7 @@ def transformTimeAxistoVelocity(
         # R_body is the one further from Sun
         R = R - R_body
 
-    else:
+    if ObjBody == "solo" or ObjBody == "psp":
         trajName = "Solar Orbiter" if ObjBody == "solo" else "SPP"
         spicedata.get_kernel(ObjBody)
         body_traj = spice.Trajectory(trajName)
@@ -213,6 +221,8 @@ def transformTimeAxistoVelocity(
 
         # Reduce the distance required
         R = R - R_body
+    else:
+        raise BodyUnknownError(ObjBody)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -801,7 +811,7 @@ class SignalFunctions(Signal):
         # Note: The difference between self.data and self.s is that S may be normalised
         try:
             assert (
-                self.t[-1] < other.t[-1]
+                self.t[-1] <= other.t[-1]
             ), f"Other Signal Object {other.t[-1]} is shorter than {self.t[-1]}. Please alter order"
         except IndexError:
             pass
@@ -1179,7 +1189,7 @@ class SignalFunctions(Signal):
             f"{self.pmin}:{self.pmax} to {other.pmin}:{other.pmax}"
         )
 
-        assert len(self.s) < len(other.s), (
+        assert len(self.s) <= len(other.s), (
             "Data of other timeseries is smaller than given timeseries."
             "Please swap their positions"
         )
@@ -1601,7 +1611,6 @@ class SignalFunctions(Signal):
         for i, value in enumerate(self.corrThrPlotList):
             if np.mod(i, 2) == 0:
                 corrThrLimits.append(value)
-        corrThrLimits.append(1)
 
         ax2.set_yticks(corrThrLimits)  # Ensure ticks are good
         # Allows for any correlation

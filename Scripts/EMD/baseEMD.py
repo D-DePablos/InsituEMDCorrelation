@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from os import makedirs
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from EMD.importsProj3.signalAPI import (
     emdAndCompareCases,
     caseCreation,
@@ -37,6 +37,7 @@ class baseEMD:
                  MARGIN=48,
                  inKind=False,
                  windDispParam: int = 1,  # How many measurements to move by
+                 accelerated=1,
                  ):
 
         # The job of the init should be to get to a standardised format
@@ -51,27 +52,33 @@ class baseEMD:
         self.shortDisplacement = shortDisplacement
         self.inKind = inKind
         self.windDispParam = windDispParam
+        self.accelerated = accelerated
 
         possibleCaseNames = ["ISSIcasesAIA",
                              "PSP_SolO_e6", "April2020_SolO_WIND", "STA_PSP"]
         if caseName == "ISSIcasesAIA":
+            # Long = PSP
+            # Short = AIA
+
             # The directories and save folders are on a per-case basis
-            unsafe_dir = "/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/unsafe/"
-            self.saveFolder = f"{unsafe_dir}ISSI/New_Method/"
-            makedirs(self.saveFolder, exist_ok=True)
+            _unsFolder = "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/unsafe/"
+            self.saveFolder = _unsFolder + "ISSIcasesAIA/"
+            objCadenceSeconds = 60
 
             # dataFolder only used in setup
-            dataFolder = f"/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/Scripts/ISSI/data/"
+            dataFolder = f"/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
 
             # Get the cases and put them together with respective AIA observations in Dic
             AIACases = {
                 "shortTimes": (datetime(2018, 10, 29, 16), datetime(2018, 10, 30, 23, 50)),
                 "longTimes": (datetime(2018, 10, 31, 8), datetime(2018, 11, 2, 8)),
-                "shortDuration": 3,
-                "caseName": "SDO_AIA",
-                "shortDisplacement": 3,
-                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/Scripts/ISSI/cases/AIAcases.pickle",
-                "forceCreate": False,
+                "shortDuration": self.shortDuration,
+                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/AIA",
+                "shortDisplacement": self.shortDisplacement,
+                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/AIAcases.pickle",
+                "forceCreate": True,
+                "firstRelevantLongTime": datetime(2018, 10, 31, 8) + timedelta(hours=MARGIN),
+                "MARGIN": MARGIN
             }
             cases = caseCreation(**AIACases)
 
@@ -94,7 +101,8 @@ class baseEMD:
                     _df.index = pd.to_datetime(_df.index)
 
             except FileNotFoundError:
-                raise FileNotFoundError("Unable to open Dataframes")
+                raise FileNotFoundError(
+                    f"Unable to open Dataframes in {dataFolder}")
 
             # Store the shortDFDics and longDFDic
             shortDFParams = (df_171.columns, df_193.columns) if shortParams == None else (
@@ -106,7 +114,7 @@ class baseEMD:
                            shortDFParams[1], "193", "sun")
             ]
             self.longDFDic = longDFDic(
-                df_is.copy(), "PSP", "psp", 1, self.speedSet)
+                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet)
 
         elif caseName == "PSP_SolO_e6":
             from Imports.Spacecraft import Spacecraft
@@ -178,12 +186,13 @@ class baseEMD:
                                            shortParams, ["SolO"], "solo")]
 
             self.longDFDic = longDFDic(
-                long_SPC.df, "WIND", "L1", 1, self.speedSet)
+                long_SPC.df, "WIND", "L1", self.accelerated, self.speedSet)
 
         # NOTE: Need to fix error in saving / opening files
         elif caseName == "STA_PSP":
             from Imports.Spacecraft import Spacecraft
-            self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/STA_PSP/"
+            _unsFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
+            self.saveFolder = f"{_unsFolder}unsafe/EMD_Results/STA_PSP/"
             # Long = STA
             # Short = PSP
 
@@ -194,7 +203,7 @@ class baseEMD:
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/PSP",
-                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_STA_PSP.pickle",
+                "savePicklePath": f"{_unsFolder}Scripts/EMD/cases/cases_STA_PSP.pickle",
                 "forceCreate": True,
                 "firstRelevantLongTime": datetime(2019, 11, 3),
                 "MARGIN": MARGIN,
@@ -216,7 +225,7 @@ class baseEMD:
                                            shortParams, ["PSP"], "psp")]
 
             self.longDFDic = longDFDic(
-                long_SPC.df.copy(), "STA", "stereo_a", 1, self.speedSet)
+                long_SPC.df.copy(), "STA", "stereo_a", self.accelerated, self.speedSet)
         else:
             raise NotImplementedError(
                 f"{caseName} not implemented. Use one of {possibleCaseNames}")
@@ -229,6 +238,10 @@ class baseEMD:
 
     def __repr__(self) -> str:
         return "{self.__class__.__name__}({self.caseName},{self.shortParams}, {self.longParams},{self.PeriodMinMax})".format(self)
+
+    def showCases(self):
+        for case in self.shortDFDics[0].cases:
+            print(case)
 
     def plotSeparately(self):
         emdAndCompareCases(
@@ -244,7 +257,7 @@ class baseEMD:
             windDispParam=self.windDispParam,
         )
 
-    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None, skipParams=[], forceRemake=True):
+    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None, skipParams=[], forceRemake=True, yTickFrequency=[0], xTickFrequency=[0]):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
             longDFDic=self.longDFDic,
@@ -261,6 +274,8 @@ class baseEMD:
             baseEMDObject=self,
             skipParams=skipParams,
             forceRemake=forceRemake,
+            yTickFrequency=yTickFrequency,
+            xTickFrequency=xTickFrequency,
         )
 
 
@@ -294,19 +309,25 @@ def ISSICase(show=False):
         "caseName": "ISSIcasesAIA",
         # Use all Parameters by setting to None
         "shortParams": None,
-        "longParams": None,
-        "PeriodMinMax": [5, 30],
+        "longParams": "B_R V_R".split(),
+        "PeriodMinMax": [5, 90],
         "showFig": show,
-        "detrendBoxWidth": 200,
-        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "detrendBoxWidth": None,
+        "corrThrPlotList": np.arange(0.45, 1, 0.1),
         "multiCPU": 4,
-        "speedSet": None,
+        "shortDuration": 6,
+        "shortDisplacement": 3,
+        "MARGIN": 24,
+        "inKind": False,
+        "windDispParam": 5,
+        "accelerated": 1.5,
     }
 
     issiEMD = baseEMD(**ISSI_AIAVars)
-    # issiEMD.plotSeparately()
-    # issiEMD.plotTogether(showBox=None, gridRegions=(2, 3, True, True))
-    issiEMD.plotTogether(showBox=None, gridRegions=True)
+    # issiEMD.showCases()
+    issiEMD.plotSeparately()
+    issiEMD.plotTogether(showBox=None, gridRegions=(
+        2, 3, True, True), yTickFrequency=[0, 12], xTickFrequency=[0, 12])
 
 
 def STAPSPCase(show=True):
@@ -389,9 +410,7 @@ if __name__ == "__main__":
 
     # Need to make the presentation! Prepare some Intro content that would be good and write it up.
 
-    # ISSICase(show=False)
+    ISSICase(show=True)
     # SolOEarth2020Case(show=True)
     # PSPSolOCase()
-
-    # FIXME: Problem with number of kernels for the ST-A case
-    STAPSPCase(show=False)
+    # STAPSPCase(show=False)

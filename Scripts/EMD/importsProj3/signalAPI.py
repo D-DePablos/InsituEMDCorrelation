@@ -199,7 +199,7 @@ def caseCreation(
     shortDuration,
     caseName,
     savePicklePath,
-    shortDisplacement=None,
+    shortDisplacement,
     forceCreate=False,
     firstRelevantLongTime=False,
     MARGIN=None,
@@ -241,10 +241,11 @@ def caseCreation(
 
     cases, i = [], 0
     _tShort = startSHORT
+    _matchTime = startLONG + timedelta(hours=MARGIN)
 
-    shortDisplacement = (
-        shortDuration if shortDisplacement == None else shortDisplacement
-    )
+    # shortDisplacement = (
+    #     shortDuration if shortDisplacement == None else shortDisplacement
+    # )
 
     if shortDuration > shortDisplacement:
         refFactor = shortDuration
@@ -271,6 +272,8 @@ def caseCreation(
         )
 
         i += 1
+
+    cases.pop()
 
     with open(f"{savePicklePath}", "wb") as f:
         pickle.dump(cases, f)
@@ -578,7 +581,9 @@ def emdAndCompareCases(
             try:
                 proc.start()
             except Exception as e:
-                raise e
+                from sys import exit
+                print(e)
+                exit(1)
 
         for proc in procs:
             proc.join()
@@ -599,6 +604,8 @@ def superSummaryPlotGeneric(shortDFDic,
                             inKind=False,
                             skipParams=[],
                             forceRemake=True,
+                            yTickFrequency=[0],
+                            xTickFrequency=[0],
                             ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -626,7 +633,7 @@ def superSummaryPlotGeneric(shortDFDic,
             int(longDFDic.df[matchingColumn].mean() / longDFDic.accelerated),
         )
 
-        if HISPEED == None:
+        if HISPEED == None or LOSPEED == None or AVGSPEED == None:
             raise ValueError("Could not extract Speeds")
 
     figName = f"{shortDFDic[0].cases[0]['caseName'].partition('/')[0]}/"
@@ -684,6 +691,8 @@ def superSummaryPlotGeneric(shortDFDic,
             inKind=inKind,
             baseEMDObject=baseEMDObject,
             forceRemake=forceRemake,
+            yTickFrequency=yTickFrequency,
+            xTickFrequency=xTickFrequency,
         )
 
 
@@ -837,6 +846,8 @@ def plot_super_summary(
     longName="",
     inKind=False,
     forceRemake=True,
+    yTickFrequency=[0],
+    xTickFrequency=[0],
 ):
     """Plots a "super" summary with info about all selected regions
     Does not take dataframes as input, instead finds the data through
@@ -892,7 +903,6 @@ def plot_super_summary(
             nrows, ncols, figsize=(20, 10), sharex=True, sharey=True
         )
     else:
-        # TODO: Add some text for each subplot in the grid
         nrows = gridRegions[0]
         ncols = gridRegions[1]
         fig, axs = plt.subplots(
@@ -1042,13 +1052,13 @@ def plot_super_summary(
             listTimesSameSpeed_LOW.append(closest_time_LOW)
 
             # Set x axis to normal format
-            longLocator = mdates.HourLocator([0])
+            longLocator = mdates.HourLocator(xTickFrequency)
             longFormatter = mdates.ConciseDateFormatter(locator)
             ax.xaxis.set_major_locator(longLocator)
             ax.xaxis.set_major_formatter(longFormatter)
 
             # Locators for the y axis (short dframe)
-            shortlocator = mdates.HourLocator([0])
+            shortlocator = mdates.HourLocator(yTickFrequency)
             shortformatter = mdates.ConciseDateFormatter(shortlocator)
             ax.yaxis.set_major_locator(shortlocator)
             ax.yaxis.set_major_formatter(shortformatter)
@@ -1082,7 +1092,6 @@ def plot_super_summary(
         # After all of the cases are done, use the last cases info
         # Create lines to delineate highest speeds
 
-        print("BOOP")
         # # Highest speeds
         # closest_index = (np.abs(Vaxis - highSpeed)).argmin()
         # closest_time = longARRAY[closest_index]
