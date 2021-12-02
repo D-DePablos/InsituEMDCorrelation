@@ -111,9 +111,9 @@ axDic = {
     "BASE": [0],
     "plume": [0, 0],
     "cbpoint": [0, 1],
-    "chplume": [0, 2],
     "chole": [1, 0],
     "qsun": [1, 1],
+    "chplume": [1, 2],
 }
 
 
@@ -203,6 +203,7 @@ def caseCreation(
     forceCreate=False,
     firstRelevantLongTime=False,
     MARGIN=None,
+    equal=False
 ):
     """Creates cases given times of short and long datasets
 
@@ -214,12 +215,16 @@ def caseCreation(
         savePicklePath ([type]): [description]
         shortDisplacement ([type], optional): [description]. Defaults to None.
         forceCreate (bool, optional): [description]. Defaults to False.
-        firstRelevantLongTime (bool, optional): If needed to skip some time from long dataset. Defaults to False.
+        firstRelevantLongTime (datetime, optional): If needed to skip some time from long dataset, set start here (e.g., duration of short dataset). Defaults to False.
+        equal (bool, optional): Whether all longTimes should be the same (boxy). Defaults to False. Requires MARGIN = None.
 
     Returns:
         [type]: [description]
     """
     import pickle
+
+    if equal:
+        assert MARGIN == 0, "MARGIN must be 0 if equal is True"
 
     # Attempt to load the file first
     if not forceCreate:
@@ -237,43 +242,61 @@ def caseCreation(
     startSHORT, endSHORT = shortTimes
     startLONG, endLONG = longTimes
 
-    baseLONG = endLONG - (endLONG - startLONG) / 2
+    middleLong = endLONG - (endLONG - startLONG) / 2
 
     cases, i = [], 0
     _tShort = startSHORT
-    _matchTime = startLONG + timedelta(hours=MARGIN)
 
-    # shortDisplacement = (
-    #     shortDuration if shortDisplacement == None else shortDisplacement
-    # )
-
+    # If the duration of the short dataset is greater than displacement
+    # What is relevant to move the data and have complete chunks is the duration
     if shortDuration > shortDisplacement:
         refFactor = shortDuration
     else:
         refFactor = shortDisplacement
-    # If displacement longer than duration it breaks
-    while _tShort <= (endSHORT - timedelta(hours=refFactor)):
-        _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
 
-        if firstRelevantLongTime != False:
-            _matchTime = firstRelevantLongTime + \
-                timedelta(hours=shortDisplacement) * i
-        else:
-            _matchTime = baseLONG
+    if not equal:
+        _matchTime = startLONG + timedelta(hours=MARGIN)
 
-        cases.append(
-            {
-                "shortTime": _tShort,
-                "matchTime": _matchTime,
-                "shortDurn": shortDuration,
-                "caseName": f"{caseName}_{_tShort.day}_T{_tShort.hour:02d}",
-                "margin": MARGIN,  # +- some number of hours
-            }
-        )
+        # If displacement longer than duration it breaks loop
+        while _tShort <= (endSHORT - timedelta(hours=refFactor)):
+            _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
 
-        i += 1
+            if firstRelevantLongTime != False:
+                _matchTime = firstRelevantLongTime + \
+                    timedelta(hours=shortDisplacement) * i
+            else:
+                _matchTime = middleLong
 
-    cases.pop()
+            cases.append(
+                {
+                    "shortTime": _tShort,
+                    "matchTime": _matchTime,
+                    "shortDurn": shortDuration,
+                    "caseName": f"{caseName}_{_tShort.day}_T{_tShort.hour:02d}",
+                    "margin": MARGIN,  # +- some number of hours
+                }
+            )
+
+            i += 1
+
+    else:
+        while _tShort <= (endSHORT - timedelta(hours=refFactor)):
+            # Advance in short dataset
+            _tShort = startSHORT + timedelta(hours=shortDisplacement) * i
+
+            cases.append(
+                {
+                    "shortTime": _tShort,
+                    "matchTime": middleLong,
+                    "shortDurn": shortDuration,
+                    "caseName": f"{caseName}_{_tShort.day}_T{_tShort.hour:02d}",
+                    "margin": MARGIN,  # Should be 0
+                }
+            )
+
+            i += 1
+
+    cases.pop()  # Last case breaks
 
     with open(f"{savePicklePath}", "wb") as f:
         pickle.dump(cases, f)
@@ -646,6 +669,8 @@ def superSummaryPlotGeneric(shortDFDic,
     # Create a list with all cases that should be split up
     allCases = []
     for caseName, shortTimes, longTimes in zip(caseNamesList, shortTimesList, longTimesList):
+        if longTimes == (None, None):
+            longTimes = (longDFDic.df.index[0], longDFDic.df.index[-1])
         dirExtension = f"{caseName}"
         allCases.append(
             caseTuple(dirExtension, shortTimes, longTimes)
@@ -666,11 +691,6 @@ def superSummaryPlotGeneric(shortDFDic,
     for longObjParam in longParams:
         plot_super_summary(
             allCasesList=allCases,
-            # Use all of the long dataset
-            # longSpan=(
-            #     longDFDic.df.index[0].to_pydatetime(),
-            #     longDFDic.df.index[-1].to_pydatetime()
-            # ),
             shortParamList=shortParams,
             longObjectParam=longObjParam,
             regions=shortRegion,
@@ -875,8 +895,8 @@ def plot_super_summary(
             f"File exists at {figSavePath}, set forceRemake to True if it should be recreated.")
         return
 
-    shortDuration = allCasesList[0].shortTimes[1] - \
-        allCasesList[0].shortTimes[0]
+    # shortDuration = allCasesList[0].shortTimes[1] - \
+    #     allCasesList[0].shortTimes[0]
 
     # Gapless subplots figure
     # import matplotlib.pyplot as plt
@@ -1038,10 +1058,6 @@ def plot_super_summary(
                 ObjBody=otherObject,
             )
 
-            # Create lines to delineate highest speeds
-            # Highest speeds
-
-            # FIXME: THere might be a problem with how speed is calculated: Showing very small results. Maybe KM wrong?
             closest_index = (np.abs(Vaxis - highSpeed)).argmin()
             closest_time = longARRAY[closest_index]
             listTimesSameSpeed.append(closest_time)
@@ -1110,8 +1126,17 @@ def plot_super_summary(
             color="orange",
             alpha=0.2,
         )
-        ax.set_ylabel(f"{shortName}")
+
+        # TODO: Plot a line every 100 km/s, same inclination as line
+        # Every 100 km/s, plot a line
+        # For the last case, plot every 100 km/s
+
+        # Set axes labels
         ax.set_xlabel(f"{longName}")
+        if len(regions) > 1:
+            ax.set_xlabel(f"{region}", fontsize=20)
+        else:
+            ax.set_ylabel(f"{shortName}")
 
         if showBox != None:
             box_X0, box_X1 = showBox[0]

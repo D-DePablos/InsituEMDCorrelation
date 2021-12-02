@@ -59,14 +59,12 @@ class baseEMD:
         if caseName == "ISSIcasesAIA":
             # Long = PSP
             # Short = AIA
+            from Imports.Spacecraft import ISSISpc
 
             # The directories and save folders are on a per-case basis
             _unsFolder = "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/unsafe/"
             self.saveFolder = _unsFolder + "ISSIcasesAIA/"
             objCadenceSeconds = 60
-
-            # dataFolder only used in setup
-            dataFolder = f"/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
 
             # Get the cases and put them together with respective AIA observations in Dic
             AIACases = {
@@ -77,32 +75,20 @@ class baseEMD:
                 "shortDisplacement": self.shortDisplacement,
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/AIAcases.pickle",
                 "forceCreate": True,
-                "firstRelevantLongTime": datetime(2018, 10, 31, 8) + timedelta(hours=MARGIN),
+                # "firstRelevantLongTime": datetime(2018, 10, 31, 8) + timedelta(hours=MARGIN),
                 "MARGIN": MARGIN
             }
-            cases = caseCreation(**AIACases)
+            cases = caseCreation(**AIACases, equal=True)
 
-            # IN SITU DATA (LONG)
-            df_is = pd.read_csv(f"{dataFolder}small_ch_in_situ.csv")
-            df_is.index = pd.to_datetime(df_is["Time"])
-            del df_is["Time"]
-            longDFParams = longParams if longParams != None else df_is.columns
-            df_is = df_is[longDFParams]
+            long_SPC = ISSISpc("ISSI_PSP_e1", cadence_obj=objCadenceSeconds)
+            longDFParams = longParams if longParams != None else long_SPC.df.columns
+            df_is = long_SPC.df[longDFParams]
+            self.long_SPC = long_SPC
 
             # REMOTE DATA (SHORT)
-            try:
-                df_171 = pd.read_csv(
-                    f"{dataFolder}small_ch_171_lc_in.csv", index_col="Time")
-                df_193 = pd.read_csv(
-                    f"{dataFolder}small_ch_193_lc_in.csv", index_col="Time")
-                print("Loaded csv successfully")
-
-                for _df in (df_171, df_193):
-                    _df.index = pd.to_datetime(_df.index)
-
-            except FileNotFoundError:
-                raise FileNotFoundError(
-                    f"Unable to open Dataframes in {dataFolder}")
+            short_SPC = ISSISpc("ISSI_AIA_e1", cadence_obj=objCadenceSeconds)
+            df_171 = short_SPC.df171
+            df_193 = short_SPC.df193
 
             # Store the shortDFDics and longDFDic
             shortDFParams = (df_171.columns, df_193.columns) if shortParams == None else (
@@ -278,6 +264,13 @@ class baseEMD:
             xTickFrequency=xTickFrequency,
         )
 
+    def updateLongCases(self, longStart, longEnd):
+
+        for shortCase in self.shortDFDics:
+            for case in shortCase.cases:
+                case.longStart = longStart
+                case.longEnd = longEnd
+
 
 def PSPSolOCase(show=False):
     # Dictionary intro
@@ -309,22 +302,23 @@ def ISSICase(show=False):
         "caseName": "ISSIcasesAIA",
         # Use all Parameters by setting to None
         "shortParams": None,
-        "longParams": "B_R V_R".split(),
-        "PeriodMinMax": [5, 90],
+        "longParams": "B_R V_R N".split(),
+        "PeriodMinMax": [5, 300],
         "showFig": show,
         "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.45, 1, 0.1),
-        "multiCPU": 4,
-        "shortDuration": 6,
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "multiCPU": 3,
+        "shortDuration": 9,
         "shortDisplacement": 3,
-        "MARGIN": 24,
+        "MARGIN": 0,
         "inKind": False,
-        "windDispParam": 5,
-        "accelerated": 1.5,
+        "windDispParam": 5,  # Move by 2% each time step
+        "accelerated": 1,
     }
 
+    # TODO: Run cases with 9 hours of short Duration
     issiEMD = baseEMD(**ISSI_AIAVars)
-    # issiEMD.showCases()
+    # issiEMD.long_SPC.plot_issi_psp_e1()
     issiEMD.plotSeparately()
     issiEMD.plotTogether(showBox=None, gridRegions=(
         2, 3, True, True), yTickFrequency=[0, 12], xTickFrequency=[0, 12])
@@ -409,8 +403,9 @@ if __name__ == "__main__":
     # Shoould make summary plot
 
     # Need to make the presentation! Prepare some Intro content that would be good and write it up.
+    # TODO: Add 100 km/s lines
 
-    ISSICase(show=True)
+    ISSICase(show=False)
     # SolOEarth2020Case(show=True)
     # PSPSolOCase()
     # STAPSPCase(show=False)

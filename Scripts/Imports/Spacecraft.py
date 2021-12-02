@@ -380,6 +380,34 @@ class Spacecraft:
 
             # raise ValueError("Not continuing yet. Debug!")
             self.__gse_to_rtn()
+        elif self.name == "ISSI_PSP_e1":
+            # Load up the ISSI data
+            # dataFolder only used in setup
+            dataFolder = f"/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
+            df_is = pd.read_csv(f"{dataFolder}small_ch_in_situ.csv")
+            df_is.index = pd.to_datetime(df_is["Time"])
+            del df_is["Time"]
+            self.df = df_is
+
+        elif self.name == "ISSI_AIA_e1":
+            # Remote data for ISSI case (short)
+            dataFolder = f"/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
+            try:
+                df_171 = pd.read_csv(
+                    f"{dataFolder}small_ch_171_lc_in.csv", index_col="Time")
+                df_193 = pd.read_csv(
+                    f"{dataFolder}small_ch_193_lc_in.csv", index_col="Time")
+                print("Loaded csv successfully")
+
+                for _df in (df_171, df_193):
+                    _df.index = pd.to_datetime(_df.index)
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    f"Unable to open Dataframes in {dataFolder}")
+
+            self.df171 = df_171
+            self.df193 = df_193
+            self.df = "Use df_171, df_193"
 
         else:
             raise NotImplementedError(f"{self.name} not implemented")
@@ -447,6 +475,9 @@ class Spacecraft:
                 del self.df["Time"]
             except KeyError:
                 pass
+
+            except TypeError:
+                return
 
         self.df = self.df.resample(f"{self.obj_cad}s").mean()
 
@@ -911,7 +942,7 @@ class PSPSolO_e6(Spacecraft):
         T = self.df["T"]
 
         # m_p is in kg
-        Mf = c.m_p * NpRPWScaled.to(u.m**(-3)) * \
+        Mf = const.m_p * NpRPWScaled.to(u.m**(-3)) * \
             np.abs(self.dfUnits["V_R"].to(u.m / u.s))
         MfScaled = Mf
 
@@ -929,7 +960,8 @@ class PSPSolO_e6(Spacecraft):
         oNp = other.dfUnits["N"]
         oNpScaled = (oNp.to(u.m ** (-3)) * oR ** 2).to(u.cm**(-3))
         oT = other.df["T"]
-        oMf = c.m_p.value * oNpScaled.to(u.m**(-3)) * np.abs(oVx).to(u.m / u.s)
+        oMf = const.m_p.value * \
+            oNpScaled.to(u.m**(-3)) * np.abs(oVx).to(u.m / u.s)
         oMfScaled = oMf
 
         selfScaledDF = pd.DataFrame(
@@ -1104,7 +1136,6 @@ class STA_psp(Spacecraft):
 
     def plot_solo_earth_df(self, other, zones=[]):
         assert "earth" in self.name.lower(), "Please ensure Earth is object with f call"
-        from astropy import constants as c
 
         ts = self.df.index
         ots = other.df.index
@@ -1191,7 +1222,6 @@ class EarthApril2020(Spacecraft):
 
     def plot_solo_earth_df(self, other, zones=[]):
         assert "earth" in self.name.lower(), "Please ensure Earth is object with f call"
-        from astropy import constants as c
 
         ts = self.df.index
         ots = other.df.index
@@ -1269,6 +1299,71 @@ class EarthApril2020(Spacecraft):
             plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
 
         plt.close()
+
+
+class ISSISpc(Spacecraft):
+    def __init__(self, name="NONE", cadence_obj=None, show=False, sunEarthDist=150111200.76, remakeCSV=False):
+        super().__init__(name=name, cadence_obj=cadence_obj,
+                         show=show, sunEarthDist=sunEarthDist, remakeCSV=remakeCSV)
+
+    def plot_issi_psp_e1(self, zones=[]):
+        from astropy import constants as const
+        from astropy import units as u
+
+        ts = self.df.index
+        R = (self.dfUnits["R"].to(u.m) - const.R_sun).value
+        Br = self.df["B_R"] * R**2
+        Mf = self.df["Mf"]
+        hour = pd.to_timedelta(ts.hour, unit='H')
+        meanVal = self.df["B_R"].groupby(hour).mean()
+
+        # Figure
+        _, axs = plt.subplots(
+            6, 1, figsize=(14, 10), sharex=True, constrained_layout=True
+        )
+
+        # Plots
+        axs[0].set_ylabel(r"R [AU]")
+        axs[0].plot(ts, R * u.m.to(u.AU))
+        axs[0].grid(True)
+        axs[0].set_ylim(0.1, 0.3)
+
+        # Bx
+        axs[1].set_ylabel(r"$\hat{B}_{R}$ R$^2$ [nT AU$^2$]")
+        axs[1].plot(ts, Br, label="PSP")
+        # Horizontal bar at 0
+        axs[1].axhline(0, color="black", linestyle="--")
+
+        # V
+        axs[2].set_ylabel(r"$\hat{V}_R$ [km/s]")
+        axs[2].plot(ts, self.df["V_R"])
+
+        axs[3].set_ylabel("Tp [K]")
+        axs[3].plot(ts, self.df["T"])
+
+        axs[4].set_ylabel(r"Np [#]")
+        axs[4].plot(ts, self.df["N"])
+
+        axs[5].semilogy(
+            ts,
+            Mf,
+            label="Mass Flux",
+            linewidth=1,
+        )
+        axs[5].set_ylabel("Mf [kg km/s]")
+
+        # # Plot the relevant columns
+        for ax in axs:
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
+
+        if self.show:
+            plt.show()
+        else:
+            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            makedirs(plotPath, exist_ok=True)
+            print(f"Saving to {plotPath}")
+            plt.savefig(f"{plotPath}summaryPlot_{self.name}.png")
 
 
 if __name__ == "__main__":

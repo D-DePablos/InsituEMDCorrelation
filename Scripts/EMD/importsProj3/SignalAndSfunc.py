@@ -164,6 +164,8 @@ def transformTimeAxistoVelocity(
         originTime: Time that is to be compared (hour of AIA images)
         shortKernelName: Kernel name for spacecraft
     """
+    # TODO: Fix run out of memory error!
+
     import heliopy.data.spice as spicedata
     import heliopy.spice as spice
 
