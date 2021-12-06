@@ -895,8 +895,8 @@ def plot_super_summary(
             f"File exists at {figSavePath}, set forceRemake to True if it should be recreated.")
         return
 
-    # shortDuration = allCasesList[0].shortTimes[1] - \
-    #     allCasesList[0].shortTimes[0]
+    shortDuration = allCasesList[0].shortTimes[1] - \
+        allCasesList[0].shortTimes[0]
 
     # Gapless subplots figure
     # import matplotlib.pyplot as plt
@@ -933,6 +933,7 @@ def plot_super_summary(
             figsize=(18, 12),
         )
 
+    # For each of the regions, make a plot
     used_ax = []
     for i, region in enumerate(regions):
 
@@ -947,6 +948,8 @@ def plot_super_summary(
                 ax = axs
 
         used_ax.append(ax)
+        ax.set_ylim(allCasesList[0].shortTimes[0] - timedelta(hours=3),
+                    allCasesList[-1].shortTimes[0] + timedelta(hours=3))
 
         # Take the starting point for AIA Times
         shortStartTimes, longTimes = [], []
@@ -1058,6 +1061,28 @@ def plot_super_summary(
                 ObjBody=otherObject,
             )
 
+            # Get the relevant speeds every 100 kms
+            relSpeeds = range(int(Vaxis.min() / 100) * 100,
+                              int(Vaxis.max() / 100) * 100 + 1, 100)
+
+            for relSpeed in relSpeeds:
+                _close_idx = (np.abs(Vaxis - relSpeed)).argmin()
+                closest_time = longARRAY[_close_idx]
+
+                if _close_idx == len(longARRAY) - 1:
+                    pass
+                else:
+                    y_num = mdates.date2num(TshortDF)
+                    absolute_posn = (y_num - ax.get_ylim()
+                                     [0]) / (ax.get_ylim()[1] - ax.get_ylim()[0])
+                    ax.axvline(
+                        x=closest_time, ymin=absolute_posn - 0.025, ymax=absolute_posn + 0.025, alpha=0.2)
+
+                    # plot text with velocity above highest line
+                    if index == len(shortStartTimes) - 1:
+                        ax.text(x=closest_time, y=TshortDF + timedelta(hours=1.2),
+                                s=f"{relSpeed}", color="black", alpha=1, fontsize=14)
+
             closest_index = (np.abs(Vaxis - highSpeed)).argmin()
             closest_time = longARRAY[closest_index]
             listTimesSameSpeed.append(closest_time)
@@ -1097,27 +1122,7 @@ def plot_super_summary(
                     c=ColumnColours[f"{_shortVar}"],
                 )
 
-                # FIXME: The cross hairs don't work
-                # Add a plot with short duration
-                # plt.plot([dfDots.index - shortDuration / 2, dfDots.index + shortDuration / 2],
-                #          [TshortDF, TshortDF],
-                #          "p--",
-                #          alpha=0.4,
-                #          )
-
         # After all of the cases are done, use the last cases info
-        # Create lines to delineate highest speeds
-
-        # # Highest speeds
-        # closest_index = (np.abs(Vaxis - highSpeed)).argmin()
-        # closest_time = longARRAY[closest_index]
-        # listTimesSameSpeed.append(closest_time)
-
-        # # Lower speeds
-        # closest_index_LOW = (np.abs(Vaxis - lowSpeed)).argmin()
-        # closest_time_LOW = longARRAY[closest_index_LOW]
-        # listTimesSameSpeed_LOW.append(closest_time_LOW)
-
         # Compared to plotting lines, this does not plot outside of necessary area
         ax.fill_betweenx(
             shortStartTimes,
@@ -1127,14 +1132,10 @@ def plot_super_summary(
             alpha=0.2,
         )
 
-        # TODO: Plot a line every 100 km/s, same inclination as line
-        # Every 100 km/s, plot a line
-        # For the last case, plot every 100 km/s
-
         # Set axes labels
         ax.set_xlabel(f"{longName}")
         if len(regions) > 1:
-            ax.set_xlabel(f"{region}", fontsize=20)
+            ax.set_ylabel(f"{region}", fontsize=20)
         else:
             ax.set_ylabel(f"{shortName}")
 
@@ -1186,10 +1187,13 @@ def plot_super_summary(
     fig.legend(handles=legend_elements, prop={"size": 20})
     longParamLegible = longObjectParam if longObjectParam not in titleDic else titleDic[
         longObjectParam]
+
+    # We now indicate necessary SW speed in all lines
     fig.suptitle(
-        f" Correlating against {longParamLegible} | in yellow {highSpeed} - {lowSpeed} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.")
+        f" X-axis: {longParamLegible} | In yellow Measured: {highSpeed} - {lowSpeed} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.")
 
     # Plot the datasets if inKind:
+    # NOTE: Here we are assuming len(axs) == 1
     if inKind:
         from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 

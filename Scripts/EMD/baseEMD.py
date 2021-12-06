@@ -264,13 +264,6 @@ class baseEMD:
             xTickFrequency=xTickFrequency,
         )
 
-    def updateLongCases(self, longStart, longEnd):
-
-        for shortCase in self.shortDFDics:
-            for case in shortCase.cases:
-                case.longStart = longStart
-                case.longEnd = longEnd
-
 
 def PSPSolOCase(show=False):
     # Dictionary intro
@@ -294,34 +287,6 @@ def PSPSolOCase(show=False):
     # pspSolOe6EMD.plotSeparately()
     pspSolOe6EMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
     pspSolOe6EMD.plotTogether(showBox=box, gridRegions=True)
-
-
-def ISSICase(show=False):
-    # Is a dictionary
-    ISSI_AIAVars = {
-        "caseName": "ISSIcasesAIA",
-        # Use all Parameters by setting to None
-        "shortParams": None,
-        "longParams": "B_R V_R N".split(),
-        "PeriodMinMax": [5, 300],
-        "showFig": show,
-        "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 3,
-        "shortDuration": 9,
-        "shortDisplacement": 3,
-        "MARGIN": 0,
-        "inKind": False,
-        "windDispParam": 5,  # Move by 2% each time step
-        "accelerated": 1,
-    }
-
-    # TODO: Run cases with 9 hours of short Duration
-    issiEMD = baseEMD(**ISSI_AIAVars)
-    # issiEMD.long_SPC.plot_issi_psp_e1()
-    issiEMD.plotSeparately()
-    issiEMD.plotTogether(showBox=None, gridRegions=(
-        2, 3, True, True), yTickFrequency=[0, 12], xTickFrequency=[0, 12])
 
 
 def STAPSPCase(show=True):
@@ -399,12 +364,55 @@ def SolOEarth2020Case(show=True):
     )
 
 
+def ISSICase(show=False):
+    # Is a dictionary
+    ISSI_AIAVars = {
+        "caseName": "ISSIcasesAIA",
+        # Use all Parameters by setting to None
+        "shortParams": None,
+        "longParams": "B_R V_R N Mf T".split(),
+        "PeriodMinMax": [5, 180],
+        "showFig": show,
+        "detrendBoxWidth": None,
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "multiCPU": 3,
+        "shortDuration": 6,
+        "shortDisplacement": 1,
+        "MARGIN": 0,  # If margin is set to 0 all long data is used
+        "inKind": False,
+        "windDispParam": 5,  # Move by 2% each time step
+        "accelerated": 1,
+    }
+
+    issiEMD = baseEMD(**ISSI_AIAVars)
+    # issiEMD.long_SPC.plot_issi_psp_e1()
+    issiEMD.plotSeparately()
+    issiEMD.plotTogether(showBox=None, gridRegions=(
+        2, 3, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12])
+
+
+def ISSIHMICase(show=False):
+    ISSI_HMIVars = {
+        "caseName": "ISSIcasesHMI",
+        "shortParams": None,
+        "longParams: "B_R Mf".split(),
+        "PeriodMinMax": [24, 240],
+        "showFig": show,
+        "detrendBoxWidth": None,
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "multiCPU": 3,
+        "shortDuration": None,
+        "shortDisplacement": None,
+        "MARGIN": 0,
+        "windDispParam": 1,
+        "accelerated": 1,
+    }
+
+    hmiEMD = baseEMD(**ISSI_HMIVars)
+
+
 if __name__ == "__main__":
-    # Shoould make summary plot
-
     # Need to make the presentation! Prepare some Intro content that would be good and write it up.
-    # TODO: Add 100 km/s lines
-
     ISSICase(show=False)
     # SolOEarth2020Case(show=True)
     # PSPSolOCase()
