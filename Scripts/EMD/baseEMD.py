@@ -5,13 +5,8 @@ from sys import path
 
 path.append("{BASE_PATH}Scripts/")
 path.append(f"/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/")
-
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from os import makedirs
-
-from datetime import datetime, timedelta
+from datetime import datetime
 from EMD.importsProj3.signalAPI import (
     emdAndCompareCases,
     caseCreation,
@@ -38,6 +33,7 @@ class baseEMD:
                  inKind=False,
                  windDispParam: int = 1,  # How many measurements to move by
                  accelerated=1,
+                 equal=False,
                  ):
 
         # The job of the init should be to get to a standardised format
@@ -53,8 +49,9 @@ class baseEMD:
         self.inKind = inKind
         self.windDispParam = windDispParam
         self.accelerated = accelerated
+        self.equal = equal
 
-        possibleCaseNames = ["ISSIcasesAIA",
+        possibleCaseNames = ["ISSIcasesAIA", "ISSIcasesHMI",
                              "PSP_SolO_e6", "April2020_SolO_WIND", "STA_PSP"]
         if caseName == "ISSIcasesAIA":
             # Long = PSP
@@ -78,7 +75,7 @@ class baseEMD:
                 # "firstRelevantLongTime": datetime(2018, 10, 31, 8) + timedelta(hours=MARGIN),
                 "MARGIN": MARGIN
             }
-            cases = caseCreation(**AIACases, equal=True)
+            cases = caseCreation(**AIACases, equal=self.equal)
 
             long_SPC = ISSISpc("ISSI_PSP_e1", cadence_obj=objCadenceSeconds)
             longDFParams = longParams if longParams != None else long_SPC.df.columns
@@ -101,6 +98,43 @@ class baseEMD:
             ]
             self.longDFDic = longDFDic(
                 df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet)
+
+        elif caseName == "ISSIcasesHMI":
+            from Imports.Spacecraft import ISSISpc
+
+            # Short = HMI
+            # Long = PSP
+
+            _unsFolder = "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/unsafe/"
+            self.saveFolder = _unsFolder + "ISSIcasesHMI/"
+            objCadenceSeconds = 60 * 12  # Get to HMI cadence
+            HMICases = {
+                "shortTimes": (datetime(2018, 10, 28, 0, 0), datetime(2018, 10, 30, 7, 48)),
+                "longTimes": (datetime(2018, 10, 31, 8), datetime(2018, 11, 2, 8)),
+                "shortDuration": self.shortDuration,
+                "shortDisplacement": self.shortDisplacement,
+                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/HMI",
+                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/HMIcases.pickle",
+                "forceCreate": True,
+                "MARGIN": MARGIN
+            }
+            cases = caseCreation(**HMICases, equal=True)
+
+            # PSP is the long data
+            long_SPC = ISSISpc("ISSI_PSP_e1", cadence_obj=objCadenceSeconds)
+            longDFParams = longParams if longParams != None else long_SPC.df.columns
+            df_is = long_SPC.df[longDFParams]
+            self.long_SPC = long_SPC
+            self.longDFDic = longDFDic(
+                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet)
+
+            # HMI is the short data
+            short_SPC = ISSISpc(
+                "ISSI_HMI_e1", cadence_obj=objCadenceSeconds, remakeCSV=True)
+            df_hmi = short_SPC.df
+            shortDFParams = shortParams if shortParams != None else df_hmi.columns
+            self.shortDFDics = [
+                shortDFDic(df_hmi.copy(), "HMI", cases, ["HMI"], shortDFParams, "sun")]
 
         elif caseName == "PSP_SolO_e6":
             from Imports.Spacecraft import Spacecraft
@@ -373,14 +407,14 @@ def ISSICase(show=False):
         "longParams": "B_R V_R N Mf T".split(),
         "PeriodMinMax": [5, 180],
         "showFig": show,
-        "detrendBoxWidth": None,
+        "detrendBoxWidth": 200,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 3,
         "shortDuration": 6,
         "shortDisplacement": 1,
         "MARGIN": 0,  # If margin is set to 0 all long data is used
         "inKind": False,
-        "windDispParam": 5,  # Move by 2% each time step
+        "windDispParam": 9,  # Move by 2% each time step
         "accelerated": 1,
     }
 
@@ -394,26 +428,30 @@ def ISSICase(show=False):
 def ISSIHMICase(show=False):
     ISSI_HMIVars = {
         "caseName": "ISSIcasesHMI",
-        "shortParams": None,
-        "longParams: "B_R Mf".split(),
+        "shortParams": ["ch_bpoint_flux", "ch_open_flux"],
+        "longParams": "B_R V_R".split(),
         "PeriodMinMax": [24, 240],
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 3,
-        "shortDuration": None,
-        "shortDisplacement": None,
+        "shortDuration": 9,
+        "shortDisplacement": 3,
         "MARGIN": 0,
-        "windDispParam": 1,
+        "windDispParam": 3,
         "accelerated": 1,
     }
 
     hmiEMD = baseEMD(**ISSI_HMIVars)
+    hmiEMD.plotSeparately()
+    hmiEMD.plotTogether(showBox=None, gridRegions=(
+        1, 2, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12])
 
 
 if __name__ == "__main__":
-    # Need to make the presentation! Prepare some Intro content that would be good and write it up.
+    # TODO: Finish paper text
     ISSICase(show=False)
+    # ISSIHMICase(show=False)
     # SolOEarth2020Case(show=True)
     # PSPSolOCase()
     # STAPSPCase(show=False)

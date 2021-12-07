@@ -1,8 +1,6 @@
-from email.headerregistry import UniqueSingleAddressHeader
 from sys import path
 from os import makedirs
 from copy import deepcopy
-from black import E
 import matplotlib
 import pandas as pd
 import numpy as np
@@ -145,6 +143,8 @@ class Spacecraft:
                         f"Saved {self.name} With Radius added to {self.completeCSVPath}. Please re-run")
 
                 del self.df["Time"]
+                self.df = self.df.resample(f"{self.obj_cad}s").mean()
+
                 self.dfUnits = QTable.from_pandas(self.df, index=True)
 
                 for _i in self.dfUnits.colnames:
@@ -387,7 +387,24 @@ class Spacecraft:
             df_is = pd.read_csv(f"{dataFolder}small_ch_in_situ.csv")
             df_is.index = pd.to_datetime(df_is["Time"])
             del df_is["Time"]
-            self.df = df_is
+            self.df = df_is.resample(f"{self.obj_cad}s").mean()
+
+        elif self.name == "ISSI_HMI_e1":
+            import idlsave
+            dataFolder = "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
+            ch_flux = idlsave.read(f'{dataFolder}chflux.sav', verbose=False)
+            # Open and Bright point flux
+            flux_time = ch_flux.hmitimes.copy()
+            flux_time = [t.decode() for t in list(flux_time)]
+
+            df_flux = pd.DataFrame(
+                {
+                    "ch_open_flux": ch_flux.chofluxes,
+                    "ch_bpoint_flux": ch_flux.chbpfluxes,
+                },
+                index=pd.to_datetime(flux_time, format="%Y.%m.%d_%H:%M:%S_TAI"))
+
+            self.df = df_flux
 
         elif self.name == "ISSI_AIA_e1":
             # Remote data for ISSI case (short)
@@ -1315,7 +1332,6 @@ class ISSISpc(Spacecraft):
         Br = self.df["B_R"] * R**2
         Mf = self.df["Mf"]
         hour = pd.to_timedelta(ts.hour, unit='H')
-        meanVal = self.df["B_R"].groupby(hour).mean()
 
         # Figure
         _, axs = plt.subplots(

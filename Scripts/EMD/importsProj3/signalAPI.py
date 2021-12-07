@@ -1,11 +1,9 @@
 """Helper functions"""
-from typing import Type
-from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity, emd, vis
+from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
 import astropy.units as u
 from collections import namedtuple
 from datetime import timedelta
 import matplotlib.dates as mdates
-from PyEMD import EMD, Visualisation
 from glob import glob
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -49,6 +47,9 @@ ColumnColours = {
     "chole": "red",
     "171": "blue",
     "193": "orange",
+    "open_flux": "orange",
+    "bpoint_flux": "purple",
+    "HMI": "purple",
 }
 alphaWVL = {
     "94": 0.9,
@@ -67,7 +68,9 @@ alphaWVL = {
     "chplume": 0.7,
     "qsun": 0.4,
     "cbpoint": 0.4,
-    "chole": 0.4
+    "chole": 0.4,
+    "ch_open_flux": 0.4,
+    "ch_bpoint_flux": 0.4,
 }
 
 titleDic = {
@@ -92,8 +95,12 @@ titleDic = {
     "B_R": "Br",
 }
 
-# Set general font size
-plt.rcParams.update({'font.size': 22})
+import matplotlib
+font = {
+    'weight': 'bold',
+    'size': 30}
+
+matplotlib.rc('font', **font)
 
 # Dictionary which contains relevant axis for a 9x9 grid for each of the regions
 axDic = {
@@ -114,11 +121,9 @@ axDic = {
     "chole": [1, 0],
     "qsun": [1, 1],
     "chplume": [1, 2],
+    "ch_open_flux": [0, 0],
+    "ch_bpoint_flux": [1, 0],
 }
-
-
-# font = {"family": "DejaVu Sans", "weight": "normal", "size": 25}
-# rc("font", **font)
 
 
 def extractDiscreteExamples(Caselist, shortDuration, **kwargs):
@@ -937,7 +942,7 @@ def plot_super_summary(
     used_ax = []
     for i, region in enumerate(regions):
 
-        if type(axs) is np.ndarray:
+        if len(axs.shape) > 1:
             row, col = axDic[region]
             ax = axs[row, col]
 
@@ -1062,26 +1067,27 @@ def plot_super_summary(
             )
 
             # Get the relevant speeds every 100 kms
-            relSpeeds = range(int(Vaxis.min() / 100) * 100,
-                              int(Vaxis.max() / 100) * 100 + 1, 100)
+            # relSpeeds = range(int(Vaxis.min() / 100) * 100,
+            #                   int(Vaxis.max() / 100) * 100 + 1, 100)
+            relSpeeds = range(100, 501, 100)
 
             for relSpeed in relSpeeds:
                 _close_idx = (np.abs(Vaxis - relSpeed)).argmin()
                 closest_time = longARRAY[_close_idx]
 
-                if _close_idx == len(longARRAY) - 1:
+                if _close_idx == len(longARRAY) - 1 or _close_idx == 0:
                     pass
                 else:
                     y_num = mdates.date2num(TshortDF)
                     absolute_posn = (y_num - ax.get_ylim()
                                      [0]) / (ax.get_ylim()[1] - ax.get_ylim()[0])
                     ax.axvline(
-                        x=closest_time, ymin=absolute_posn - 0.025, ymax=absolute_posn + 0.025, alpha=0.2)
+                        x=closest_time, ymin=absolute_posn - 0.015, ymax=absolute_posn + 0.015, alpha=0.2)
 
                     # plot text with velocity above highest line
                     if index == len(shortStartTimes) - 1:
-                        ax.text(x=closest_time, y=TshortDF + timedelta(hours=1.2),
-                                s=f"{relSpeed}", color="black", alpha=1, fontsize=14)
+                        ax.text(x=closest_time, y=TshortDF + timedelta(hours=1),
+                                s=f"{relSpeed}", color="black", alpha=1, fontsize=18)
 
             closest_index = (np.abs(Vaxis - highSpeed)).argmin()
             closest_time = longARRAY[closest_index]
@@ -1178,7 +1184,7 @@ def plot_super_summary(
 
         legend_elements.append(_legendElement)
 
-    if type(axs) == np.ndarray:
+    if len(axs.shape) > 1:
         for row in axs:
             for _ax in row:
                 if _ax not in used_ax:
