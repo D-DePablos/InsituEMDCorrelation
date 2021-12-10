@@ -98,7 +98,7 @@ titleDic = {
 import matplotlib
 font = {
     'weight': 'bold',
-    'size': 30}
+    'size': 40}
 
 matplotlib.rc('font', **font)
 
@@ -891,7 +891,7 @@ def plot_super_summary(
         showBox = ([X0, XF], [Y0, YF]) - in datetime
     """
     highSpeed, lowSpeed, _ = speedSet
-    figSavePath = f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.png"
+    figSavePath = f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.pdf"
     from matplotlib.lines import Line2D
     from os.path import isfile
 
@@ -964,6 +964,7 @@ def plot_super_summary(
 
         listTimesSameSpeed = []
         listTimesSameSpeed_LOW = []
+        firstLoad = True
 
         # Define a function which allows for multiprocessing call
         # Use some of the shortStartTimes
@@ -1064,7 +1065,9 @@ def plot_super_summary(
                 originTime=TshortDF,
                 shortKernelName=shortKernelName,
                 ObjBody=otherObject,
+                firstLoad=firstLoad,
             )
+            firstLoad = False
 
             # Get the relevant speeds every 100 kms
             # relSpeeds = range(int(Vaxis.min() / 100) * 100,
@@ -1087,7 +1090,7 @@ def plot_super_summary(
                     # plot text with velocity above highest line
                     if index == len(shortStartTimes) - 1:
                         ax.text(x=closest_time, y=TshortDF + timedelta(hours=1),
-                                s=f"{relSpeed}", color="black", alpha=1, fontsize=18)
+                                s=f"{relSpeed}", color="black", alpha=1, fontsize=15)
 
             closest_index = (np.abs(Vaxis - highSpeed)).argmin()
             closest_time = longARRAY[closest_index]
@@ -1339,6 +1342,7 @@ def new_plot_format(
         )
         regionDic[region] = expandedWvlDic
 
+    firstLoad = True
     # Once opened up each of the regions, do plots
     for region in regionDic:
         # Below is how you pull vars. Can use "isData corrMatrix shortData shortTime"
@@ -1399,7 +1403,9 @@ def new_plot_format(
                     isTuple.isData.index,
                     originTime=isTuple.shortTime[0].to_pydatetime(),
                     shortKernelName=shortKernelName,
+                    firstLoad=firstLoad,
                 )
+                firstLoad = False
                 axV = axIS.twiny()
                 axV.plot(vSWAxis, isTuple.isData, alpha=0)
                 axV.invert_xaxis()

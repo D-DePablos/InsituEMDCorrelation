@@ -154,7 +154,7 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
 
 
 def transformTimeAxistoVelocity(
-    timeAxis, originTime, shortKernelName=None, ObjBody="Sun"
+    timeAxis, originTime, shortKernelName=None, ObjBody="Sun", firstLoad=True,
 ):
     """
     Gives a corresponding velocity axis for a time axis and originTime
@@ -170,15 +170,18 @@ def transformTimeAxistoVelocity(
     import heliopy.spice as spice
 
     if shortKernelName == "solo":
-        spicedata.get_kernel("solo")
+        if firstLoad:
+            spicedata.get_kernel("solo")
         sp_traj = spice.Trajectory("Solar Orbiter")
 
     elif shortKernelName == "psp":
-        spicedata.get_kernel("psp")
+        if firstLoad:
+            spicedata.get_kernel("psp")
         sp_traj = spice.Trajectory("SPP")
 
     elif shortKernelName == "sun":
-        spicedata.get_kernel("helio_frames")
+        if firstLoad:
+            spicedata.get_kernel("helio_frames")
         sp_traj = spice.Trajectory("Sun")
 
     else:
@@ -215,7 +218,8 @@ def transformTimeAxistoVelocity(
 
     if ObjBody == "solo" or ObjBody == "psp":
         trajName = "Solar Orbiter" if ObjBody == "solo" else "SPP"
-        spicedata.get_kernel(ObjBody)
+        if firstLoad:
+            spicedata.get_kernel(ObjBody)
         body_traj = spice.Trajectory(trajName)
         body_traj.generate_positions(
             [originTime, originTime], "Sun", "IAU_SUN")
@@ -1626,6 +1630,8 @@ class SignalFunctions(Signal):
                 originTime=short_signal.true_time[0].to_pydatetime(),
                 shortKernelName=shortKernelName,
                 ObjBody="psp" if "psp" in other.name.lower() else "Sun",
+                firstLoad=True if height == 0 else False,
+
             )
 
             axV = ax2.twiny()

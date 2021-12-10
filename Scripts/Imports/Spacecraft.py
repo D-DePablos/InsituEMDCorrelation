@@ -144,7 +144,6 @@ class Spacecraft:
 
                 del self.df["Time"]
                 self.df = self.df.resample(f"{self.obj_cad}s").mean()
-
                 self.dfUnits = QTable.from_pandas(self.df, index=True)
 
                 for _i in self.dfUnits.colnames:
@@ -1379,7 +1378,7 @@ class ISSISpc(Spacecraft):
             plotPath = f"{BASE_PATH}Figures/Timeseries/"
             makedirs(plotPath, exist_ok=True)
             print(f"Saving to {plotPath}")
-            plt.savefig(f"{plotPath}summaryPlot_{self.name}.png")
+            plt.savefig(f"{plotPath}summaryPlot_{self.name}.pdf")
 
 
 if __name__ == "__main__":

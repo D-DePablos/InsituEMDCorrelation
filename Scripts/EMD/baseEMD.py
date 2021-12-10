@@ -349,7 +349,7 @@ def STAPSPCase(show=True):
     stapspEMD.plotSeparately()
     stapspEMD.fixDFNames("STA")
     stapspEMD.plotTogether(showBox=box, gridRegions=True,
-                           missingData=mData, shortName="PSP (~0.95A.U.)", longName="ST-A (0.95A.U.)", skipParams=["STA_V_R"], forceRemake=True)
+                           missingData=mData, shortName="PSP (~0.95A.U.)", longName="ST-A (0.95A.U.)", skipParams=["STA_V_R"])
 
 
 def SolOEarth2020Case(show=True):
@@ -410,19 +410,19 @@ def ISSICase(show=False):
         "detrendBoxWidth": 200,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 3,
-        "shortDuration": 6,
+        "shortDuration": 9,
         "shortDisplacement": 1,
         "MARGIN": 0,  # If margin is set to 0 all long data is used
         "inKind": False,
-        "windDispParam": 9,  # Move by 2% each time step
+        "windDispParam": 10,  # In Minutes
         "accelerated": 1,
     }
 
     issiEMD = baseEMD(**ISSI_AIAVars)
-    # issiEMD.long_SPC.plot_issi_psp_e1()
-    issiEMD.plotSeparately()
-    issiEMD.plotTogether(showBox=None, gridRegions=(
-        2, 3, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12])
+    issiEMD.long_SPC.plot_issi_psp_e1()
+    # issiEMD.plotSeparately()
+    # issiEMD.plotTogether(showBox=None, gridRegions=(
+    #     2, 3, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12], forceRemake=True)
 
 
 def ISSIHMICase(show=False):
@@ -436,9 +436,9 @@ def ISSIHMICase(show=False):
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
         "multiCPU": 3,
         "shortDuration": 9,
-        "shortDisplacement": 3,
+        "shortDisplacement": 1,
         "MARGIN": 0,
-        "windDispParam": 3,
+        "windDispParam": 1,
         "accelerated": 1,
     }
 
@@ -449,9 +449,9 @@ def ISSIHMICase(show=False):
 
 
 if __name__ == "__main__":
-    # TODO: Finish paper text
-    ISSICase(show=False)
-    # ISSIHMICase(show=False)
+    # TODO: Calculate differnce in time taken with different windDispParam
+    # ISSICase(show=False)
+    ISSIHMICase(show=False)
     # SolOEarth2020Case(show=True)
     # PSPSolOCase()
     # STAPSPCase(show=False)
