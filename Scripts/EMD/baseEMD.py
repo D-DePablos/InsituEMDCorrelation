@@ -439,7 +439,7 @@ def ISSIHMICase(show=False):
         "shortDisplacement": 1,
         "MARGIN": 0,
         "windDispParam": 1,
-        "accelerated": 1,
+        "accelerated": 2,  # TODO: Figure out if there is an actual number
     }
 
     hmiEMD = baseEMD(**ISSI_HMIVars)
@@ -451,7 +451,7 @@ def ISSIHMICase(show=False):
 if __name__ == "__main__":
     # TODO: Calculate differnce in time taken with different windDispParam
     # ISSICase(show=False)
-    ISSIHMICase(show=False)
-    # SolOEarth2020Case(show=True)
+    # ISSIHMICase(show=False)
+    SolOEarth2020Case(show=True)
     # PSPSolOCase()
     # STAPSPCase(show=False)
