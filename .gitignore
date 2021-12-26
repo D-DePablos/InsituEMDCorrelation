@@ -136,3 +136,4 @@ dmypy.json
 **.png
 **.vscode
 **EMD_Results
+.DS_Store
