@@ -40,11 +40,11 @@ ColumnColours = {
     "N_RPW": "green",
     "Mf": "purple",
     "V_R": "red",
-    "plume": "pink",
-    "chplume": "blue",
-    "qsun": "green",
-    "cbpoint": "purple",
-    "chole": "red",
+    "PL": "pink",
+    "CHPL": "blue",
+    "QS": "green",
+    "BP": "purple",
+    "CH": "red",
     "171": "blue",
     "193": "orange",
     "open_flux": "orange",
@@ -64,11 +64,11 @@ alphaWVL = {
     "N_RPW": 0.9,
     "V_R": 0.9,
     "Mf": 0.9,
-    "plume": 0.9,
-    "chplume": 0.7,
-    "qsun": 0.4,
-    "cbpoint": 0.4,
-    "chole": 0.4,
+    "PL": 0.9,
+    "CHPL": 0.7,
+    "QS": 0.4,
+    "BP": 0.4,
+    "CH": 0.4,
     "ch_open_flux": 0.4,
     "ch_bpoint_flux": 0.4,
 }
@@ -116,11 +116,11 @@ axDic = {
     "open": [0],
     "bpoint": [0],
     "BASE": [0],
-    "plume": [0, 0],
-    "cbpoint": [0, 1],
-    "chole": [1, 0],
-    "qsun": [1, 1],
-    "chplume": [1, 2],
+    "PL": [0, 0],
+    "BP": [0, 1],
+    "CH": [1, 0],
+    "QS": [1, 1],
+    "CHPL": [1, 2],
     "ch_open_flux": [0, 0],
     "ch_bpoint_flux": [1, 0],
 }
@@ -942,11 +942,12 @@ def plot_super_summary(
     used_ax = []
     for i, region in enumerate(regions):
 
-        if len(axs.shape) > 1:
-            row, col = axDic[region]
-            ax = axs[row, col]
+        try:
+            if len(axs.shape) > 1:
+                row, col = axDic[region]
+                ax = axs[row, col]
 
-        else:
+        except AttributeError:
             try:
                 ax = axs[i]
             except TypeError:

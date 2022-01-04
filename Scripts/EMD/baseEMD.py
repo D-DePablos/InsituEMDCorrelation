@@ -87,6 +87,19 @@ class baseEMD:
             df_171 = short_SPC.df171
             df_193 = short_SPC.df193
 
+            for df in (df_171, df_193):
+                # Rename by referring specifically, more consistent
+                df.rename({
+                    "plume": "PL",
+                    "cbpoint": "BP",
+                    "chplume": "CHPL",
+                    "chole": "CH",
+                    "qsun": "QS",
+                }, axis=1, inplace=True)
+
+                # Unsafe renaming is cool but not necessary
+                # df.set_axis("PL BP CHPL CH QS".split(), axis=1, inplace=True)
+
             # Store the shortDFDics and longDFDic
             shortDFParams = (df_171.columns, df_193.columns) if shortParams == None else (
                 shortParams, shortParams)
@@ -353,6 +366,11 @@ def STAPSPCase(show=True):
 
 
 def SolOEarth2020Case(show=True):
+    """Solar Orbiter vs WIND (In-situ)
+
+    Args:
+        show (bool, optional): [description]. Defaults to True.
+    """
     MARGIN = 60
     Vars = {
         "caseName": "April2020_SolO_WIND",
@@ -419,10 +437,10 @@ def ISSICase(show=False):
     }
 
     issiEMD = baseEMD(**ISSI_AIAVars)
-    issiEMD.long_SPC.plot_issi_psp_e1()
-    # issiEMD.plotSeparately()
-    # issiEMD.plotTogether(showBox=None, gridRegions=(
-    #     2, 3, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12], forceRemake=True)
+    # issiEMD.long_SPC.plot_issi_psp_e1()
+    issiEMD.plotSeparately()
+    issiEMD.plotTogether(showBox=None, gridRegions=(
+        2, 3, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12], forceRemake=True)
 
 
 def ISSIHMICase(show=False):
@@ -450,8 +468,8 @@ def ISSIHMICase(show=False):
 
 if __name__ == "__main__":
     # TODO: Calculate differnce in time taken with different windDispParam
-    # ISSICase(show=False)
+    ISSICase(show=False)
     # ISSIHMICase(show=False)
-    SolOEarth2020Case(show=True)
+    # SolOEarth2020Case(show=True)
     # PSPSolOCase()
     # STAPSPCase(show=False)
