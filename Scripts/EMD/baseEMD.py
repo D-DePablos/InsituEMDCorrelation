@@ -1,10 +1,10 @@
 # This file should be used for routines and information that can be shared accross test cases
-BASE_PATH = "/home/diegodp/Documents/PhD/Paper_3/SolO_SDO_EUI/"
+BASE_PATH = "/Users/ddp/Documents/PhD/solo_sdo/"
 
 from sys import path
 
 path.append("{BASE_PATH}Scripts/")
-path.append(f"/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/")
+path.append(f"/Users/ddp/Documents/PhD/inEMD_Github/Scripts/")
 import numpy as np
 from datetime import datetime
 from EMD.importsProj3.signalAPI import (
@@ -17,24 +17,25 @@ from EMD.importsProj3.signalAPI import (
 
 
 class baseEMD:
-    def __init__(self,
-                 caseName,
-                 shortParams,
-                 longParams,
-                 PeriodMinMax,
-                 showFig=True,
-                 detrendBoxWidth=200,
-                 corrThrPlotList=np.arange(0.65, 1, 0.05),
-                 multiCPU=None,
-                 speedSet=None,
-                 shortDuration=1.5,
-                 shortDisplacement=1.5,
-                 MARGIN=48,
-                 inKind=False,
-                 windDispParam: int = 1,  # How many measurements to move by
-                 accelerated=1,
-                 equal=False,
-                 ):
+    def __init__(
+        self,
+        caseName,
+        shortParams,
+        longParams,
+        PeriodMinMax,
+        showFig=True,
+        detrendBoxWidth=200,
+        corrThrPlotList=np.arange(0.65, 1, 0.05),
+        multiCPU=None,
+        speedSet=None,
+        shortDuration=1.5,
+        shortDisplacement=1.5,
+        MARGIN=48,
+        inKind=False,
+        windDispParam: int = 1,  # How many measurements to move by
+        accelerated=1,
+        equal=False,
+    ):
 
         # The job of the init should be to get to a standardised format
         # Not to use it!
@@ -51,8 +52,13 @@ class baseEMD:
         self.accelerated = accelerated
         self.equal = equal
 
-        possibleCaseNames = ["ISSIcasesAIA", "ISSIcasesHMI",
-                             "PSP_SolO_e6", "April2020_SolO_WIND", "STA_PSP"]
+        possibleCaseNames = [
+            "ISSIcasesAIA",
+            "ISSIcasesHMI",
+            "PSP_SolO_e6",
+            "April2020_SolO_WIND",
+            "STA_PSP",
+        ]
         if caseName == "ISSIcasesAIA":
             # Long = PSP
             # Short = AIA
@@ -65,7 +71,10 @@ class baseEMD:
 
             # Get the cases and put them together with respective AIA observations in Dic
             AIACases = {
-                "shortTimes": (datetime(2018, 10, 29, 16), datetime(2018, 10, 30, 23, 50)),
+                "shortTimes": (
+                    datetime(2018, 10, 29, 16),
+                    datetime(2018, 10, 30, 23, 50),
+                ),
                 "longTimes": (datetime(2018, 10, 31, 8), datetime(2018, 11, 2, 8)),
                 "shortDuration": self.shortDuration,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/AIA",
@@ -73,7 +82,7 @@ class baseEMD:
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/AIAcases.pickle",
                 "forceCreate": True,
                 # "firstRelevantLongTime": datetime(2018, 10, 31, 8) + timedelta(hours=MARGIN),
-                "MARGIN": MARGIN
+                "MARGIN": MARGIN,
             }
             cases = caseCreation(**AIACases, equal=self.equal)
 
@@ -88,16 +97,20 @@ class baseEMD:
             df_193 = short_SPC.df193
 
             # Store the shortDFDics and longDFDic
-            shortDFParams = (df_171.columns, df_193.columns) if shortParams == None else (
-                shortParams, shortParams)
+            shortDFParams = (
+                (df_171.columns, df_193.columns)
+                if shortParams == None
+                else (shortParams, shortParams)
+            )
             self.shortDFDics = [
-                shortDFDic(df_171.copy(), "171", cases,
-                           ["171", "193"], shortDFParams[0], "sun"),
-                shortDFDic(df_193.copy(), "193", cases,
-                           shortDFParams[1], "193", "sun")
+                shortDFDic(
+                    df_171.copy(), "171", cases, ["171", "193"], shortDFParams[0], "sun"
+                ),
+                shortDFDic(df_193.copy(), "193", cases, shortDFParams[1], "193", "sun"),
             ]
             self.longDFDic = longDFDic(
-                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet)
+                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet
+            )
 
         elif caseName == "ISSIcasesHMI":
             from Imports.Spacecraft import ISSISpc
@@ -109,14 +122,17 @@ class baseEMD:
             self.saveFolder = _unsFolder + "ISSIcasesHMI/"
             objCadenceSeconds = 60 * 12  # Get to HMI cadence
             HMICases = {
-                "shortTimes": (datetime(2018, 10, 28, 0, 0), datetime(2018, 10, 30, 7, 48)),
+                "shortTimes": (
+                    datetime(2018, 10, 28, 0, 0),
+                    datetime(2018, 10, 30, 7, 48),
+                ),
                 "longTimes": (datetime(2018, 10, 31, 8), datetime(2018, 11, 2, 8)),
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/HMI",
                 "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/HMIcases.pickle",
                 "forceCreate": True,
-                "MARGIN": MARGIN
+                "MARGIN": MARGIN,
             }
             cases = caseCreation(**HMICases, equal=True)
 
@@ -126,19 +142,23 @@ class baseEMD:
             df_is = long_SPC.df[longDFParams]
             self.long_SPC = long_SPC
             self.longDFDic = longDFDic(
-                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet)
+                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet
+            )
 
             # HMI is the short data
             short_SPC = ISSISpc(
-                "ISSI_HMI_e1", cadence_obj=objCadenceSeconds, remakeCSV=True)
+                "ISSI_HMI_e1", cadence_obj=objCadenceSeconds, remakeCSV=True
+            )
             df_hmi = short_SPC.df
             shortDFParams = shortParams if shortParams != None else df_hmi.columns
             self.shortDFDics = [
-                shortDFDic(df_hmi.copy(), "HMI", cases, ["HMI"], shortDFParams, "sun")]
+                shortDFDic(df_hmi.copy(), "HMI", cases, ["HMI"], shortDFParams, "sun")
+            ]
 
         elif caseName == "PSP_SolO_e6":
             from Imports.Spacecraft import Spacecraft
-            self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/encounter6_Parker_1_5/"
+
+            self.saveFolder = "/Users/ddp/Documents/PhD/inEMD_Github/unsafe/EMD_Results/encounter6_Parker_1_5/"
             objCadenceSeconds = 60
 
             # Create or read existing cases
@@ -148,29 +168,37 @@ class baseEMD:
                 "shortDuration": 1.5,
                 "caseName": "SolO",
                 "shortDisplacement": 1.5,
-                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_1-5.pickle",
+                "savePicklePath": "/Users/ddp/Documents/PhD/inEMD_Github/Scripts/EMD/cases/cases_1-5.pickle",
                 "forceCreate": True,
+                "equal": True,
+                "MARGIN": MARGIN,
             }
             cases = caseCreation(**PSPSolO_e6_cases)
 
             # Long SPC (PSP)(IN-SITU)
             # See if we can make a Spacecraft object etc, with more data to then select from it
-            long_SPC = Spacecraft(name="PSP_Scaled_e6",
-                                  cadence_obj=objCadenceSeconds,
-                                  )
-            short_SPC = Spacecraft(name="SolO_Scaled_e6",
-                                   cadence_obj=objCadenceSeconds, )
+            long_SPC = Spacecraft(
+                name="PSP_Scaled_e6",
+                cadence_obj=objCadenceSeconds,
+            )
+            short_SPC = Spacecraft(
+                name="SolO_Scaled_e6",
+                cadence_obj=objCadenceSeconds,
+            )
             for _df in (long_SPC.df, short_SPC.df):
                 _df = _df.interpolate()
 
-            self.shortDFDics = [shortDFDic(short_SPC.df, "SolO", cases,
-                                           shortParams, ["SolO"], "solo")]
+            self.shortDFDics = [
+                shortDFDic(short_SPC.df, "SolO", cases, shortParams, ["SolO"], "solo")
+            ]
 
             self.longDFDic = longDFDic(
-                long_SPC.df.copy(), "PSP", "psp", 1, self.speedSet)
+                long_SPC.df.copy(), "PSP", "psp", 1, self.speedSet
+            )
 
         elif caseName == "April2020_SolO_WIND":
             from Imports.Spacecraft import Spacecraft
+
             self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/SolO_Earth_April_2020/"
             objCadenceSeconds = 92
 
@@ -190,28 +218,36 @@ class baseEMD:
 
             # Long SPC (PSP)(IN-SITU)
             # See if we can make a Spacecraft object etc, with more data to then select from it
-            long_SPC = Spacecraft(name="Earth_April_2020",
-                                  cadence_obj=objCadenceSeconds,
-                                  )
-            short_SPC = Spacecraft(name="SolO_April_2020",
-                                   cadence_obj=objCadenceSeconds, )
+            long_SPC = Spacecraft(
+                name="Earth_April_2020",
+                cadence_obj=objCadenceSeconds,
+            )
+            short_SPC = Spacecraft(
+                name="SolO_April_2020",
+                cadence_obj=objCadenceSeconds,
+            )
 
             long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
-            short_SPC.df = short_SPC.df[shortParams] if shortParams != None else short_SPC.df
+            short_SPC.df = (
+                short_SPC.df[shortParams] if shortParams != None else short_SPC.df
+            )
 
             for _df in (long_SPC.df, short_SPC.df):
                 _df = _df.interpolate()
 
-            self.shortDFDics = [shortDFDic(short_SPC.df, "SolO", cases,
-                                           shortParams, ["SolO"], "solo")]
+            self.shortDFDics = [
+                shortDFDic(short_SPC.df, "SolO", cases, shortParams, ["SolO"], "solo")
+            ]
 
             self.longDFDic = longDFDic(
-                long_SPC.df, "WIND", "L1", self.accelerated, self.speedSet)
+                long_SPC.df, "WIND", "L1", self.accelerated, self.speedSet
+            )
 
         # NOTE: Need to fix error in saving / opening files
         elif caseName == "STA_PSP":
             from Imports.Spacecraft import Spacecraft
-            _unsFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
+
+            _unsFolder = "/Users/ddp/Documents/PhD/inEMD_Github/"
             self.saveFolder = f"{_unsFolder}unsafe/EMD_Results/STA_PSP/"
             # Long = STA
             # Short = PSP
@@ -230,25 +266,30 @@ class baseEMD:
             }
             cases = caseCreation(**staPSPCases)
 
-            long_SPC = Spacecraft(name="STA_Nov_2019",
-                                  cadence_obj=objCadenceSeconds, remakeCSV=False)
-            short_SPC = Spacecraft(name="PSP_Nov_2019",
-                                   cadence_obj=objCadenceSeconds)
+            long_SPC = Spacecraft(
+                name="STA_Nov_2019", cadence_obj=objCadenceSeconds, remakeCSV=False
+            )
+            short_SPC = Spacecraft(name="PSP_Nov_2019", cadence_obj=objCadenceSeconds)
 
             long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
-            short_SPC.df = short_SPC.df[shortParams] if shortParams != None else short_SPC.df
+            short_SPC.df = (
+                short_SPC.df[shortParams] if shortParams != None else short_SPC.df
+            )
 
             for _df in (long_SPC.df, short_SPC.df):
                 _df = _df.interpolate()
 
-            self.shortDFDics = [shortDFDic(short_SPC.df, "PSP", cases,
-                                           shortParams, ["PSP"], "psp")]
+            self.shortDFDics = [
+                shortDFDic(short_SPC.df, "PSP", cases, shortParams, ["PSP"], "psp")
+            ]
 
             self.longDFDic = longDFDic(
-                long_SPC.df.copy(), "STA", "stereo_a", self.accelerated, self.speedSet)
+                long_SPC.df.copy(), "STA", "stereo_a", self.accelerated, self.speedSet
+            )
         else:
             raise NotImplementedError(
-                f"{caseName} not implemented. Use one of {possibleCaseNames}")
+                f"{caseName} not implemented. Use one of {possibleCaseNames}"
+            )
 
     def fixDFNames(self, name):
         for column in list(self.longDFDic.df):
@@ -257,7 +298,9 @@ class baseEMD:
                 del self.longDFDic.df[column]
 
     def __repr__(self) -> str:
-        return "{self.__class__.__name__}({self.caseName},{self.shortParams}, {self.longParams},{self.PeriodMinMax})".format(self)
+        return "{self.__class__.__name__}({self.caseName},{self.shortParams}, {self.longParams},{self.PeriodMinMax})".format(
+            self
+        )
 
     def showCases(self):
         for case in self.shortDFDics[0].cases:
@@ -277,7 +320,18 @@ class baseEMD:
             windDispParam=self.windDispParam,
         )
 
-    def plotTogether(self, showBox=None, gridRegions=False, shortName="", longName="", missingData=None, skipParams=[], forceRemake=True, yTickFrequency=[0], xTickFrequency=[0]):
+    def plotTogether(
+        self,
+        showBox=None,
+        gridRegions=False,
+        shortName="",
+        longName="",
+        missingData=None,
+        skipParams=[],
+        forceRemake=True,
+        yTickFrequency=[0],
+        xTickFrequency=[0],
+    ):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
             longDFDic=self.longDFDic,
@@ -309,16 +363,27 @@ def PSPSolOCase(show=False):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.65, 1, 0.05),
-        "multiCPU": 4,
+        "multiCPU": 8,
         "caseName": "PSP_SolO_e6",
         "speedSet": (300, 200, 250),  # High - low - mid
+        "MARGIN": 0,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
-    box = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
-           (datetime(2020, 10, 1, 20, ), datetime(2020, 10, 2, 0, 13)))
+    box = (
+        (datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
+        (
+            datetime(
+                2020,
+                10,
+                1,
+                20,
+            ),
+            datetime(2020, 10, 2, 0, 13),
+        ),
+    )
     pspSolOe6EMD = baseEMD(**PSP_SolOVars)
-    # pspSolOe6EMD.plotSeparately()
+    pspSolOe6EMD.plotSeparately()
     pspSolOe6EMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
     pspSolOe6EMD.plotTogether(showBox=box, gridRegions=True)
 
@@ -348,8 +413,14 @@ def STAPSPCase(show=True):
     stapspEMD = baseEMD(**Kwargs)
     stapspEMD.plotSeparately()
     stapspEMD.fixDFNames("STA")
-    stapspEMD.plotTogether(showBox=box, gridRegions=True,
-                           missingData=mData, shortName="PSP (~0.95A.U.)", longName="ST-A (0.95A.U.)", skipParams=["STA_V_R"])
+    stapspEMD.plotTogether(
+        showBox=box,
+        gridRegions=True,
+        missingData=mData,
+        shortName="PSP (~0.95A.U.)",
+        longName="ST-A (0.95A.U.)",
+        skipParams=["STA_V_R"],
+    )
 
 
 def SolOEarth2020Case(show=True):
@@ -444,14 +515,18 @@ def ISSIHMICase(show=False):
 
     hmiEMD = baseEMD(**ISSI_HMIVars)
     hmiEMD.plotSeparately()
-    hmiEMD.plotTogether(showBox=None, gridRegions=(
-        1, 2, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12])
+    hmiEMD.plotTogether(
+        showBox=None,
+        gridRegions=(1, 2, True, True),
+        yTickFrequency=[0, 6, 12, 18],
+        xTickFrequency=[0, 12],
+    )
 
 
 if __name__ == "__main__":
-    # TODO: Calculate differnce in time taken with different windDispParam
-    # ISSICase(show=False)
-    ISSIHMICase(show=False)
+    # TODO: Calculate difference in time taken with different windDispParam and performance differences
+    ISSICase(show=False)
+    # ISSIHMICase(show=False)
     # SolOEarth2020Case(show=True)
     # PSPSolOCase()
     # STAPSPCase(show=False)
