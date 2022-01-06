@@ -136,4 +136,5 @@ dmypy.json
 **.png
 **.vscode
 **EMD_Results
-.DS_Store
+**.DS*
+Scripts/EMD/baseEMD.py

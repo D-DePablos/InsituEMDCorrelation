@@ -2,6 +2,7 @@
 BASE_PATH = "/Users/ddp/Documents/PhD/solo_sdo/"
 
 from sys import path
+import time
 
 path.append("{BASE_PATH}Scripts/")
 path.append(f"/Users/ddp/Documents/PhD/inEMD_Github/Scripts/")
@@ -14,6 +15,22 @@ from EMD.importsProj3.signalAPI import (
     longDFDic,
     superSummaryPlotGeneric,
 )
+
+import functools
+import time
+
+
+def timer(func):
+    @functools.wraps(func)
+    def wrapper_timer(*args, **kwargs):
+        tic = time.perf_counter()
+        value = func(*args, **kwargs)
+        toc = time.perf_counter()
+        elapsed_time = toc - tic
+        print(f"Elapsed time: {elapsed_time:0.4f} seconds")
+        return value
+
+    return wrapper_timer
 
 
 class baseEMD:
@@ -65,7 +82,7 @@ class baseEMD:
             from Imports.Spacecraft import ISSISpc
 
             # The directories and save folders are on a per-case basis
-            _unsFolder = "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/unsafe/"
+            _unsFolder = "/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/unsafe/"
             self.saveFolder = _unsFolder + "ISSIcasesAIA/"
             objCadenceSeconds = 60
 
@@ -79,7 +96,7 @@ class baseEMD:
                 "shortDuration": self.shortDuration,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/AIA",
                 "shortDisplacement": self.shortDisplacement,
-                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/AIAcases.pickle",
+                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/data/AIAcases.pickle",
                 "forceCreate": True,
                 # "firstRelevantLongTime": datetime(2018, 10, 31, 8) + timedelta(hours=MARGIN),
                 "MARGIN": MARGIN,
@@ -118,7 +135,7 @@ class baseEMD:
             # Short = HMI
             # Long = PSP
 
-            _unsFolder = "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/unsafe/"
+            _unsFolder = "/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/unsafe/"
             self.saveFolder = _unsFolder + "ISSIcasesHMI/"
             objCadenceSeconds = 60 * 12  # Get to HMI cadence
             HMICases = {
@@ -130,7 +147,7 @@ class baseEMD:
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/HMI",
-                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/HMIcases.pickle",
+                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/data/HMIcases.pickle",
                 "forceCreate": True,
                 "MARGIN": MARGIN,
             }
@@ -199,7 +216,7 @@ class baseEMD:
         elif caseName == "April2020_SolO_WIND":
             from Imports.Spacecraft import Spacecraft
 
-            self.saveFolder = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/EMD_Results/SolO_Earth_April_2020/"
+            self.saveFolder = "/Users/ddp/Documents/PhD/solo_sdo/InsituEMDCorrelation/unsafe/EMD_Results/SolO_Earth_April_2020/"
             objCadenceSeconds = 92
 
             # Create or read existing cases
@@ -209,7 +226,7 @@ class baseEMD:
                 "shortDuration": self.shortDuration,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
                 "shortDisplacement": self.shortDisplacement,
-                "savePicklePath": "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts/EMD/cases/cases_April_2020_SolO.pickle",
+                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/InsituEMDCorrelation/Scripts/EMD/cases/cases_April_2020_SolO.pickle",
                 "forceCreate": True,
                 "firstRelevantLongTime": datetime(2020, 4, 15, 20),
                 "MARGIN": MARGIN,
@@ -469,8 +486,9 @@ def SolOEarth2020Case(show=True):
     )
 
 
+@timer
 def ISSICase(show=False):
-    # Is a dictionary
+    WINDDISP = 1
     ISSI_AIAVars = {
         "caseName": "ISSIcasesAIA",
         # Use all Parameters by setting to None
@@ -480,23 +498,33 @@ def ISSICase(show=False):
         "showFig": show,
         "detrendBoxWidth": 200,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 3,
+        "multiCPU": 6,
         "shortDuration": 9,
         "shortDisplacement": 1,
         "MARGIN": 0,  # If margin is set to 0 all long data is used
         "inKind": False,
-        "windDispParam": 10,  # In Minutes
+        "windDispParam": WINDDISP,  # In Minutes
         "accelerated": 1,
     }
 
     issiEMD = baseEMD(**ISSI_AIAVars)
     issiEMD.long_SPC.plot_issi_psp_e1()
-    # issiEMD.plotSeparately()
-    # issiEMD.plotTogether(showBox=None, gridRegions=(
-    #     2, 3, True, True), yTickFrequency=[0, 6, 12, 18], xTickFrequency=[0, 12], forceRemake=True)
+    issiEMD.plotSeparately()
+
+    issiEMD.plotTogether(
+        showBox=None,
+        gridRegions=(2, 3, True, True),
+        yTickFrequency=[0, 6, 12, 18],
+        xTickFrequency=[0, 12],
+        forceRemake=True,
+    )
+    print(
+        f"Done ISSIcasesAIA with {issiEMD.multiCPU} CPUs and {issiEMD.windDispParam} minutes of window displacement"
+    )
 
 
 def ISSIHMICase(show=False):
+    WINDDISP = 1
     ISSI_HMIVars = {
         "caseName": "ISSIcasesHMI",
         "shortParams": ["ch_bpoint_flux", "ch_open_flux"],
@@ -505,16 +533,20 @@ def ISSIHMICase(show=False):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 3,
+        "multiCPU": 8,
         "shortDuration": 9,
         "shortDisplacement": 1,
         "MARGIN": 0,
-        "windDispParam": 1,
+        "windDispParam": WINDDISP,
         "accelerated": 1,
     }
 
     hmiEMD = baseEMD(**ISSI_HMIVars)
+    start_time = time.clock()
     hmiEMD.plotSeparately()
+    print(
+        f"ISSI HMI CASE Takes {time.clock() - start_time} seconds with windDispParam of {WINDDISP} minutes"
+    )
     hmiEMD.plotTogether(
         showBox=None,
         gridRegions=(1, 2, True, True),

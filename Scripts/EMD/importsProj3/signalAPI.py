@@ -105,7 +105,7 @@ titleDic = {
 
 import matplotlib
 
-font = {"weight": "bold", "size": 40}
+font = {"weight": "bold", "size": 60}
 
 matplotlib.rc("font", **font)
 
@@ -464,6 +464,79 @@ def plot_imfs(time_array, vector, imfs, title, savePath, width, show):
     plt.close("all")
 
 
+def multiEMD(
+    splitTimes,
+    splitIndices,
+    caseNamesList,
+    _dfShort,
+    longDF,
+    saveFolder,
+    cads,
+    corrThrPlotList,
+    PeriodMinMax,
+    detrendBoxWidth,
+    showFig,
+    windDispParam,
+    inKind,
+    splitLongTimes=None,
+):
+    """EMD for a set of splitTimes and Indices
+    Optimised for multiprocessing
+
+    Args:
+        splitTimes (np.array): short DF times that are selected
+        splitIndices ([type]): indices used for dirNames
+        caseNamesList ([type]): [description]
+        _dfShort ([type]): [description]
+        longDF ([type]): namedTuple with '.name' and '.df'
+        saveFolder ([type]): [description]
+        cads ([type]): [description]
+        corrThrPlotList ([type]): [description]
+        PeriodMinMax ([type]): [description]
+        detrendBoxWidth ([type]): [description]
+        showFig ([type]): [description]
+        loSpeed ([type]): [description]
+        hiSpeed ([type]): [description]
+    """
+
+    cadShort, cadLong = cads
+    _dfLong = longDF.df.copy()
+
+    for i, shortTimes in enumerate(splitTimes):
+        dirName = f"{caseNamesList[splitIndices[i]]}"
+        print(f"Starting {dirName} -- to save in {saveFolder}")
+        _dfShortCut = _dfShort[shortTimes[0] : shortTimes[1]]
+        if splitLongTimes is not None:
+            _dfLongCut = _dfLong[splitLongTimes[i][0] : splitLongTimes[i][1]]
+        else:
+            _dfLongCut = _dfLong
+        _specificFolder = f"{saveFolder}{dirName}/"
+
+        _expectedLocationList = False
+
+        compareTS(
+            dfSelf=_dfShortCut,
+            dfOther=_dfLongCut,
+            cadSelf=cadShort,
+            cadOther=cadLong,
+            labelOther=longDF.name,
+            winDispList=[cadShort * windDispParam],
+            corrThrPlotList=corrThrPlotList,
+            PeriodMinMax=PeriodMinMax,
+            showLocationList=False,
+            filterPeriods=True,
+            savePath=_specificFolder,
+            useRealTime=True,
+            expectedLocationList=_expectedLocationList,
+            detrend_box_width=detrendBoxWidth,
+            showFig=showFig,
+            renormalize=False,
+            showSpeed=False,
+            shortKernelName=longDF.name.lower(),  # Should ensure that using SPC name
+            inKind=inKind,
+        )
+
+
 def emdAndCompareCases(
     shortDFDic,
     longDFSimpleDic,
@@ -486,82 +559,11 @@ def emdAndCompareCases(
     speedLim: Upper and lower bounds on Speed for reference. Should be 2 numbers which do not change
     multiCPU: Either 'None' if not multiprocessing, or the number of CPUs to use
     """
-    # FIXME: Issue with pickling multiEMD
-    global multiEMD
     _dfLong = longDFSimpleDic.df
     _dfLong.columns = [f"{longDFSimpleDic.name}_{i}" for i in _dfLong.columns]
     cadLong = (_dfLong.index[1] - _dfLong.index[0]).seconds
 
     # Analyse multiple Cases at the same time
-    def multiEMD(
-        splitTimes,
-        splitIndices,
-        caseNamesList,
-        _dfShort,
-        longDF,
-        saveFolder,
-        cads,
-        corrThrPlotList,
-        PeriodMinMax,
-        detrendBoxWidth,
-        showFig,
-        splitLongTimes=None,
-    ):
-        """EMD for a set of splitTimes and Indices
-        Optimised for multiprocessing
-
-        Args:
-            splitTimes (np.array): short DF times that are selected
-            splitIndices ([type]): indices used for dirNames
-            caseNamesList ([type]): [description]
-            _dfShort ([type]): [description]
-            longDF ([type]): namedTuple with '.name' and '.df'
-            saveFolder ([type]): [description]
-            cads ([type]): [description]
-            corrThrPlotList ([type]): [description]
-            PeriodMinMax ([type]): [description]
-            detrendBoxWidth ([type]): [description]
-            showFig ([type]): [description]
-            loSpeed ([type]): [description]
-            hiSpeed ([type]): [description]
-        """
-
-        cadShort, cadLong = cads
-        _dfLong = longDF.df.copy()
-
-        for i, shortTimes in enumerate(splitTimes):
-            dirName = f"{caseNamesList[splitIndices[i]]}"
-            print(f"Starting {dirName} -- to save in {saveFolder}")
-            _dfShortCut = _dfShort[shortTimes[0] : shortTimes[1]]
-            if splitLongTimes is not None:
-                _dfLongCut = _dfLong[splitLongTimes[i][0] : splitLongTimes[i][1]]
-            else:
-                _dfLongCut = _dfLong
-            _specificFolder = f"{saveFolder}{dirName}/"
-
-            _expectedLocationList = False
-
-            compareTS(
-                dfSelf=_dfShortCut,
-                dfOther=_dfLongCut,
-                cadSelf=cadShort,
-                cadOther=cadLong,
-                labelOther=longDF.name,
-                winDispList=[cadShort * windDispParam],
-                corrThrPlotList=corrThrPlotList,
-                PeriodMinMax=PeriodMinMax,
-                showLocationList=False,
-                filterPeriods=True,
-                savePath=_specificFolder,
-                useRealTime=True,
-                expectedLocationList=_expectedLocationList,
-                detrend_box_width=detrendBoxWidth,
-                showFig=showFig,
-                renormalize=False,
-                showSpeed=False,
-                shortKernelName=longDF.name.lower(),  # Should ensure that using SPC name
-                inKind=inKind,
-            )
 
     # For each of the "wavelengths" or "shortParameters"
     for dfCase in shortDFDic:
@@ -614,6 +616,8 @@ def emdAndCompareCases(
                     PeriodMinMax,
                     detrendBoxWidth,
                     showFig,
+                    windDispParam,
+                    inKind,
                     _splitLongTimes,
                 ),
             )

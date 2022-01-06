@@ -395,7 +395,7 @@ class Spacecraft:
         elif self.name == "ISSI_PSP_e1":
             # Load up the ISSI data
             # dataFolder only used in setup
-            dataFolder = f"/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
+            dataFolder = f"/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/data/"
             df_is = pd.read_csv(f"{dataFolder}small_ch_in_situ.csv")
             df_is.index = pd.to_datetime(df_is["Time"])
             del df_is["Time"]
@@ -404,7 +404,7 @@ class Spacecraft:
         elif self.name == "ISSI_HMI_e1":
             import idlsave
 
-            dataFolder = "/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
+            dataFolder = "/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/data/"
             ch_flux = idlsave.read(f"{dataFolder}chflux.sav", verbose=False)
             # Open and Bright point flux
             flux_time = ch_flux.hmitimes.copy()
@@ -422,7 +422,7 @@ class Spacecraft:
 
         elif self.name == "ISSI_AIA_e1":
             # Remote data for ISSI case (short)
-            dataFolder = f"/home/diegodp/Documents/PhD/Paper_2/ISSIwork/data/"
+            dataFolder = f"/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/data/"
             try:
                 df_171 = pd.read_csv(
                     f"{dataFolder}small_ch_171_lc_in.csv", index_col="Time"

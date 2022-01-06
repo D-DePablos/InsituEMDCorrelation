@@ -1,4 +1,3 @@
-# from decorators_utils import trace
 import numpy as np
 
 SidRotRate = 24.47 / 86400  # In seconds
@@ -7,8 +6,6 @@ SidRotRate = 24.47 / 86400  # In seconds
 def fcl(df, dtObj):
     return df.iloc[np.argmin(np.abs(df.index.to_pydatetime() - dtObj))]
 
-def helloworld():
-    return "Hello World"
 
 def resample_and_rename(df, srate: str, name):
     """
