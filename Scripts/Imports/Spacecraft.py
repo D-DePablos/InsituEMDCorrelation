@@ -694,6 +694,7 @@ class Spacecraft:
         plotRate = How often to plot the orbits
         hlight = for farFrom, closeTo, which date to highlight (closest to!)
         """
+        plt.rc("legend", fontsize="x-large")  # using a named size
         makedirs(objFolder, exist_ok=True)
         assert farFromSun.sp_traj != None, "Please calculate the spacecraft trajectory"
         t1 = farFromSun.sp_traj.times.datetime
@@ -781,7 +782,7 @@ class Spacecraft:
             slopeIntList.append(slopeInt(m, b))
 
         # Figure of the two orbits with field lines
-        plt.figure(figsize=(12, 12))
+        plt.figure(figsize=(12, 12), constrained_layout=True)
         plt.xlim(-0.79, 0.07)
         plt.ylim(-0.16, 0.8)
 
@@ -801,61 +802,9 @@ class Spacecraft:
             ),
         }
 
-        # Plot all positions
-        plt.scatter(
-            df_farFromSun["X"],
-            df_farFromSun["Y"],
-            alpha=0.6,
-        )
-        plt.scatter(
-            df_nextToSun["X"],
-            df_nextToSun["Y"],
-            alpha=0.6,
-        )
-
-        labelsPSP, labelsSolo = [], []
-
         # ANNOTATION
         # Annotate dates in PSP
         pspiralIndex = df_nextToSun.index.get_loc(pspiralHlight, method="nearest")
-        for i, txt in enumerate(df_nextToSun.index):
-            if i in list(set([*hlightIndices["PSPIndices"], pspiralIndex])):
-                # plt.gca().annotate(
-                #     datetime.strftime(txt, "%d-%H:%M"),
-                #     (df_nextToSun["X"][i], df_nextToSun["Y"][i]),
-                #     size=15,
-                #     bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
-                # )
-                _lab = ("PSP " + datetime.strftime(txt, "%Y-%m-%d %H:%M"),)
-                labelsPSP.append(_lab)
-
-                plt.scatter(
-                    df_nextToSun["X"][i],
-                    df_nextToSun["Y"][i],
-                    color="red" if i != pspiralIndex else "green",
-                    label=_lab,
-                    s=30,
-                )
-
-        # Annotate dates in SolO
-        for i, txt in enumerate(df_farFromSun.index):
-            if i in hlightIndices["SoloIndices"]:
-                # plt.gca().annotate(
-                #     datetime.strftime(txt, "%d-%H:%M"),
-                #     (df_farFromSun["X"][i], df_farFromSun["Y"][i]),
-                #     size=15,
-                #     bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
-                # )
-                _lab = ("SolO " + datetime.strftime(txt, "%Y-%m-%d %H:%M"),)
-                labelsSolo.append(_lab)
-                plt.scatter(
-                    df_farFromSun["X"][i],
-                    df_farFromSun["Y"][i],
-                    color="black",
-                    s=30,
-                    label=_lab,
-                )
-
         # RADIAL
         # plot radial
         for i, line in enumerate(slopeIntList):
@@ -872,23 +821,69 @@ class Spacecraft:
                 if tline not in df_nextToSun.index[hlightIndices["PSPIndices"]]
                 else "red"
             )
-            plt.plot(x, y, color=_col)
+            plt.plot(x, y, color=_col, alpha=0.7, linestyle="--", linewidth=2)
 
         # SPIRALS
         # plot spiral
-        pspSpirals = findSpirals(df=df_nextToSun, vSW=314, rads=(0, 1.3))
+        pspSpirals = findSpirals(df=df_nextToSun, vSW=314, rads=(0.05, 1.3))
         for i, spiral in enumerate(pspSpirals):
             x = spiral.X
             y = spiral.Y
-            _col, _alpha = ("orange", 0.5) if i != pspiralIndex else ("red", 0.8)
-            plt.plot(x, y, color=_col, alpha=_alpha)
+            _col, _alpha = ("green", 0) if i != pspiralIndex else ("green", 0.8)
+            plt.plot(x, y, color=_col, alpha=_alpha, linestyle="-.", linewidth=4)
 
         # Plot Solo Spiral
-        soloSpirals = findSpirals(df_farFromSun, vSW=314, rads=(0, 1.3))
+        soloSpirals = findSpirals(df_farFromSun, vSW=314, rads=(0.15, 1.3))
         for spiral in soloSpirals:
             x = spiral.X
             y = spiral.Y
-            plt.plot(x, y, color="gray", alpha=0.5)
+            plt.plot(x, y, color="gray", alpha=0.1, linestyle="-.")
+
+        # Plot all Spacecraft positions
+        plt.scatter(
+            df_farFromSun["X"],
+            df_farFromSun["Y"],
+            alpha=0.6,
+            s=10,
+        )
+        plt.scatter(
+            df_nextToSun["X"],
+            df_nextToSun["Y"],
+            alpha=0.6,
+            s=10,
+        )
+
+        # Annotate dates in PSP
+        for i, txt in enumerate(df_nextToSun.index):
+            # If within the list
+            if i in list(set([*hlightIndices["PSPIndices"], pspiralIndex])):
+                _lab = "PSP " + datetime.strftime(txt, "%Y-%m-%d %H:%M")
+                plt.scatter(
+                    df_nextToSun["X"][i],
+                    df_nextToSun["Y"][i],
+                    color="red" if i != pspiralIndex else "green",
+                    s=100,
+                    alpha=1,
+                    label=_lab if i != pspiralIndex else f"Parker Alignment: {_lab}",
+                )
+
+        # Annotate dates in SolO
+        for i, txt in enumerate(df_farFromSun.index):
+            if i in hlightIndices["SoloIndices"]:
+                # plt.gca().annotate(
+                #     datetime.strftime(txt, "%d-%H:%M"),
+                #     (df_farFromSun["X"][i], df_farFromSun["Y"][i]),
+                #     size=15,
+                #     bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
+                # )
+                _lab = "SolO " + datetime.strftime(txt, "%Y-%m-%d %H:%M")
+                plt.scatter(
+                    df_farFromSun["X"][i],
+                    df_farFromSun["Y"][i],
+                    color="black",
+                    s=30,
+                    label=_lab,
+                )
 
         # Need to add labels correctly
         plt.scatter([0], [0], s=300, color="orange", marker="*")
@@ -1042,6 +1037,7 @@ class PSPSolO_e6(Spacecraft):
         )
 
         if saveScaledDF:
+            # Cases are used to save the dataframe to a csv
             if case == "orbit6":
                 selfScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
                 otherScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
@@ -1134,7 +1130,7 @@ class PSPSolO_e6(Spacecraft):
         if self.show:
             plt.show()
         else:
-            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            plotPath = f"{BASE_PATH}Figures/PSP_SolO/"
             makedirs(plotPath, exist_ok=True)
             plt.savefig(f"{plotPath}onlyScaled_{self.name}__{other.name}.pdf")
 

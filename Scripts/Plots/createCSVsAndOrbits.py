@@ -66,9 +66,9 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
     solo.plot_solo_psp_df_onlyScaled(
         psp, zones=[solo_paper, psp_paper], saveScaledDF=True, case="orbit6"
     )
-    solo.plot_solo_psp_df(
-        psp, zones=[solo_paper, psp_paper], saveScaledDF=True, case="orbit6"
-    )
+    # solo.plot_solo_psp_df(
+    #     psp, zones=[solo_paper, psp_paper], saveScaledDF=True, case="orbit6"
+    # )
 
     solo.zoom_in(**solo_zoomed)
     psp.zoom_in(**psp_zoomed)
@@ -81,7 +81,7 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
     solo.df.fillna(method="pad")
     psp.df.fillna(method="pad")
 
-    orbit_case_path = f"{BASE_PATH}Figures/Orbits/"
+    orbit_case_path = f"{BASE_PATH}Figures/PSP_SolO/"
     makedirs(orbit_case_path, exist_ok=True)
 
     # Spacecraft object calling the function is where the solar wind is being mapped from
@@ -99,7 +99,7 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
             # Highlight one of the parker spirals
             solo.plotOrbit_x_y(
                 psp,
-                objFolder=f"{orbit_case_path}/",
+                objFolder=f"{orbit_case_path}",
                 plotRate=f"{minSteps}min",
                 farTime="22:00",
                 closeTime="04:00",

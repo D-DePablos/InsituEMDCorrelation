@@ -182,12 +182,12 @@ class baseEMD:
             PSPSolO_e6_cases = {
                 "shortTimes": (datetime(2020, 9, 30), datetime(2020, 10, 2, 23)),
                 "longTimes": (datetime(2020, 9, 24, 12), datetime(2020, 10, 3)),
-                "shortDuration": 1.5,
+                "shortDuration": shortDuration,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
-                "shortDisplacement": 1.5,
+                "shortDisplacement": shortDisplacement,
                 "savePicklePath": "/Users/ddp/Documents/PhD/inEMD_Github/Scripts/EMD/cases/cases_1-5.pickle",
                 "forceCreate": True,
-                "equal": True,
+                "equal": self.equal,
                 "MARGIN": MARGIN,
             }
             cases = caseCreation(**PSPSolO_e6_cases)
@@ -386,7 +386,7 @@ def PSPSolOCase(show=False):
         "caseName": "PSP_SolO_e6",
         "shortParams": ["Btotal", "B_R", "V_R", "Mf", "N"],  # Does N break?
         "longParams": ["Btotal", "B_R", "V_R", "Mf", "N"],
-        "PeriodMinMax": [5, 22],
+        "PeriodMinMax": [5, 40],
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.65, 1, 0.05),
@@ -394,10 +394,11 @@ def PSPSolOCase(show=False):
         "caseName": "PSP_SolO_e6",
         "speedSet": (300, 200, 250),  # High - low - mid
         "shortDuration": 3,
-        "shortDisplacement": 0.5,
+        "shortDisplacement": 1,
         "MARGIN": 0,
         "inKind": True,
         "windDispParam": 1,
+        "equal": True,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
@@ -582,15 +583,14 @@ if __name__ == "__main__":
     # TODO:
     """
         - PSP Solo: First case (easiest, mostly working, kernels good) -> Imports from /Users/ddp/Documents/PhD/inEMD_Github/Scripts/Plots/createCSVsAndOrbits.py
-            - Should remake the timeseries plot. Where Are they found?
-            - Should choose one of the orbit plots and put it in
-            - Should get a results plot, whether 1.5 hours or more
+            - Should remake the timeseries plot. DONE
+            - Should choose one of the orbit plots and put it in. DONE
+            - Should get a results plot, whether 1.5 hours or more. DOING
             
         - SoloEarth2020: Second case (harder, kernels bad)
-            - Should remake the timeseries plot. Where Are they found?
-            - Should fix the L1 spice kernel
-            - Should check exactly what I added to Heliopy on old computer
-            - Should choose one of the orbit plots and put it in
+            - Should remake the timeseries plot. Where Are they found? -> In createCSVsAndOrbits.py
+            - Should fix the L1 spice kernel. DONE
+            - Should choose one of the orbit plots. Do they exist? -> In createCSVsAndOrbits.py
             - Should get a results plot, whether 1.5 hours or more
         
         - STAPSP: Literally did it over a couple of days. I wonder how much of it works?

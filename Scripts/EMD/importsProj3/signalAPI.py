@@ -225,10 +225,10 @@ def caseCreation(
     caseName,
     savePicklePath,
     shortDisplacement,
+    equal,
     forceCreate=False,
     firstRelevantLongTime=False,
     MARGIN=None,
-    equal=False,
 ):
     """Creates cases given times of short and long datasets
 
