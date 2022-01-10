@@ -116,8 +116,8 @@ class Spacecraft:
 
     def __init__(
         self,
-        name="NONE",
-        cadence_obj=None,
+        name,
+        cadence_obj,
         show=False,
         sunEarthDist=150111200.76,
         remakeCSV=False,
@@ -781,7 +781,6 @@ class Spacecraft:
             slopeIntList.append(slopeInt(m, b))
 
         # Figure of the two orbits with field lines
-        # TODO: Make fgiure limits variable possibly
         plt.figure(figsize=(12, 12))
         plt.xlim(-0.79, 0.07)
         plt.ylim(-0.16, 0.8)
@@ -814,6 +813,8 @@ class Spacecraft:
             alpha=0.6,
         )
 
+        labelsPSP, labelsSolo = [], []
+
         # ANNOTATION
         # Annotate dates in PSP
         pspiralIndex = df_nextToSun.index.get_loc(pspiralHlight, method="nearest")
@@ -825,13 +826,15 @@ class Spacecraft:
                 #     size=15,
                 #     bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
                 # )
+                _lab = ("PSP " + datetime.strftime(txt, "%Y-%m-%d %H:%M"),)
+                labelsPSP.append(_lab)
 
                 plt.scatter(
                     df_nextToSun["X"][i],
                     df_nextToSun["Y"][i],
                     color="red" if i != pspiralIndex else "green",
+                    label=_lab,
                     s=30,
-                    label="PSP " + datetime.strftime(txt, "%Y-%m-%d %H:%M"),
                 )
 
         # Annotate dates in SolO
@@ -843,12 +846,14 @@ class Spacecraft:
                 #     size=15,
                 #     bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
                 # )
+                _lab = ("SolO " + datetime.strftime(txt, "%Y-%m-%d %H:%M"),)
+                labelsSolo.append(_lab)
                 plt.scatter(
                     df_farFromSun["X"][i],
                     df_farFromSun["Y"][i],
                     color="black",
                     s=30,
-                    label="SolO " + datetime.strftime(txt, "%Y-%m-%d %H:%M"),
+                    label=_lab,
                 )
 
         # RADIAL
@@ -885,19 +890,27 @@ class Spacecraft:
             y = spiral.Y
             plt.plot(x, y, color="gray", alpha=0.5)
 
+        # Need to add labels correctly
         plt.scatter([0], [0], s=300, color="orange", marker="*")
         plt.grid(True)
         plt.xlabel("Cartesian X (AU)")
         plt.ylabel("Cartesian Y (AU)")
-        plt.title(f"Maximum accepted Long. Separation {radialTolerance:.2f} deg.")
+        plt.title(
+            f"Accepted Long separation:{radialTolerance:.2f} deg. | cadence {plotRate}"
+        )
         plt.legend()
 
         # Plot the Parker Spiral lines
         plt.savefig(
-            f"{objFolder}soloPSP_rate_{plotRate}_Tolerance_{radialTolerance}deg.png"
+            f"{objFolder}soloPSP_rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf"
+        )
+        print(
+            f"Saved to {objFolder}soloPSP_rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf"
         )
         if farFromSun.show == True:
             plt.show()
+
+        plt.close()
 
     def zoom_in(
         self,
@@ -906,6 +919,7 @@ class Spacecraft:
         stepMinutes=30,
         extractOrbit=True,
     ):
+
         """
         Zoom into a specific part of the signal and store new self.df in memory
         Uses start_time and end_time to define limits
@@ -930,7 +944,217 @@ class PSPSolO_e6(Spacecraft):
     def __init__(self, name="NONE", cadence_obj=None, show=False):
         super().__init__(name=name, cadence_obj=cadence_obj, show=show)
 
-    def plot_solo_psp_df(self, other, zones=[], saveScaledDF=False, case=None):
+    def plot_solo_psp_df_onlyScaled(
+        self,
+        other,
+        zones=[],
+        saveScaledDF=False,
+        case=None,
+        colourSolO="k-",
+        colourPSP="r-",
+    ):
+        """
+        Plot the dataframe in the style of the previous paper
+        Other must be PSP
+        zone 1 and zone 2 will be highlighted in SolO and PSP respectively
+        """
+        assert "solo" in self.name.lower(), "Please ensure SolO is object with f call"
+        from astropy import constants as c
+
+        # Figure
+        # Width and marker size
+        _, axs = plt.subplots(
+            5, 1, figsize=(16, 10), sharex=True, constrained_layout=True
+        )
+
+        R = (self.dfUnits["R"].to(u.m) - const.R_sun).value
+        oR = (other.dfUnits["R"].to(u.m) - const.R_sun).value
+
+        ts = self.df.index
+        ots = other.df.index
+
+        Bt = np.sqrt(
+            self.dfUnits["B_R"] ** 2
+            + self.dfUnits["B_T"] ** 2
+            + self.dfUnits["B_N"] ** 2
+        )
+        BrScaled = (self.dfUnits["B_R"].to(u.T)) * R ** 2
+        BtScaled = np.sqrt(
+            BrScaled ** 2
+            + self.dfUnits["B_T"].to(u.T) ** 2
+            + self.dfUnits["B_N"].to(u.T) ** 2
+        ).to(u.nT)
+
+        Vx = np.abs(self.dfUnits["V_R"])
+        Np = self.dfUnits["N"]  # In protons per cm3
+        NpScaled = (Np.to(u.m ** (-3)) * R ** 2).to(u.cm ** (-3))  # To 1/m**3
+
+        NpRPW = self.dfUnits["N_RPW"]
+        NpRPWScaled = (NpRPW.to(u.m ** (-3)) * R ** 2).to(u.cm ** (-3))
+        T = self.df["T"]
+
+        # m_p is in kg
+        Mf = (
+            const.m_p
+            * NpRPWScaled.to(u.m ** (-3))
+            * np.abs(self.dfUnits["V_R"].to(u.m / u.s))
+        )
+        MfScaled = Mf
+
+        # Other object (PSP)
+        oBTUnscaled = np.sqrt(
+            other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
+        )
+        oBrScaled = other.dfUnits["B_R"].to(u.T) * oR ** 2
+        oBtScaled = np.sqrt(
+            oBrScaled ** 2
+            + other.dfUnits["B_T"].to(u.T) ** 2
+            + other.dfUnits["B_N"].to(u.T) ** 2
+        ).to(u.nT)
+        oVx = np.abs(other.dfUnits["V_R"])
+        oNp = other.dfUnits["N"]
+        oNpScaled = (oNp.to(u.m ** (-3)) * oR ** 2).to(u.cm ** (-3))
+        oT = other.df["T"]
+        oMf = const.m_p.value * oNpScaled.to(u.m ** (-3)) * np.abs(oVx).to(u.m / u.s)
+        oMfScaled = oMf
+
+        selfScaledDF = pd.DataFrame(
+            {
+                "V_R": Vx,
+                "B_R": BrScaled,
+                "Btotal": BtScaled,
+                "N": NpScaled,
+                "N_RPW": NpRPWScaled,
+                "T": T,
+                "Mf": MfScaled,
+            },
+        )
+
+        otherScaledDF = pd.DataFrame(
+            {
+                "V_R": oVx,
+                "B_R": oBrScaled,
+                "Btotal": oBtScaled,
+                "N": oNpScaled,
+                "T": oT,
+                "Mf": oMfScaled,
+            },
+        )
+
+        if saveScaledDF:
+            if case == "orbit6":
+                selfScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
+                otherScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
+
+        # BEGIN PLOTS
+        # Magnetic field components
+        # Radial velocity
+        ax1 = axs[0]
+        ax1.plot(ts, Vx, colourSolO, label="SolO Br")
+        ax1.plot(ots, oVx, colourPSP, label="PSP Br")
+        ax1.set_ylabel(r"$-{V_x} (km/s)$ [N.S]")
+        ax1.legend(loc="upper left")
+
+        # Instead of Temperature show scaled Br
+        ax2 = axs[1]
+        ax2.plot(
+            ts,
+            BrScaled,
+            colourSolO,
+            label="SolO Br",
+            linewidth=1,
+        )
+        ax2.plot(ots, oBrScaled, colourPSP, label="PSP Br")
+        ax2.set_ylabel(r"$\hat{B}_R$")
+        ax2.legend(loc="upper left")
+
+        # Magnetic field components
+        axsBt = axs[2]
+        axsBt.set_ylabel(r"$\hat{B}_{TOTAL}$")
+        axsBt.plot(
+            ts,
+            BtScaled,
+            colourSolO,
+            label=r"$R^2$ Scaled Btotal SolO",
+        )
+        axsBt.plot(
+            ots,
+            oBtScaled,
+            colourPSP,
+            label=r"$R^2$ Scaled Btotal PSP",
+        )
+        axsBt.legend(loc="upper left")
+
+        # Proton Density
+        axsNp = axs[3]
+        axsNp.plot(
+            ts,
+            NpScaled,
+            colourSolO,
+            label=r"$R^2$ Scaled Np (SolO_PAS)",
+        )
+        axsNp.plot(
+            ts,
+            NpRPWScaled,
+            colourSolO,
+            alpha=0.5,
+            label=r"$R^2$ Scaled Np (SolO_RPW)",
+        )
+        axsNp.plot(
+            ots,
+            oNpScaled,
+            colourPSP,
+            label=r"$R^2$ Scaled Np (PSP_SWEAP)",
+        )
+        axsNp.set_ylabel(r"$n_p$ (# $m^{-3}$)")
+        axsNp.legend(loc="upper left")
+
+        # Scaled MF
+        axsMf = axs[4]
+        axsMf.plot(ts, MfScaled, colourSolO, linewidth=1, label=r"$R^2$ Scaled Mf SolO")
+        axsMf.plot(ots, oMfScaled, colourPSP, label=r"$R^2$ Scaled Mf PSP")
+        axsMf.set_ylabel(r"$Mf$")
+        axsMf.legend(loc="upper left")
+
+        # # Plot the relevant columns
+        for ax in axs:
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
+
+        # Plot the zones being considered
+        for zone in zones:
+            for ax in axs:
+                ax.axvspan(
+                    zone["start_time"], zone["end_time"], color=zone["color"], alpha=0.3
+                )
+
+        # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
+        # print(f"Saving to {self}")
+        # plt.savefig(f"{save_folder}B_Br_V_sb_matrix_highlighted.pdf")
+        if self.show:
+            plt.show()
+        else:
+            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            makedirs(plotPath, exist_ok=True)
+            plt.savefig(f"{plotPath}onlyScaled_{self.name}__{other.name}.pdf")
+
+            print(
+                "Saved to {} as {}".format(
+                    plotPath, f"onlyScaled_{self.name}__{other.name}.pdf"
+                )
+            )
+
+        plt.close()
+
+    def plot_solo_psp_df(
+        self,
+        other,
+        zones=[],
+        saveScaledDF=False,
+        case=None,
+        colourPSP="r-",
+        colourSolO="k-",
+    ):
         """
         Plot the dataframe in the style of the previous paper
         Other must be PSP
@@ -1024,13 +1248,14 @@ class PSPSolO_e6(Spacecraft):
                 selfScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/SolO_POST_e6.csv")
                 otherScaledDF.to_csv(f"{BASE_PATH}Data/Prepped_csv/psp_POST_e6.csv")
 
+        # BEGIN PLOTS
         # Magnetic field components
         ax0 = axs[0]
         ax0.set_ylabel(r"$\hat{B}_T(nT)$")
         ax0.semilogy(
             ts,
             Bt,
-            "r-",
+            colourSolO,
             label="SolO_MAG",
             alpha=1,
             linewidth=1,
@@ -1038,7 +1263,7 @@ class PSPSolO_e6(Spacecraft):
         ax0.semilogy(
             ots,
             oBTUnscaled,
-            "k-",
+            colourPSP,
             label="PSP_FLD",
             alpha=1,
         )
@@ -1046,8 +1271,8 @@ class PSPSolO_e6(Spacecraft):
 
         # Radial velocity
         ax1 = axs[1]
-        ax1.plot(ts, Vx, color="black", label="Vp [GSE]", linewidth=1)
-        ax1.plot(ots, oVx, color="red")
+        ax1.plot(ts, Vx, colourSolO, label="Vp [GSE]", linewidth=1)
+        ax1.plot(ots, oVx, colourPSP)
         ax1.set_ylabel(r"$-{V_x} (km/s)$")
 
         # Temperature
@@ -1055,11 +1280,11 @@ class PSPSolO_e6(Spacecraft):
         ax2.semilogy(
             ts,
             T,
-            "r-",
+            colourSolO,
             label=r"$T_p$",
             linewidth=1,
         )
-        ax2.semilogy(ots, oT, "k-")
+        ax2.semilogy(ots, oT, colourPSP)
         ax2.set_ylabel(r"$T_p (K)$")
 
         # Proton Density
@@ -1067,12 +1292,12 @@ class PSPSolO_e6(Spacecraft):
         ax4.semilogy(
             ts,
             Np,
-            "r-",
-            label="Np_SolO_SWA_PAS",
+            colourSolO,
+            label=r"Np (SolO_PAS)",
             linewidth=1,
         )
-        ax4.semilogy(ts, NpRPW, color="blue", alpha=0.4, label="Np_SolO_RPW")
-        ax4.semilogy(ots, oNp, "k-", label="Np_PSP_SPAN")
+        ax4.semilogy(ts, NpRPW, colourPSP, alpha=1, label=r"Np (SolO_RPW)")
+        ax4.semilogy(ots, oNp, "k-", label=r"Np (PSP_PAS)")
         ax4.set_ylabel(r"$n_p$ (# $cm^{-3}$)")
         ax4.legend()
 
@@ -1081,11 +1306,15 @@ class PSPSolO_e6(Spacecraft):
         axMf.semilogy(
             ts,
             Mf,
-            "r-",
+            colourSolO,
             label="Mass Flux",
             linewidth=1,
         )
-        axMf.semilogy(ots, oMf, "k-")
+        axMf.semilogy(
+            ots,
+            oMf,
+            colourPSP,
+        )
         axMf.set_ylabel(r"$Mf$")
 
         # Magnetic field components
@@ -1093,13 +1322,13 @@ class PSPSolO_e6(Spacecraft):
         axs[5].plot(
             ts,
             BtScaled,
-            "r-",
+            colourSolO,
             label=r"$R^2$ Scaled Btotal SolO",
         )
         axs[5].plot(
             ots,
             oBtScaled,
-            "k-",
+            colourPSP,
             label=r"$R^2$ Scaled Btotal PSP",
         )
         axs[5].legend()
@@ -1108,28 +1337,30 @@ class PSPSolO_e6(Spacecraft):
         axs[6].plot(
             ts,
             NpScaled,
-            "r-",
-            label=r"$R^2$ Scaled Np (PAS)",
-            linewidth=1,
+            colourSolO,
+            label=r"$R^2$ Scaled Np (SolO_PAS)",
         )
         axs[6].plot(
             ts,
             NpRPWScaled,
-            color="blue",
-            alpha=0.4,
-            label=r"$R^2$ Scaled Np (RPW)",
+            colourSolO,
+            alpha=0.5,
+            label=r"$R^2$ Scaled Np (SolO_RPW)",
         )
         axs[6].plot(
             ots,
             oNpScaled,
-            "k-",
+            colourPSP,
             label=r"$R^2$ Scaled Np (PSP_SWEAP)",
         )
         axs[6].set_ylabel(r"$n_p$ (# $m^{-3}$)")
         axs[6].legend()
 
-        axs[7].plot(ts, MfScaled, "r-", linewidth=1, label=r"$R^2$ Scaled Mf SolO")
-        axs[7].plot(ots, oMfScaled, "k-", label=r"$R^2$ Scaled Mf PSP")
+        # Scaled MF
+        axs[7].plot(
+            ts, MfScaled, colourSolO, linewidth=1, label=r"$R^2$ Scaled Mf SolO"
+        )
+        axs[7].plot(ots, oMfScaled, colourPSP, label=r"$R^2$ Scaled Mf PSP")
         axs[7].set_ylabel(r"$Mf$")
         axs[7].legend()
 
@@ -1154,6 +1385,12 @@ class PSPSolO_e6(Spacecraft):
             plotPath = f"{BASE_PATH}Figures/Timeseries/"
             makedirs(plotPath, exist_ok=True)
             plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
+
+            print(
+                "Saved to {} as {}".format(
+                    plotPath, f"summaryPlot_{self.name}__{other.name}.png"
+                )
+            )
 
         plt.close()
 
@@ -1259,8 +1496,8 @@ class STA_psp(Spacecraft):
 class EarthApril2020(Spacecraft):
     def __init__(
         self,
+        cadence_obj,
         name="NONE",
-        cadence_obj=None,
         show=False,
         sunEarthDist=150111200.76,
         remakeCSV=False,
@@ -1343,6 +1580,7 @@ class EarthApril2020(Spacecraft):
         # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
         # print(f"Saving to {self}")
         # plt.savefig(f"{save_folder}B_Br_V_sb_matrix_highlighted.pdf")
+        # TODO: Add orbit plots
         if self.show:
             plt.show()
         else:

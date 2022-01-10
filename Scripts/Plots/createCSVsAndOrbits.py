@@ -3,21 +3,22 @@ from astropy.coordinates import spherical_to_cartesian
 from datetime import datetime
 from os import makedirs
 from sys import path
-BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
+
+BASE_PATH = "/Users/ddp/Documents/PhD/inEMD_Github/"
 
 path.append(f"{BASE_PATH}Scripts/")
 
 from Imports.Spacecraft import PSPSolO_e6, EarthApril2020
 
 
-def psp_e6(show=False):
+def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
     """
     Additional encounter possibly currently. Check data
     """
     OBJ_CADENCE = 60  # To one minute resolution
-    PLOT_ORBITS = False
+    PLOT_ORBITS = plot_orbit
     SHOW_PLOTS = show
-    stepMinutes = 60
+    orbitStepMin = 90
 
     psp_e6_overview = {
         "name": "PSPpriv_e6",
@@ -39,33 +40,36 @@ def psp_e6(show=False):
     solo_zoomed = {
         "start_time": datetime(2020, 9, 27, 11, 30),
         "end_time": datetime(2020, 10, 4, 11, 53),
-        "stepMinutes": stepMinutes,
-        "color": "red",
+        "stepMinutes": orbitStepMin,
     }
 
     psp_zoomed = {
         "start_time": datetime(2020, 9, 25),
         "end_time": datetime(2020, 9, 30),
-        "stepMinutes": stepMinutes,
-        "color": "black",
+        "stepMinutes": orbitStepMin,
     }
 
+    # These are zones and therefore have colours
     solo_paper = {
         "start_time": datetime(2020, 10, 1, 22, 40),
         "end_time": datetime(2020, 10, 2, 0, 13),
-        "color": "red",
+        "color": "blue",
     }
 
     psp_paper = {
         "start_time": datetime(2020, 9, 27, 3, 30),
         "end_time": datetime(2020, 9, 27, 5),
-        "color": "black",
+        "color": "red",
     }
 
     # Here we save the scaled DF
+    solo.plot_solo_psp_df_onlyScaled(
+        psp, zones=[solo_paper, psp_paper], saveScaledDF=True, case="orbit6"
+    )
     solo.plot_solo_psp_df(
         psp, zones=[solo_paper, psp_paper], saveScaledDF=True, case="orbit6"
     )
+
     solo.zoom_in(**solo_zoomed)
     psp.zoom_in(**psp_zoomed)
 
@@ -77,7 +81,7 @@ def psp_e6(show=False):
     solo.df.fillna(method="pad")
     psp.df.fillna(method="pad")
 
-    orbit_case_path = f"{BASE_PATH}Figures/Orbit_3d/"
+    orbit_case_path = f"{BASE_PATH}Figures/Orbits/"
     makedirs(orbit_case_path, exist_ok=True)
 
     # Spacecraft object calling the function is where the solar wind is being mapped from
@@ -85,14 +89,14 @@ def psp_e6(show=False):
 
         # Create a set of radial separations
         for minSteps in [
-            stepMinutes,
-            stepMinutes * 2,
-            stepMinutes * 4,
-            stepMinutes * 6,
-            stepMinutes * 12,
-            stepMinutes * 24,
+            orbitStepMin,
+            orbitStepMin * 2,
+            orbitStepMin * 4,
+            orbitStepMin * 6,
+            orbitStepMin * 12,
+            orbitStepMin * 24,
         ]:
-            tol = 1.5
+            # Highlight one of the parker spirals
             solo.plotOrbit_x_y(
                 psp,
                 objFolder=f"{orbit_case_path}/",
@@ -105,15 +109,17 @@ def psp_e6(show=False):
                     28,
                     23,
                 ),
-                radialTolerance=tol,
+                radialTolerance=radialTolerance,
             )
 
 
 def solo_Earth_April_2020(show=False):
-    solo = EarthApril2020(name="SolO_April_2020",
-                          cadence_obj=92, show=show, remakeCSV=False)
-    earth = EarthApril2020(name="Earth_April_2020",
-                           cadence_obj=92, show=show, remakeCSV=False)
+    solo = EarthApril2020(
+        name="SolO_April_2020", cadence_obj=92, show=show, remakeCSV=False
+    )
+    earth = EarthApril2020(
+        name="Earth_April_2020", cadence_obj=92, show=show, remakeCSV=False
+    )
 
     earth.plot_solo_earth_df(solo)
     pass
@@ -121,10 +127,10 @@ def solo_Earth_April_2020(show=False):
 
 if __name__ == "__main__":
     # Do twice so it saves with Radius hopefully
-    show = True
+    show = False
     try:
-        psp_e6(show=show)
-        solo_Earth_April_2020(show=show)
+        psp_e6(show=show, plot_orbit=True)
+        # solo_Earth_April_2020(show=show)
     except AttributeError or ValueError:
         psp_e6(show=show)
         solo_Earth_April_2020(show=show)

@@ -1,4 +1,5 @@
 """Helper functions"""
+from pyparsing import WordEnd
 from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
 import astropy.units as u
 from collections import namedtuple
@@ -41,11 +42,11 @@ missingData = namedtuple(
 )
 
 ColumnColours = {
-    "Btotal": "pink",
+    "Btotal": "orange",
     "B_R": "blue",
     "B_T": "green",
     "B_N": "red",
-    "N_RPW": "green",
+    "N": "green",
     "Mf": "purple",
     "V_R": "red",
     "plume": "pink",
@@ -69,7 +70,7 @@ alphaWVL = {
     "B_R": 0.7,
     "B_T": 0.7,
     "B_N": 0.7,
-    "N_RPW": 0.9,
+    "N": 0.9,
     "V_R": 0.9,
     "Mf": 0.9,
     "plume": 0.9,
@@ -101,13 +102,25 @@ titleDic = {
     "PSP_B_R": "Br",
     "PSP_Btotal": "Bt",
     "B_R": "Br",
+    "plume": "PL",
+    "cbpoint": "BP",
+    "chole": "CH",
+    "chplume": "CHPL",
+    "qsun": "QS",
+    "ch_open_flux": "Open UMF",
+    "ch_bpoint_flux": "Bipole UMF",
 }
 
 import matplotlib
 
-font = {"weight": "bold", "size": 60}
-
-matplotlib.rc("font", **font)
+params = {
+    "legend.fontsize": "x-large",
+    "axes.labelsize": "x-large",
+    "axes.titlesize": "x-large",
+    "xtick.labelsize": "x-large",
+    "ytick.labelsize": "x-large",
+}
+matplotlib.rcParams.update(params)
 
 # Dictionary which contains relevant axis for a 9x9 grid for each of the regions
 axDic = {
@@ -932,7 +945,7 @@ def plot_super_summary(
     #     a.set_yticklabels([])
     #     a.set_aspect('equal')
 
-    # Makes Figure here
+    # In some cases, need to auto-grid
     if gridRegions == True:
         # This way makes sure there is space
         nrowsCols = np.sqrt(len(regions))
@@ -943,7 +956,12 @@ def plot_super_summary(
             nrows = int(nrowsCols)
             ncols = int(nrowsCols)
         fig, axs = plt.subplots(
-            nrows, ncols, figsize=(20, 10), sharex=True, sharey=True
+            nrows,
+            ncols,
+            figsize=(16, 12),
+            sharex=True,
+            sharey=True,
+            constrained_layout=True,
         )
     else:
         nrows = gridRegions[0]
@@ -953,23 +971,26 @@ def plot_super_summary(
             ncols=ncols,
             sharex=gridRegions[2],
             sharey=gridRegions[3],
-            figsize=(18, 12),
+            figsize=(16, 12),
+            constrained_layout=True,
         )
 
     # For each of the regions, make a plot
     used_ax = []
     for i, region in enumerate(regions):
 
-        if len(axs.shape) > 1:
-            row, col = axDic[region]
-            ax = axs[row, col]
+        try:
+            if len(axs.shape) > 1:
+                row, col = axDic[region]
+                ax = axs[row, col]
+            else:
+                try:
+                    ax = axs[i]
+                except TypeError:
+                    ax = axs
 
-        else:
-            try:
-                ax = axs[i]
-            except TypeError:
-                ax = axs
-
+        except AttributeError:
+            ax = axs
         used_ax.append(ax)
         ax.set_ylim(
             allCasesList[0].shortTimes[0] - timedelta(hours=3),
@@ -1066,7 +1087,7 @@ def plot_super_summary(
 
             assert (
                 worked is True
-            ), f"{shortParamList} does not include {longObjectParam.split('_', 1)[1]}"
+            ), f"{shortParamList} does not include {longObjectParam.split('_', 1)[1]}, please cut down from the dataframe"
             # After all shortVars Set the index of the Dots dataframe to midPoints
             dfDots.index = midpointTimes
 
@@ -1088,9 +1109,8 @@ def plot_super_summary(
             )
             firstLoad = False
 
+            # Get an arbitrary list of valuable speeds
             # Get the relevant speeds every 100 kms
-            # relSpeeds = range(int(Vaxis.min() / 100) * 100,
-            #                   int(Vaxis.max() / 100) * 100 + 1, 100)
             relSpeeds = range(100, 501, 100)
 
             for relSpeed in relSpeeds:
@@ -1119,7 +1139,7 @@ def plot_super_summary(
                             s=f"{relSpeed}",
                             color="black",
                             alpha=1,
-                            fontsize=15,
+                            fontsize=18,
                         )
 
             closest_index = (np.abs(Vaxis - highSpeed)).argmin()
@@ -1173,10 +1193,8 @@ def plot_super_summary(
 
         # Set axes labels
         ax.set_xlabel(f"{longName}")
-        if len(regions) > 1:
-            ax.set_ylabel(f"{region}", fontsize=20)
-        else:
-            ax.set_ylabel(f"{shortName}")
+        ylabel_each = region if region not in titleDic else titleDic[region]
+        ax.set_ylabel(ylabel_each, fontsize=20)
 
         if showBox != None:
             box_X0, box_X1 = showBox[0]
@@ -1223,13 +1241,24 @@ def plot_super_summary(
 
         legend_elements.append(_legendElement)
 
-    if len(axs.shape) > 1:
-        for row in axs:
-            for _ax in row:
-                if _ax not in used_ax:
-                    fig.delaxes(_ax)
+    try:
+        if len(axs.shape) > 1:
+            for row in axs:
+                for _ax in row:
+                    if _ax not in used_ax:
+                        fig.delaxes(_ax)
+    except AttributeError:
+        pass
     # Or that the jumpCadence of Short dataset is correct
-    fig.legend(handles=legend_elements, prop={"size": 20})
+    try:
+        if axs.shape == (2, 3):
+            BBOX_anchor = (0.9, 0.9)
+        else:
+            BBOX_anchor = (1, 1)
+    except AttributeError:
+        BBOX_anchor = (1, 1)
+
+    fig.legend(handles=legend_elements, prop={"size": 25}, bbox_to_anchor=BBOX_anchor)
     longParamLegible = (
         longObjectParam
         if longObjectParam not in titleDic
@@ -1238,11 +1267,13 @@ def plot_super_summary(
 
     # We now indicate necessary SW speed in all lines
     fig.suptitle(
-        f" X-axis: {longParamLegible} | In yellow Measured: {highSpeed} - {lowSpeed} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min."
+        f" X-axis: {longParamLegible} | In yellow Measured: {highSpeed} - {lowSpeed} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.",
+        y=1.02,
+        fontsize=18,
     )
 
     # Plot the datasets if inKind:
-    # NOTE: Here we are assuming len(axs) == 1
+    # If data is inKind, overplot
     if inKind:
         from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
@@ -1269,7 +1300,9 @@ def plot_super_summary(
 
         # duplicate x axis
         x_axis_df.plot(
-            longDataSet.values, color=ColumnColours[longObjectParam.split("_", 1)[1]]
+            longDataSet.values,
+            color="k"
+            # color=ColumnColours[longObjectParam.split("_", 1)[1]]
         )
         y_axis_df.plot(
             -shortDataSet.values,
@@ -1277,7 +1310,7 @@ def plot_super_summary(
             color=ColumnColours[longObjectParam.split("_", 1)[1]],
         )
 
-    plt.savefig(figSavePath)
+    plt.savefig(figSavePath, bbox_inches="tight")
 
     if showFig:
         plt.show()

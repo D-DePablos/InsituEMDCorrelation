@@ -40,13 +40,13 @@ class baseEMD:
         shortParams,
         longParams,
         PeriodMinMax,
+        shortDuration,
+        shortDisplacement,
         showFig=True,
         detrendBoxWidth=200,
         corrThrPlotList=np.arange(0.65, 1, 0.05),
         multiCPU=None,
         speedSet=None,
-        shortDuration=1.5,
-        shortDisplacement=1.5,
         MARGIN=48,
         inKind=False,
         windDispParam: int = 1,  # How many measurements to move by
@@ -173,7 +173,7 @@ class baseEMD:
             ]
 
         elif caseName == "PSP_SolO_e6":
-            from Imports.Spacecraft import Spacecraft
+            from Imports.Spacecraft import PSPSolO_e6 as Spacecraft
 
             self.saveFolder = "/Users/ddp/Documents/PhD/inEMD_Github/unsafe/EMD_Results/encounter6_Parker_1_5/"
             objCadenceSeconds = 60
@@ -183,7 +183,7 @@ class baseEMD:
                 "shortTimes": (datetime(2020, 9, 30), datetime(2020, 10, 2, 23)),
                 "longTimes": (datetime(2020, 9, 24, 12), datetime(2020, 10, 3)),
                 "shortDuration": 1.5,
-                "caseName": "SolO",
+                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
                 "shortDisplacement": 1.5,
                 "savePicklePath": "/Users/ddp/Documents/PhD/inEMD_Github/Scripts/EMD/cases/cases_1-5.pickle",
                 "forceCreate": True,
@@ -202,6 +202,15 @@ class baseEMD:
                 name="SolO_Scaled_e6",
                 cadence_obj=objCadenceSeconds,
             )
+
+            # Change N to N_old and N_RPW column to N in short_SPC
+            short_SPC.df.rename(columns={"N": "N_old", "N_RPW": "N"}, inplace=True)
+
+            long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
+            short_SPC.df = (
+                short_SPC.df[shortParams] if shortParams != None else short_SPC.df
+            )
+
             for _df in (long_SPC.df, short_SPC.df):
                 _df = _df.interpolate()
 
@@ -216,7 +225,7 @@ class baseEMD:
         elif caseName == "April2020_SolO_WIND":
             from Imports.Spacecraft import Spacecraft
 
-            self.saveFolder = "/Users/ddp/Documents/PhD/solo_sdo/InsituEMDCorrelation/unsafe/EMD_Results/SolO_Earth_April_2020/"
+            self.saveFolder = "/Users/ddp/Documents/PhD/solo_sdo/unsafe/EMD_Data/SolO_Earth_April_2020/"
             objCadenceSeconds = 92
 
             # Create or read existing cases
@@ -226,7 +235,7 @@ class baseEMD:
                 "shortDuration": self.shortDuration,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
                 "shortDisplacement": self.shortDisplacement,
-                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/InsituEMDCorrelation/Scripts/EMD/cases/cases_April_2020_SolO.pickle",
+                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/Scripts/EMDComparison/pickleCases/cases_April_2020_SolO.pickle",
                 "forceCreate": True,
                 "firstRelevantLongTime": datetime(2020, 4, 15, 20),
                 "MARGIN": MARGIN,
@@ -260,7 +269,7 @@ class baseEMD:
                 long_SPC.df, "WIND", "L1", self.accelerated, self.speedSet
             )
 
-        # NOTE: Need to fix error in saving / opening files
+        # TODO: Need to fix error in saving / opening files
         elif caseName == "STA_PSP":
             from Imports.Spacecraft import Spacecraft
 
@@ -371,19 +380,24 @@ class baseEMD:
 
 
 def PSPSolOCase(show=False):
+    # TODO: Add labels in bottom of plot like in other cases
     # Dictionary intro
     PSP_SolOVars = {
         "caseName": "PSP_SolO_e6",
-        "shortParams": ["Btotal", "B_R", "V_R", "Mf", "N_RPW"],
+        "shortParams": ["Btotal", "B_R", "V_R", "Mf", "N"],  # Does N break?
         "longParams": ["Btotal", "B_R", "V_R", "Mf", "N"],
         "PeriodMinMax": [5, 22],
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.65, 1, 0.05),
-        "multiCPU": 8,
+        "multiCPU": 6,
         "caseName": "PSP_SolO_e6",
         "speedSet": (300, 200, 250),  # High - low - mid
+        "shortDuration": 3,
+        "shortDisplacement": 0.5,
         "MARGIN": 0,
+        "inKind": True,
+        "windDispParam": 1,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
@@ -421,7 +435,7 @@ def STAPSPCase(show=True):
         "shortDisplacement": 10,  # In hours
         "MARGIN": MARGIN,
         "inKind": True,
-        "windDispParam": 30,
+        "windDispParam": 1,
     }
 
     box = None
@@ -440,6 +454,7 @@ def STAPSPCase(show=True):
     )
 
 
+@timer
 def SolOEarth2020Case(show=True):
     MARGIN = 60
     Vars = {
@@ -450,13 +465,13 @@ def SolOEarth2020Case(show=True):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 3,
+        "multiCPU": 6,
         "speedSet": None,
         "shortDuration": 20,  # In hours
         "shortDisplacement": 1,
         "MARGIN": MARGIN,
         "inKind": True,
-        "windDispParam": 10,
+        "windDispParam": 1,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
@@ -465,11 +480,6 @@ def SolOEarth2020Case(show=True):
     # box = ([datetime(2020, 4, 20, 1, 0) - timedelta(hours=MARGIN), datetime(2020, 4, 21, 0, 0) - timedelta(hours=MARGIN)],
     #    [datetime(2020, 4, 19, 8, 50) - timedelta(hours=MARGIN), datetime(2020, 4, 20, 9) - timedelta(hours=MARGIN)])
     box = None
-
-    # missingData = namedtuple("missingData", [
-    #                          "shortMissing", "longMissing", "colour"], defaults=(None, None, "red"))
-    shortDataGaps = None
-    longDataGaps = None
     # For SolO - Earth there is no missing data essentially
     mData = None
 
@@ -484,9 +494,12 @@ def SolOEarth2020Case(show=True):
         missingData=mData,
         skipParams=["WIND_V_R"],
     )
+    print(
+        f"Done April2020_SOLO_WIND with {soloAprilEMD.multiCPU} CPUs and {soloAprilEMD.windDispParam} minutes of window displacement"
+    )
 
 
-@timer
+# @timer
 def ISSICase(show=False):
     WINDDISP = 1
     ISSI_AIAVars = {
@@ -523,6 +536,7 @@ def ISSICase(show=False):
     )
 
 
+@timer
 def ISSIHMICase(show=False):
     WINDDISP = 1
     ISSI_HMIVars = {
@@ -533,7 +547,7 @@ def ISSIHMICase(show=False):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 8,
+        "multiCPU": 6,
         "shortDuration": 9,
         "shortDisplacement": 1,
         "MARGIN": 0,
@@ -542,11 +556,8 @@ def ISSIHMICase(show=False):
     }
 
     hmiEMD = baseEMD(**ISSI_HMIVars)
-    start_time = time.clock()
     hmiEMD.plotSeparately()
-    print(
-        f"ISSI HMI CASE Takes {time.clock() - start_time} seconds with windDispParam of {WINDDISP} minutes"
-    )
+
     hmiEMD.plotTogether(
         showBox=None,
         gridRegions=(1, 2, True, True),
@@ -554,11 +565,35 @@ def ISSIHMICase(show=False):
         xTickFrequency=[0, 12],
     )
 
+    print(
+        f"ISSI HMI CASE with {hmiEMD.multiCPU} CPUs and {hmiEMD.windDispParam} minutes of window displacement"
+    )
+
 
 if __name__ == "__main__":
-    # TODO: Calculate difference in time taken with different windDispParam and performance differences
-    ISSICase(show=False)
+    # ISSICase(show=False)
     # ISSIHMICase(show=False)
-    # SolOEarth2020Case(show=True)
-    # PSPSolOCase()
+
+    # In situ
+    PSPSolOCase(show=False)
+    # SolOEarth2020Case(show=False)
     # STAPSPCase(show=False)
+
+    # TODO:
+    """
+        - PSP Solo: First case (easiest, mostly working, kernels good) -> Imports from /Users/ddp/Documents/PhD/inEMD_Github/Scripts/Plots/createCSVsAndOrbits.py
+            - Should remake the timeseries plot. Where Are they found?
+            - Should choose one of the orbit plots and put it in
+            - Should get a results plot, whether 1.5 hours or more
+            
+        - SoloEarth2020: Second case (harder, kernels bad)
+            - Should remake the timeseries plot. Where Are they found?
+            - Should fix the L1 spice kernel
+            - Should check exactly what I added to Heliopy on old computer
+            - Should choose one of the orbit plots and put it in
+            - Should get a results plot, whether 1.5 hours or more
+        
+        - STAPSP: Literally did it over a couple of days. I wonder how much of it works?
+            - Just do everything lol
+    
+    """

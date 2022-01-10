@@ -207,9 +207,10 @@ def transformTimeAxistoVelocity(
     elif ObjBody == "L1":
         from sys import path
 
-        path.append("/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts")
+        # TODO: Check if this path is required
+        # path.append("/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/Scripts")
         # Get wind data for relevant times
-        spc = Spacecraft(name="Earth_April_2020")
+        spc = Spacecraft(name="Earth_April_2020", cadence_obj=92, remakeCSV=False)
         R_body = spc.df["R"].mean() * u.km
         R = R - R_body
 
@@ -219,7 +220,7 @@ def transformTimeAxistoVelocity(
         # R_body is the one further from Sun
         R = R - R_body
 
-    if ObjBody == "solo" or ObjBody == "psp":
+    elif ObjBody == "solo" or ObjBody == "psp":
         trajName = "Solar Orbiter" if ObjBody == "solo" else "SPP"
         if firstLoad:
             spicedata.get_kernel(ObjBody)
