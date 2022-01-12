@@ -665,6 +665,7 @@ def superSummaryPlotGeneric(
     forceRemake=True,
     yTickFrequency=[0],
     xTickFrequency=[0],
+    legendLocForce="upper right",
 ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -752,6 +753,7 @@ def superSummaryPlotGeneric(
             forceRemake=forceRemake,
             yTickFrequency=yTickFrequency,
             xTickFrequency=xTickFrequency,
+            legendLocForce=legendLocForce,
         )
 
 
@@ -904,6 +906,7 @@ def plot_super_summary(
     forceRemake=True,
     yTickFrequency=[0],
     xTickFrequency=[0],
+    legendLocForce="upper right",
 ):
     """Plots a "super" summary with info about all selected regions
     Does not take dataframes as input, instead finds the data through
@@ -1170,6 +1173,7 @@ def plot_super_summary(
                     for x in dfDots[_shortVar].values
                 ]
                 _msize = 100 * (dfDots[_shortVar].values) ** 2
+                # In the case where we only use one of the correlation thresholds
                 if len(corrThrPlotList) == 1:
                     _msize = 100
 
@@ -1251,12 +1255,19 @@ def plot_super_summary(
         pass
     # Or that the jumpCadence of Short dataset is correct
     try:
+        # When the axis is 2x3, have BBOX in this position
         if axs.shape == (2, 3):
             BBOX_anchor = (0.9, 0.9)
-        else:
-            BBOX_anchor = (1, 1)
+
     except AttributeError:
-        BBOX_anchor = (1, 1)
+        if legendLocForce == "upper right":
+            BBOX_anchor = (1, 1)
+        elif legendLocForce == "lower right":
+            BBOX_anchor = (1, 0.4)
+        elif legendLocForce == "lower left":
+            BBOX_anchor = (0, 0)
+        elif legendLocForce == "upper left":
+            BBOX_anchor = (0, 1)
 
     fig.legend(handles=legend_elements, prop={"size": 25}, bbox_to_anchor=BBOX_anchor)
     longParamLegible = (
@@ -1590,3 +1601,7 @@ def plot_variables(df, BOXWIDTH=200):
         plt.ylabel(parameter)
     plt.show()
     plt.close()
+
+
+if __name__ == "__main__":
+    raise AttributeError("Signal API is utilised from within other classes.")

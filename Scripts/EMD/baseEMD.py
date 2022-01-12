@@ -239,6 +239,7 @@ class baseEMD:
                 "forceCreate": True,
                 "firstRelevantLongTime": datetime(2020, 4, 15, 20),
                 "MARGIN": MARGIN,
+                "equal": self.equal,
             }
             cases = caseCreation(**soloEarthcases)
 
@@ -289,6 +290,7 @@ class baseEMD:
                 "forceCreate": True,
                 "firstRelevantLongTime": datetime(2019, 11, 3),
                 "MARGIN": MARGIN,
+                "equal": self.equal,
             }
             cases = caseCreation(**staPSPCases)
 
@@ -357,6 +359,7 @@ class baseEMD:
         forceRemake=True,
         yTickFrequency=[0],
         xTickFrequency=[0],
+        legendLocForce="upper right",
     ):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
@@ -376,6 +379,7 @@ class baseEMD:
             forceRemake=forceRemake,
             yTickFrequency=yTickFrequency,
             xTickFrequency=xTickFrequency,
+            legendLocForce=legendLocForce,
         )
 
 
@@ -417,7 +421,9 @@ def PSPSolOCase(show=False):
     pspSolOe6EMD = baseEMD(**PSP_SolOVars)
     pspSolOe6EMD.plotSeparately()
     pspSolOe6EMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
-    pspSolOe6EMD.plotTogether(showBox=box, gridRegions=True)
+    pspSolOe6EMD.plotTogether(
+        showBox=box, gridRegions=True, legendLocForce="lower right"
+    )
 
 
 def STAPSPCase(show=True):
@@ -455,7 +461,7 @@ def STAPSPCase(show=True):
     )
 
 
-@timer
+# @timer
 def SolOEarth2020Case(show=True):
     MARGIN = 60
     Vars = {
@@ -490,10 +496,11 @@ def SolOEarth2020Case(show=True):
     soloAprilEMD.plotTogether(
         showBox=box,
         gridRegions=True,
-        shortName="SolO (0.8A.U.)",
+        shortName="SolO (0.8 A.U.)",
         longName="WIND (1 A.U.)",
         missingData=mData,
         skipParams=["WIND_V_R"],
+        legendLocForce="upper left",
     )
     print(
         f"Done April2020_SOLO_WIND with {soloAprilEMD.multiCPU} CPUs and {soloAprilEMD.windDispParam} minutes of window displacement"
@@ -537,7 +544,7 @@ def ISSICase(show=False):
     )
 
 
-@timer
+# @timer
 def ISSIHMICase(show=False):
     WINDDISP = 1
     ISSI_HMIVars = {
@@ -577,23 +584,23 @@ if __name__ == "__main__":
 
     # In situ
     PSPSolOCase(show=False)
-    # SolOEarth2020Case(show=False)
+    # SolOEarth2020Case(show=True)
     # STAPSPCase(show=False)
 
     # TODO:
     """
-        - PSP Solo: First case (easiest, mostly working, kernels good) -> Imports from /Users/ddp/Documents/PhD/inEMD_Github/Scripts/Plots/createCSVsAndOrbits.py
-            - Should remake the timeseries plot. DONE
-            - Should choose one of the orbit plots and put it in. DONE
-            - Should get a results plot, whether 1.5 hours or more. DOING
-            
-        - SoloEarth2020: Second case (harder, kernels bad)
-            - Should remake the timeseries plot. Where Are they found? -> In createCSVsAndOrbits.py
-            - Should fix the L1 spice kernel. DONE
-            - Should choose one of the orbit plots. Do they exist? -> In createCSVsAndOrbits.py
-            - Should get a results plot, whether 1.5 hours or more
-        
-        - STAPSP: Literally did it over a couple of days. I wonder how much of it works?
-            - Just do everything lol
-    
+    - PSP Solo: First case (easiest, mostly working, kernels good) -> Imports from /Users/ddp/Documents/PhD/inEMD_Github/Scripts/Plots/createCSVsAndOrbits.py
+        - Should remake the timeseries plot. DONE
+        - Should choose one of the orbit plots and put it in. DONE
+        - Should get a results plot, whether 1.5 hours or more. DOING
+
+    - SoloEarth2020: Second case (harder, kernels bad)
+        - Should remake the timeseries plot. Where Are they found? -> In createCSVsAndOrbits.py
+        - Should fix the L1 spice kernel. DONE
+        - Should choose one of the orbit plots. Do they exist? -> In createCSVsAndOrbits.py
+        - Should get a results plot, whether 1.5 hours or more
+
+    - STAPSP: Literally did it over a couple of days. I wonder how much of it works?
+        - Just do everything lol
+
     """

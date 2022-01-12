@@ -12,6 +12,8 @@ import astropy.constants as const
 from datetime import timedelta, datetime
 from collections import namedtuple
 
+from pyparsing import col
+
 BASE_PATH = "/Users/ddp/Documents/PhD/inEMD_Github/"
 
 path.append(f"{BASE_PATH}Scripts/")
@@ -34,17 +36,17 @@ unitsTable = {
 SOLROTRATE = 24.47 / 86400
 
 from cycler import cycler
-
 import matplotlib
 
-plt.style.use("seaborn-paper")
-
-matplotlib.rcParams["axes.titlesize"] = 18
-matplotlib.rcParams["axes.labelsize"] = 18
-matplotlib.rcParams["figure.titlesize"] = 20
-matplotlib.rcParams["xtick.labelsize"] = 16
-matplotlib.rcParams["ytick.labelsize"] = 16
-matplotlib.rcParams["axes.prop_cycle"] = cycler(color="krgby")
+params = {
+    "legend.fontsize": "x-large",
+    "axes.labelsize": "x-large",
+    "axes.titlesize": "x-large",
+    "xtick.labelsize": "x-large",
+    "ytick.labelsize": "x-large",
+    "axes.prop_cycle": cycler(color="krgby"),
+}
+matplotlib.rcParams.update(params)
 
 
 def lineCalc(P1, P2):
@@ -648,7 +650,11 @@ class Spacecraft:
             sp_traj = spice.Trajectory("SolO")
 
         elif "earth" in self.name.lower():
-            raise NotImplementedError("Earth L1 spacecraft do not have a spice kernel")
+            spicedata.get_kernel("planet_trajectories")
+            sp_traj = spice.Trajectory("Earth")
+        elif "sta" in self.name.lower():
+            spicedata.get_kernel("stereo_a")
+            sp_traj = spice.Trajectory("Stereo Ahead")
         else:
             raise ValueError(f"{self.name} not identified")
 
@@ -682,15 +688,24 @@ class Spacecraft:
     def plotOrbit_x_y(
         farFromSun,
         closetoSun,
+        legendLoc,
         objFolder=f"{BASE_PATH}Figures/Orbit_3d/",
         plotRate="12h",
         farTime="22:00",
         closeTime="3:30",
-        pspiralHlight=datetime(2020, 9, 29, 15, 30),
+        pspiralHlight=None,
         radialTolerance=1.5,
+        zoomRegion=((-0.79, 0.07), (-0.16, 0.8)),
+        vSW=314,
+        selfName="MISSING_NAME_SELF",
+        otherName="MISSING_NAME_OTHER",
+        selfSpiralRadii=(0.15, 1.3),
+        otherSpiralRadii=(0.05, 1.3),
+        plot_spirals=True,
     ):
         """
         Plots the longitude and latitude of a given spacecraft object
+        Defaults are set to PSP SolO case
         plotRate = How often to plot the orbits
         hlight = for farFrom, closeTo, which date to highlight (closest to!)
         """
@@ -737,36 +752,40 @@ class Spacecraft:
         )
 
         # Reduce the datasets
-        solo_times, psp_times = [], []
+        farFromTimes, closeToTimes = [], []
+        for time in pd.date_range(
+            farFromSun.df.index[0].to_pydatetime(),
+            farFromSun.df.index[-1].to_pydatetime(),
+            freq=f"{plotRate}",
+        ):
+            farFromTimes.append(time.to_pydatetime())
 
         for time in pd.date_range(
-            datetime(2020, 9, 27, 22), datetime(2020, 10, 4, 22), freq=f"{plotRate}"
+            closetoSun.df.index[0].to_pydatetime(),
+            closetoSun.df.index[-1].to_pydatetime(),
+            freq=f"{plotRate}",
         ):
-            solo_times.append(time.to_pydatetime())
-
-        for time in pd.date_range(
-            datetime(2020, 9, 25, 4), datetime(2020, 10, 1, 4), freq=f"{plotRate}"
-        ):
-            psp_times.append(time.to_pydatetime())
+            closeToTimes.append(time.to_pydatetime())
 
         df_farFromSun = df_farFromSun.resample(f"{plotRate}", origin=farTime).mean()
         df_nextToSun = df_nextToSun.resample(f"{plotRate}", origin=closeTime).mean()
 
-        tSoloList, tPSPList, lonDistList = [], [], []
+        farFromSunTimesList, tPSPList, lonDistList = [], [], []
         lonDistDF = pd.DataFrame({})
 
+        # Get times and longitudes into a list
         for _i, dfRowPSP in enumerate(df_nextToSun.iterrows()):
             # Use the downsampled PSP data
             tPSP, tSolo, lonDist = _alignmentIdentification(
-                soloDF=df_farFromSun, pspDF=dfRowPSP, vSWPSP=320
+                soloDF=df_farFromSun, pspDF=dfRowPSP, vSWPSP=vSW
             )
 
-            tSoloList.append(tSolo)
+            farFromSunTimesList.append(tSolo)
             tPSPList.append(tPSP)
             lonDistList.append(lonDist)
 
         lonDistDF["PSPTime"] = tPSPList
-        lonDistDF["SoloTime"] = tSoloList
+        lonDistDF["farFromSunTime"] = farFromSunTimesList
         lonDistDF["LonDist"] = lonDistList
 
         closestRows = lonDistDF[np.abs(lonDistDF["LonDist"]) <= radialTolerance]
@@ -782,17 +801,17 @@ class Spacecraft:
             slopeIntList.append(slopeInt(m, b))
 
         # Figure of the two orbits with field lines
-        plt.figure(figsize=(12, 12), constrained_layout=True)
-        plt.xlim(-0.79, 0.07)
-        plt.ylim(-0.16, 0.8)
+        fig = plt.figure(figsize=(10, 10), constrained_layout=True)
+        ax = plt.gca()
+        plt.scatter([0], [0], s=300, color="orange", marker="*")
 
         soloIndices = []
-        for _t in pd.to_datetime(closestRows["SoloTime"].values).to_pydatetime():
+        for _t in pd.to_datetime(closestRows["farFromSunTime"].values).to_pydatetime():
             soloIndex = df_farFromSun.index.get_loc(_t, method="nearest")
             soloIndices.append(soloIndex)
 
         hlightIndices = {
-            "SoloIndices": soloIndices,
+            "farFromSunHighlightedIndices": soloIndices,
             "PSPIndices": list(
                 set(
                     [
@@ -804,14 +823,19 @@ class Spacecraft:
 
         # ANNOTATION
         # Annotate dates in PSP
-        pspiralIndex = df_nextToSun.index.get_loc(pspiralHlight, method="nearest")
+        pspiralIndex = (
+            df_nextToSun.index.get_loc(pspiralHlight, method="nearest")
+            if pspiralHlight
+            else None
+        )
         # RADIAL
         # plot radial
         for i, line in enumerate(slopeIntList):
+            # Take plus or minus X values
             x = (
                 np.linspace(0.0, -1.0)
                 if df_nextToSun["X"].values[i] < 0
-                else np.linspace(0.0, 0.1)
+                else np.linspace(0.0, 1)
             )
             y = line.m * x + line.b
 
@@ -821,87 +845,97 @@ class Spacecraft:
                 if tline not in df_nextToSun.index[hlightIndices["PSPIndices"]]
                 else "red"
             )
-            plt.plot(x, y, color=_col, alpha=0.7, linestyle="--", linewidth=2)
+            plt.plot(x, y, color=_col, alpha=0.4, linestyle="--", linewidth=1, zorder=1)
 
-        # SPIRALS
-        # plot spiral
-        pspSpirals = findSpirals(df=df_nextToSun, vSW=314, rads=(0.05, 1.3))
-        for i, spiral in enumerate(pspSpirals):
-            x = spiral.X
-            y = spiral.Y
-            _col, _alpha = ("green", 0) if i != pspiralIndex else ("green", 0.8)
-            plt.plot(x, y, color=_col, alpha=_alpha, linestyle="-.", linewidth=4)
+        if plot_spirals:
+            # SPIRALS
+            # plot spiral
+            closeToSpirals = findSpirals(
+                df=df_nextToSun, vSW=vSW, rads=otherSpiralRadii
+            )
+            for i, spiral in enumerate(closeToSpirals):
+                x = spiral.X
+                y = spiral.Y
+                _col, _alpha = ("blue", 0.1) if i != pspiralIndex else ("green", 0.8)
+                plt.plot(x, y, color=_col, alpha=_alpha, linestyle="-.", linewidth=4)
 
-        # Plot Solo Spiral
-        soloSpirals = findSpirals(df_farFromSun, vSW=314, rads=(0.15, 1.3))
-        for spiral in soloSpirals:
-            x = spiral.X
-            y = spiral.Y
-            plt.plot(x, y, color="gray", alpha=0.1, linestyle="-.")
+            # Plot Solo Spiral
+            farFromSpirals = findSpirals(df_farFromSun, vSW=vSW, rads=selfSpiralRadii)
+            for spiral in farFromSpirals:
+                x = spiral.X
+                y = spiral.Y
+                plt.plot(x, y, color="gray", alpha=0.1, linestyle="-.")
 
         # Plot all Spacecraft positions
-        plt.scatter(
+        smap = plt.scatter(
             df_farFromSun["X"],
             df_farFromSun["Y"],
-            alpha=0.6,
-            s=10,
-        )
-        plt.scatter(
-            df_nextToSun["X"],
-            df_nextToSun["Y"],
-            alpha=0.6,
-            s=10,
+            c=df_farFromSun.index,
+            cmap="binary",
+            s=40,
+            edgecolors="black",
         )
 
-        # Annotate dates in PSP
+        cax = ax.inset_axes([1.05, 0.50, 0.05, 0.45], transform=ax.transAxes)
+        cb = plt.colorbar(smap, cax=cax, orientation="vertical", shrink=0.45)
+        cb.ax.set_yticklabels(df_farFromSun.index.strftime("%d %b %H:%M"))
+        cb.ax.set_title(f"{selfName}")
+
+        smap = plt.scatter(
+            df_nextToSun["X"],
+            df_nextToSun["Y"],
+            c=df_nextToSun.index,
+            cmap="OrRd",
+            s=40,
+            edgecolors="black",
+        )
+        cax = ax.inset_axes([1.05, 0, 0.05, 0.45], transform=ax.transAxes)
+        cb = plt.colorbar(smap, cax=cax, orientation="vertical", shrink=0.45)
+        cb.ax.set_yticklabels(df_nextToSun.index.strftime("%d %b %H:%M"))
+        cb.ax.set_title(f"{otherName}")
+
+        # Annotate dates in closetoSun
         for i, txt in enumerate(df_nextToSun.index):
             # If within the list
             if i in list(set([*hlightIndices["PSPIndices"], pspiralIndex])):
-                _lab = "PSP " + datetime.strftime(txt, "%Y-%m-%d %H:%M")
+                _lab = f'{otherName} {datetime.strftime(txt, "%Y-%m-%d %H:%M")}'
                 plt.scatter(
                     df_nextToSun["X"][i],
                     df_nextToSun["Y"][i],
-                    color="red" if i != pspiralIndex else "green",
+                    # color="red" if i != pspiralIndex else "green",
                     s=100,
                     alpha=1,
                     label=_lab if i != pspiralIndex else f"Parker Alignment: {_lab}",
                 )
 
-        # Annotate dates in SolO
+        # Annotate dates in farFromSun (Which are highlighted)
+        # Keep in red because we only use radial propagation here, not Parker Spiral???
         for i, txt in enumerate(df_farFromSun.index):
-            if i in hlightIndices["SoloIndices"]:
-                # plt.gca().annotate(
-                #     datetime.strftime(txt, "%d-%H:%M"),
-                #     (df_farFromSun["X"][i], df_farFromSun["Y"][i]),
-                #     size=15,
-                #     bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
-                # )
-                _lab = "SolO " + datetime.strftime(txt, "%Y-%m-%d %H:%M")
+            if i in hlightIndices["farFromSunHighlightedIndices"]:
+                _lab = f'{selfName}: {datetime.strftime(txt, "%Y-%m-%d %H:%M")}'
                 plt.scatter(
                     df_farFromSun["X"][i],
                     df_farFromSun["Y"][i],
-                    color="black",
-                    s=30,
+                    # color="red",
+                    s=200,
                     label=_lab,
+                    marker="+",
                 )
 
         # Need to add labels correctly
-        plt.scatter([0], [0], s=300, color="orange", marker="*")
         plt.grid(True)
         plt.xlabel("Cartesian X (AU)")
         plt.ylabel("Cartesian Y (AU)")
         plt.title(
-            f"Accepted Long separation:{radialTolerance:.2f} deg. | cadence {plotRate}"
+            f"Accepted long. separation:{radialTolerance:.2f} deg. | cadence {plotRate} | Vsw: {vSW} km/s"
         )
-        plt.legend()
+        plt.xlim(*zoomRegion[0])
+        plt.ylim(*zoomRegion[1])
+        plt.legend(loc=legendLoc)
 
         # Plot the Parker Spiral lines
-        plt.savefig(
-            f"{objFolder}soloPSP_rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf"
-        )
-        print(
-            f"Saved to {objFolder}soloPSP_rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf"
-        )
+        plt.savefig(f"{objFolder}rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf")
+        print(f"Saved to {objFolder}rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf")
         if farFromSun.show == True:
             plt.show()
 
@@ -1046,9 +1080,9 @@ class PSPSolO_e6(Spacecraft):
         # Magnetic field components
         # Radial velocity
         ax1 = axs[0]
-        ax1.plot(ts, Vx, colourSolO, label="SolO Br")
-        ax1.plot(ots, oVx, colourPSP, label="PSP Br")
-        ax1.set_ylabel(r"$-{V_x} (km/s)$ [N.S]")
+        ax1.plot(ts, Vx, colourSolO, label="SolO")
+        ax1.plot(ots, oVx, colourPSP, label="PSP")
+        ax1.set_ylabel(r"$-{V_x} (km/s)$")
         ax1.legend(loc="upper left")
 
         # Instead of Temperature show scaled Br
@@ -1062,24 +1096,24 @@ class PSPSolO_e6(Spacecraft):
         )
         ax2.plot(ots, oBrScaled, colourPSP, label="PSP Br")
         ax2.set_ylabel(r"$\hat{B}_R$")
-        ax2.legend(loc="upper left")
+        # ax2.legend(loc="upper left")
 
         # Magnetic field components
         axsBt = axs[2]
-        axsBt.set_ylabel(r"$\hat{B}_{TOTAL}$")
+        axsBt.set_ylabel(r"Scaled $\hat{B}_{TOTAL}$")
         axsBt.plot(
             ts,
             BtScaled,
             colourSolO,
-            label=r"$R^2$ Scaled Btotal SolO",
+            label=r"S.Btotal SolO",
         )
         axsBt.plot(
             ots,
             oBtScaled,
             colourPSP,
-            label=r"$R^2$ Scaled Btotal PSP",
+            label=r"S.Btotal PSP",
         )
-        axsBt.legend(loc="upper left")
+        # axsBt.legend(loc="upper left")
 
         # Proton Density
         axsNp = axs[3]
@@ -1087,30 +1121,30 @@ class PSPSolO_e6(Spacecraft):
             ts,
             NpScaled,
             colourSolO,
-            label=r"$R^2$ Scaled Np (SolO_PAS)",
+            label=r"SolO[PAS]",
         )
         axsNp.plot(
             ts,
             NpRPWScaled,
             colourSolO,
             alpha=0.5,
-            label=r"$R^2$ Scaled Np (SolO_RPW)",
+            label=r"SolO[RPW]",
         )
         axsNp.plot(
             ots,
             oNpScaled,
             colourPSP,
-            label=r"$R^2$ Scaled Np (PSP_SWEAP)",
+            label=r"PSP",
         )
-        axsNp.set_ylabel(r"$n_p$ (# $m^{-3}$)")
+        axsNp.set_ylabel(r"Scaled $n_p$ (# $m^{-3}$)")
         axsNp.legend(loc="upper left")
 
         # Scaled MF
         axsMf = axs[4]
-        axsMf.plot(ts, MfScaled, colourSolO, linewidth=1, label=r"$R^2$ Scaled Mf SolO")
-        axsMf.plot(ots, oMfScaled, colourPSP, label=r"$R^2$ Scaled Mf PSP")
-        axsMf.set_ylabel(r"$Mf$")
-        axsMf.legend(loc="upper left")
+        axsMf.plot(ts, MfScaled, colourSolO, linewidth=1, label=r"S.Mf SolO")
+        axsMf.plot(ots, oMfScaled, colourPSP, label=r"S.Mf PSP")
+        axsMf.set_ylabel(r"Scaled $Mf$")
+        # axsMf.legend(loc="upper left")
 
         # # Plot the relevant columns
         for ax in axs:
@@ -1408,8 +1442,8 @@ class STA_psp(Spacecraft):
             remakeCSV=remakeCSV,
         )
 
-    def plot_solo_earth_df(self, other, zones=[]):
-        assert "earth" in self.name.lower(), "Please ensure Earth is object with f call"
+    def plot_sta_psp_df(self, other, zones=[], colourSTA="k-", colourPSP="r-"):
+        assert "sta" in self.name.lower(), "Please ensure STEREO is object with f call"
 
         ts = self.df.index
         ots = other.df.index
@@ -1425,43 +1459,47 @@ class STA_psp(Spacecraft):
         # Figure
         # Width and marker size
         _, axs = plt.subplots(
-            7, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
+            6, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
         )
 
         # Plots
-        axs[0].set_ylabel("R (AU)")
-        axs[0].plot(ts, R * u.m.to(u.AU), label="WIND")
-        axs[0].plot(ots, oR * u.m.to(u.AU), label="SolO")
-        axs[0].grid(True)
-        axs[0].set_ylim(0.7, 1.1)
-        axs[0].legend()
-
-        # Bx
-        axs[1].set_ylabel(r"$\hat{B}_{R}$")
-        axs[1].plot(ts, Bx, label="ACE")
-        axs[1].plot(ots, oBx, label="SolO")
-
-        # By
-        axs[2].set_ylabel(r"$\hat{B}_{T}$")
-        axs[2].plot(ts, By)
-        axs[2].plot(ots, oBy)
-
-        # Bz
-        axs[3].set_ylabel(r"$\hat{B}_{N}$")
-        axs[3].plot(ts, Bz)
-        axs[3].plot(ots, oBz)
-
-        # Btotal
-        axs[4].set_ylabel(r"$\hat{B}_T$")
-        axs[4].plot(ts, Bt)
-        axs[4].plot(ots, oBt)
+        axR = axs[0]
+        axR.set_ylabel(r"R [AU]")
+        axR.plot(ts, R * u.m.to(u.AU), colourSTA, label="ST-A")
+        axR.plot(ots, oR * u.m.to(u.AU), colourPSP, label="PSP")
+        axR.grid(True)
+        axR.set_ylim(0.9, 0.97)
+        axR.legend()
 
         # V
-        axs[5].set_ylabel(r"$\hat{V}_R$")
-        axs[5].plot(ts, self.df["V_R"])
+        axV = axs[1]
+        axV.set_ylabel(r"$\hat{V}_R [km/s]$")
+        axV.plot(ts, self.df["V_R"], colourSTA, label="ST-A", alpha=0.7)
+        axV.legend()
 
-        axs[6].set_ylabel(r"$T_p$")
-        axs[6].plot(ts, self.df["T"])
+        # Bx
+        axBR = axs[2]
+        axBR.set_ylabel(r"$\hat{B}_{R} [nT]$")
+        axBR.plot(ts, Bx, colourSTA, alpha=0.7)
+        axBR.plot(ots, oBx, colourPSP, alpha=0.6)
+
+        # By
+        axBT = axs[3]
+        axBT.set_ylabel(r"$\hat{B}_{T} [nT]$")
+        axBT.plot(ts, By, colourSTA, alpha=0.7)
+        axBT.plot(ots, oBy, colourPSP, alpha=0.6)
+
+        # Bz
+        axBN = axs[4]
+        axBN.set_ylabel(r"$\hat{B}_{N} [nT]$")
+        axBN.plot(ts, Bz, colourSTA, alpha=0.7)
+        axBN.plot(ots, oBz, colourPSP, alpha=0.6)
+
+        # Btotal
+        axBTOTAL = axs[5]
+        axBTOTAL.set_ylabel(r"$\hat{B}_{TOTAL} [nT]$")
+        axBTOTAL.plot(ts, Bt, colourSTA, alpha=0.7)
+        axBTOTAL.plot(ots, oBt, colourPSP, alpha=0.6)
 
         # # Plot the relevant columns
         for ax in axs:
@@ -1523,21 +1561,27 @@ class EarthApril2020(Spacecraft):
         # Figure
         # Width and marker size
         _, axs = plt.subplots(
-            7, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
+            5, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
         )
 
-        # Plots
-        axs[0].set_ylabel("R (AU)")
-        axs[0].plot(ts, R * u.m.to(u.AU), label="WIND")
-        axs[0].plot(ots, oR * u.m.to(u.AU), label="SolO")
-        axs[0].grid(True)
-        axs[0].set_ylim(0.7, 1.1)
-        axs[0].legend()
+        # # Plots
+        # axs[0].set_ylabel("R (AU)")
+        # axs[0].plot(ts, R * u.m.to(u.AU), label="WIND")
+        # axs[0].plot(ots, oR * u.m.to(u.AU), label="SolO")
+        # axs[0].grid(True)
+        # axs[0].set_ylim(0.7, 1.1)
+        # axs[0].legend()
 
         # Bx
+        # V
+        axs[0].set_ylabel(r"$\hat{V}_R$")
+        axs[0].plot(ts, self.df["V_R"], label="WIND")
+        axs[0].legend()
+
         axs[1].set_ylabel(r"$\hat{B}_{R}$")
-        axs[1].plot(ts, Bx, label="ACE")
+        axs[1].plot(ts, Bx, label="WIND")
         axs[1].plot(ots, oBx, label="SolO")
+        axs[1].legend()
 
         # By
         axs[2].set_ylabel(r"$\hat{B}_{T}$")
@@ -1549,17 +1593,10 @@ class EarthApril2020(Spacecraft):
         axs[3].plot(ts, Bz)
         axs[3].plot(ots, oBz)
 
-        # Btotal
-        axs[4].set_ylabel(r"$\hat{B}_T$")
+        # Bt0tal
+        axs[4].set_ylabel(r"$\hat{B}_{TOTAL}$")
         axs[4].plot(ts, Bt)
         axs[4].plot(ots, oBt)
-
-        # V
-        axs[5].set_ylabel(r"$\hat{V}_R$")
-        axs[5].plot(ts, self.df["V_R"])
-
-        axs[6].set_ylabel(r"$T_p$")
-        axs[6].plot(ts, self.df["T"])
 
         # # Plot the relevant columns
         for ax in axs:
