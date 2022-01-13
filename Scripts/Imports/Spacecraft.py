@@ -11,6 +11,9 @@ import astropy.units as u
 import astropy.constants as const
 from datetime import timedelta, datetime
 from collections import namedtuple
+import warnings
+
+warnings.filterwarnings("ignore")
 
 from pyparsing import col
 
@@ -801,7 +804,7 @@ class Spacecraft:
             slopeIntList.append(slopeInt(m, b))
 
         # Figure of the two orbits with field lines
-        fig = plt.figure(figsize=(10, 10), constrained_layout=True)
+        fig = plt.figure(figsize=(11, 10), constrained_layout=True)
         ax = plt.gca()
         plt.scatter([0], [0], s=300, color="orange", marker="*")
 
@@ -870,29 +873,36 @@ class Spacecraft:
         smap = plt.scatter(
             df_farFromSun["X"],
             df_farFromSun["Y"],
-            c=df_farFromSun.index,
+            c=mdates.date2num(df_farFromSun.index),
             cmap="binary",
             s=40,
             edgecolors="black",
         )
 
-        cax = ax.inset_axes([1.05, 0.50, 0.05, 0.45], transform=ax.transAxes)
+        cax = ax.inset_axes([1.07, 0.50, 0.05, 0.45])
         cb = plt.colorbar(smap, cax=cax, orientation="vertical", shrink=0.45)
-        cb.ax.set_yticklabels(df_farFromSun.index.strftime("%d %b %H:%M"))
-        cb.ax.set_title(f"{selfName}")
+        cb.ax.yaxis.set_label_position("left")
+        cb.ax.set_ylabel(f"{selfName}")
+        loc = mdates.DayLocator()
+        # cb.ax.yaxis.set_major_locator(loc)
+        # cb.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
+        cb.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
 
-        smap = plt.scatter(
+        smap2 = plt.scatter(
             df_nextToSun["X"],
             df_nextToSun["Y"],
-            c=df_nextToSun.index,
+            c=mdates.date2num(df_nextToSun.index),
             cmap="OrRd",
             s=40,
             edgecolors="black",
         )
-        cax = ax.inset_axes([1.05, 0, 0.05, 0.45], transform=ax.transAxes)
-        cb = plt.colorbar(smap, cax=cax, orientation="vertical", shrink=0.45)
-        cb.ax.set_yticklabels(df_nextToSun.index.strftime("%d %b %H:%M"))
-        cb.ax.set_title(f"{otherName}")
+        cax2 = ax.inset_axes([1.07, 0, 0.05, 0.45])
+        cb2 = plt.colorbar(smap2, cax=cax2, orientation="vertical", shrink=0.45)
+        cb2.ax.yaxis.set_label_position("left")
+        cb2.ax.set_ylabel(f"{otherName}")
+        loc2 = mdates.DayLocator()
+        # cb2.ax.yaxis.set_major_locator(loc)
+        cb2.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc2))
 
         # Annotate dates in closetoSun
         for i, txt in enumerate(df_nextToSun.index):
@@ -988,7 +998,6 @@ class PSPSolO_e6(Spacecraft):
         zone 1 and zone 2 will be highlighted in SolO and PSP respectively
         """
         assert "solo" in self.name.lower(), "Please ensure SolO is object with f call"
-        from astropy import constants as c
 
         # Figure
         # Width and marker size
@@ -1044,7 +1053,7 @@ class PSPSolO_e6(Spacecraft):
         oNp = other.dfUnits["N"]
         oNpScaled = (oNp.to(u.m ** (-3)) * oR ** 2).to(u.cm ** (-3))
         oT = other.df["T"]
-        oMf = const.m_p.value * oNpScaled.to(u.m ** (-3)) * np.abs(oVx).to(u.m / u.s)
+        oMf = const.m_p * oNpScaled.to(u.m ** (-3)) * np.abs(oVx).to(u.m / u.s)
         oMfScaled = oMf
 
         selfScaledDF = pd.DataFrame(
@@ -1082,7 +1091,7 @@ class PSPSolO_e6(Spacecraft):
         ax1 = axs[0]
         ax1.plot(ts, Vx, colourSolO, label="SolO")
         ax1.plot(ots, oVx, colourPSP, label="PSP")
-        ax1.set_ylabel(r"$-{V_x} (km/s)$")
+        ax1.set_ylabel(r"$-{V_x} [km/s]$")
         ax1.legend(loc="upper left")
 
         # Instead of Temperature show scaled Br
@@ -1095,12 +1104,12 @@ class PSPSolO_e6(Spacecraft):
             linewidth=1,
         )
         ax2.plot(ots, oBrScaled, colourPSP, label="PSP Br")
-        ax2.set_ylabel(r"$\hat{B}_R$")
+        ax2.set_ylabel(r"$\hat{B}_R$[nT]")
         # ax2.legend(loc="upper left")
 
         # Magnetic field components
         axsBt = axs[2]
-        axsBt.set_ylabel(r"Scaled $\hat{B}_{TOTAL}$")
+        axsBt.set_ylabel(r"Scaled $\hat{B}_{TOTAL}$[nT]")
         axsBt.plot(
             ts,
             BtScaled,
@@ -1136,14 +1145,14 @@ class PSPSolO_e6(Spacecraft):
             colourPSP,
             label=r"PSP",
         )
-        axsNp.set_ylabel(r"Scaled $n_p$ (# $m^{-3}$)")
+        axsNp.set_ylabel(r"S.$N_p$ (# $m^{-3}$)")
         axsNp.legend(loc="upper left")
 
         # Scaled MF
         axsMf = axs[4]
         axsMf.plot(ts, MfScaled, colourSolO, linewidth=1, label=r"S.Mf SolO")
         axsMf.plot(ots, oMfScaled, colourPSP, label=r"S.Mf PSP")
-        axsMf.set_ylabel(r"Scaled $Mf$")
+        axsMf.set_ylabel(r"S.$Mf$ [kg m$^{-2}$ s$^{-1}$]")
         # axsMf.legend(loc="upper left")
 
         # # Plot the relevant columns
@@ -1414,11 +1423,11 @@ class PSPSolO_e6(Spacecraft):
         else:
             plotPath = f"{BASE_PATH}Figures/Timeseries/"
             makedirs(plotPath, exist_ok=True)
-            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
+            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.pdf")
 
             print(
                 "Saved to {} as {}".format(
-                    plotPath, f"summaryPlot_{self.name}__{other.name}.png"
+                    plotPath, f"summaryPlot_{self.name}__{other.name}.pdf"
                 )
             )
 
@@ -1519,10 +1528,10 @@ class STA_psp(Spacecraft):
         if self.show:
             plt.show()
         else:
-            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            plotPath = f"{BASE_PATH}Figures/PSP_STA/"
             makedirs(plotPath, exist_ok=True)
             print(f"Saving to {plotPath}")
-            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
+            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.pdf")
 
         plt.close()
 
@@ -1574,27 +1583,27 @@ class EarthApril2020(Spacecraft):
 
         # Bx
         # V
-        axs[0].set_ylabel(r"$\hat{V}_R$")
+        axs[0].set_ylabel(r"$\hat{V}_R$ [km/s]")
         axs[0].plot(ts, self.df["V_R"], label="WIND")
         axs[0].legend()
 
-        axs[1].set_ylabel(r"$\hat{B}_{R}$")
+        axs[1].set_ylabel(r"$\hat{B}_{R}$ [nT]")
         axs[1].plot(ts, Bx, label="WIND")
         axs[1].plot(ots, oBx, label="SolO")
         axs[1].legend()
 
         # By
-        axs[2].set_ylabel(r"$\hat{B}_{T}$")
+        axs[2].set_ylabel(r"$\hat{B}_{T}$ [nT]")
         axs[2].plot(ts, By)
         axs[2].plot(ots, oBy)
 
         # Bz
-        axs[3].set_ylabel(r"$\hat{B}_{N}$")
+        axs[3].set_ylabel(r"$\hat{B}_{N}$ [nT]")
         axs[3].plot(ts, Bz)
         axs[3].plot(ots, oBz)
 
         # Bt0tal
-        axs[4].set_ylabel(r"$\hat{B}_{TOTAL}$")
+        axs[4].set_ylabel(r"$\hat{B}_{TOTAL}$ [nT]")
         axs[4].plot(ts, Bt)
         axs[4].plot(ots, oBt)
 
@@ -1617,10 +1626,10 @@ class EarthApril2020(Spacecraft):
         if self.show:
             plt.show()
         else:
-            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            plotPath = f"{BASE_PATH}Figures/SolO_Earth/"
             makedirs(plotPath, exist_ok=True)
             print(f"Saving to {plotPath}")
-            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.png")
+            plt.savefig(f"{plotPath}summaryPlot_{self.name}__{other.name}.pdf")
 
         plt.close()
 

@@ -53,7 +53,7 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
     solo_paper = {
         "start_time": datetime(2020, 10, 1, 22, 40),
         "end_time": datetime(2020, 10, 2, 0, 13),
-        "color": "blue",
+        "color": "black",
     }
 
     psp_paper = {
@@ -100,16 +100,17 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
                 plotRate=f"{minSteps}min",
                 farTime="22:00",
                 closeTime="04:00",
-                pspiralHlight=datetime(
-                    2020,
-                    9,
-                    28,
-                    23,
-                ),
+                # pspiralHlight=datetime(
+                #     2020,
+                #     9,
+                #     28,
+                #     23,
+                # ),
                 radialTolerance=radialTolerance,
                 selfName="SolO",
                 otherName="PSP",
                 legendLoc="best",
+                plot_spirals=False,
             )
 
 
@@ -155,6 +156,7 @@ def solo_Earth_April_2020(show=False, plot_orbit=False):
                 # closeTime="04:00",
                 pspiralHlight=None,
                 radialTolerance=radialTolerance,
+                plot_spirals=False,
                 zoomRegion=((-0.95, -0.65), (-0.6, -0.2)),
                 vSW=int(earth.df["V_R"].mean()),
                 selfName="WIND",
@@ -225,10 +227,9 @@ if __name__ == "__main__":
     show = False
     sta_psp(show=show, plot_orbit=True)
     try:
-        # psp_e6(show=show, plot_orbit=True)
-        # TODO: Make plots for Presentation
+        psp_e6(show=show, plot_orbit=True)
         solo_Earth_April_2020(show=show, plot_orbit=True)
+
     except AttributeError or ValueError:
-        pass
-        # psp_e6(show=show)
-        # solo_Earth_April_2020(show=show)
+        psp_e6(show=show)
+        solo_Earth_April_2020(show=show)
