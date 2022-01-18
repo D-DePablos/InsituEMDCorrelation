@@ -982,6 +982,7 @@ def plot_super_summary(
     used_ax = []
     for i, region in enumerate(regions):
 
+        # Slight hack to not break if only 1 ax
         try:
             if len(axs.shape) > 1:
                 row, col = axDic[region]
@@ -1201,18 +1202,19 @@ def plot_super_summary(
         ax.set_ylabel(ylabel_each, fontsize=20)
 
         if showBox != None:
-            box_X0, box_X1 = showBox[0]
-            box_Y0, box_Y1 = showBox[1]
+            for box in showBox:
+                box_X0, box_X1 = box.longData
+                box_Y0, box_Y1 = box.shortData
 
-            rec = plt.Rectangle(
-                (box_X0, box_Y0),
-                box_X1 - box_X0,
-                box_Y1 - box_Y0,
-                fc="blue",
-                ec=None,
-                alpha=0.4,
-            )
-            ax.add_patch(rec)
+                rec = plt.Rectangle(
+                    (box_X0, box_Y0),
+                    box_X1 - box_X0,
+                    box_Y1 - box_Y0,
+                    fc=box.color,
+                    ec=None,
+                    alpha=0.5,
+                )
+                ax.add_patch(rec)
 
     # Custom legend to show circle sizes and colouring
     legend_elements = []

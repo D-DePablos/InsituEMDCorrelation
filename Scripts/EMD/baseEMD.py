@@ -18,6 +18,11 @@ from EMD.importsProj3.signalAPI import (
 
 import functools
 import time
+from collections import namedtuple
+
+boxTuple = namedtuple(
+    "boxTuple", ["longData", "shortData", "color"], defaults=(None, None, "red")
+)
 
 
 def timer(func):
@@ -173,6 +178,7 @@ class baseEMD:
             ]
 
         elif caseName == "PSP_SolO_e6":
+            # PSP is long and SolO is short
             from Imports.Spacecraft import PSPSolO_e6 as Spacecraft
 
             self.saveFolder = "/Users/ddp/Documents/PhD/inEMD_Github/unsafe/EMD_Results/encounter6_Parker_1_5/"
@@ -180,8 +186,9 @@ class baseEMD:
 
             # Create or read existing cases
             PSPSolO_e6_cases = {
-                "shortTimes": (datetime(2020, 9, 30), datetime(2020, 10, 2, 23)),
-                "longTimes": (datetime(2020, 9, 24, 12), datetime(2020, 10, 3)),
+                # TODO: Check that happy with short, long Times
+                "shortTimes": (datetime(2020, 10, 1), datetime(2020, 10, 3)),
+                "longTimes": (datetime(2020, 9, 25, 0), datetime(2020, 9, 29)),
                 "shortDuration": shortDuration,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
                 "shortDisplacement": shortDisplacement,
@@ -270,7 +277,6 @@ class baseEMD:
                 long_SPC.df, "WIND", "L1", self.accelerated, self.speedSet
             )
 
-        # TODO: Need to fix error in saving / opening files
         elif caseName == "STA_PSP":
             from Imports.Spacecraft import Spacecraft
 
@@ -281,14 +287,14 @@ class baseEMD:
 
             objCadenceSeconds = 60
             staPSPCases = {
-                "longTimes": (datetime(2019, 11, 1), datetime(2019, 11, 15)),
-                "shortTimes": (datetime(2019, 11, 1), datetime(2019, 11, 15)),
+                "longTimes": (datetime(2019, 11, 15), datetime(2019, 12, 1)),
+                "shortTimes": (datetime(2019, 11, 15), datetime(2019, 12, 1)),
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/PSP",
                 "savePicklePath": f"{_unsFolder}Scripts/EMD/cases/cases_STA_PSP.pickle",
                 "forceCreate": True,
-                "firstRelevantLongTime": datetime(2019, 11, 3),
+                "firstRelevantLongTime": datetime(2019, 11, 16, 1),
                 "MARGIN": MARGIN,
                 "equal": self.equal,
             }
@@ -385,39 +391,61 @@ class baseEMD:
 
 def PSPSolOCase(show=False):
     # TODO: Add labels in bottom of plot like in other cases
-    # Dictionary intro
+    MARGIN = 0
     PSP_SolOVars = {
         "caseName": "PSP_SolO_e6",
         "shortParams": ["Btotal", "B_R", "V_R", "Mf", "N"],  # Does N break?
         "longParams": ["Btotal", "B_R", "V_R", "Mf", "N"],
-        "PeriodMinMax": [5, 40],
+        "PeriodMinMax": [5, 22],
         "showFig": show,
         "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.65, 1, 0.05),
-        "multiCPU": 6,
+        "corrThrPlotList": np.arange(0.75, 1, 0.05),
+        "multiCPU": 7,
         "caseName": "PSP_SolO_e6",
-        "speedSet": (300, 200, 250),  # High - low - mid
-        "shortDuration": 3,
-        "shortDisplacement": 1,
-        "MARGIN": 0,
+        "speedSet": (320, 200, 250),  # High - low - mid
+        "shortDuration": 1.5,
+        "shortDisplacement": 1.5,
+        "MARGIN": MARGIN,
         "inKind": True,
         "windDispParam": 1,
-        "equal": True,
+        "equal": True if MARGIN == 0 else False,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
-    box = (
-        (datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
-        (
-            datetime(
-                2020,
-                10,
-                1,
-                20,
+    # Expect correlation of 0.72 here
+    # Box for telloni
+
+    box = [
+        # boxTuple(
+        #     longData=(datetime(2020, 9, 27, 3, 15), datetime(2020, 9, 27, 4, 45)),
+        #     shortData=(
+        #         datetime(
+        #             2020,
+        #             10,
+        #             1,
+        #             21,
+        #             34,
+        #         ),
+        #         datetime(2020, 10, 1, 23, 4),
+        #     ),
+        #     color="blue",
+        # ),
+        boxTuple(
+            longData=(datetime(2020, 9, 27, 4), datetime(2020, 9, 27, 5, 30)),
+            shortData=(
+                (
+                    datetime(
+                        2020,
+                        10,
+                        2,
+                        1,
+                    ),
+                    datetime(2020, 10, 2, 2, 30),
+                )
             ),
-            datetime(2020, 10, 2, 0, 13),
         ),
-    )
+    ]
+
     pspSolOe6EMD = baseEMD(**PSP_SolOVars)
     pspSolOe6EMD.plotSeparately()
     pspSolOe6EMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
@@ -427,7 +455,8 @@ def PSPSolOCase(show=False):
 
 
 def STAPSPCase(show=True):
-    MARGIN = 72
+    # Short is PSP, Long is STA
+    MARGIN = 0
     Kwargs = {
         "caseName": "STA_PSP",
         "shortParams": ["B_R", "B_T", "B_N"],
@@ -436,7 +465,7 @@ def STAPSPCase(show=True):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 4,
+        "multiCPU": 7,
         # "speedSet": (100, 1000, 500),  # Low, high, mid
         "shortDuration": 25,  # In hours
         "shortDisplacement": 10,  # In hours
@@ -445,7 +474,22 @@ def STAPSPCase(show=True):
         "windDispParam": 1,
     }
 
-    box = None
+    box = [
+        boxTuple(
+            longData=(datetime(2019, 11, 2, 23, 0), datetime(2019, 11, 3, 4, 0)),
+            shortData=(
+                datetime(
+                    2019,
+                    11,
+                    2,
+                    19,
+                    30,
+                ),
+                datetime(2019, 11, 3, 0, 30),
+            ),
+            color="blue",
+        ),
+    ]
     mData = None
 
     stapspEMD = baseEMD(**Kwargs)
@@ -463,30 +507,35 @@ def STAPSPCase(show=True):
 
 # @timer
 def SolOEarth2020Case(show=True):
-    MARGIN = 60
+    # Short is SolO, long is Earth
+    MARGIN = 0
     Vars = {
         "caseName": "April2020_SolO_WIND",
         "shortParams": ["B_R", "B_T", "B_N"],
         "longParams": ["B_R", "B_T", "B_N", "V_R"],
-        "PeriodMinMax": [60, 720],  # Very long periods
+        "PeriodMinMax": [60, 720],  # 1 to 12 hours
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 6,
+        "multiCPU": 7,
         "speedSet": None,
         "shortDuration": 20,  # In hours
         "shortDisplacement": 1,
         "MARGIN": MARGIN,
+        "equal": True if MARGIN == 0 else False,
         "inKind": True,
         "windDispParam": 1,
     }
 
     # showBox = ([X0, XF], [Y0, YF]) - in datetime
 
-    # from datetime import timedelta
-    # box = ([datetime(2020, 4, 20, 1, 0) - timedelta(hours=MARGIN), datetime(2020, 4, 21, 0, 0) - timedelta(hours=MARGIN)],
-    #    [datetime(2020, 4, 19, 8, 50) - timedelta(hours=MARGIN), datetime(2020, 4, 20, 9) - timedelta(hours=MARGIN)])
-    box = None
+    # Box for orbital match (reference)
+    box = [
+        boxTuple(
+            shortData=(datetime(2020, 4, 20, 18, 30), datetime(2020, 4, 20, 21, 30)),
+            longData=(datetime(2020, 4, 21, 18, 0), datetime(2020, 4, 21, 21, 0)),
+        ),
+    ]
     # For SolO - Earth there is no missing data essentially
     mData = None
 
@@ -510,6 +559,7 @@ def SolOEarth2020Case(show=True):
 # @timer
 def ISSICase(show=False):
     WINDDISP = 1
+    MARGIN = 0
     ISSI_AIAVars = {
         "caseName": "ISSIcasesAIA",
         # Use all Parameters by setting to None
@@ -522,7 +572,7 @@ def ISSICase(show=False):
         "multiCPU": 6,
         "shortDuration": 9,
         "shortDisplacement": 1,
-        "MARGIN": 0,  # If margin is set to 0 all long data is used
+        "MARGIN": MARGIN,  # If margin is set to 0 all long data is used
         "inKind": False,
         "windDispParam": WINDDISP,  # In Minutes
         "accelerated": 1,
@@ -579,26 +629,24 @@ def ISSIHMICase(show=False):
 
 
 if __name__ == "__main__":
-    # ISSICase(show=False)
-    # ISSIHMICase(show=False)
+    show = False
+    # ISSICase(show=show)
+    # ISSIHMICase(show=show)
 
+    # TODO: If we use a MARGIN, we will not have as many useless results!
     # In situ
-    PSPSolOCase(show=False)
-    # SolOEarth2020Case(show=True)
-    # STAPSPCase(show=False)
+    PSPSolOCase(show=show)
+    # SolOEarth2020Case(show=show)
+    # STAPSPCase(show=show)
 
-    # TODO:
     """
     - PSP Solo: First case (easiest, mostly working, kernels good) -> Imports from /Users/ddp/Documents/PhD/inEMD_Github/Scripts/Plots/createCSVsAndOrbits.py
-        - Should remake the timeseries plot. DONE
-        - Should choose one of the orbit plots and put it in. DONE
-        - Should get a results plot, whether 1.5 hours or more. DOING
+        - Should get a results plot, for 1.5 hours.
+        - What is their sliding window?
 
     - SoloEarth2020: Second case (harder, kernels bad)
-        - Should remake the timeseries plot. Where Are they found? -> In createCSVsAndOrbits.py
-        - Should fix the L1 spice kernel. DONE
-        - Should choose one of the orbit plots. Do they exist? -> In createCSVsAndOrbits.py
-        - Should get a results plot, whether 1.5 hours or more
+        - Should get a results plot, use CME scale to get a better grasp of the results.
+        - Can I check scale of a CME??
 
     - STAPSP: Literally did it over a couple of days. I wonder how much of it works?
         - Just do everything lol

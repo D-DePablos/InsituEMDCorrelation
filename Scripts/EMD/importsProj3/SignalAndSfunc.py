@@ -215,13 +215,16 @@ def transformTimeAxistoVelocity(
         R = R - R_body
 
     elif ObjBody == "stereo_a":
-        spc = Spacecraft(name="STA_Nov_2019")
+        spc = Spacecraft(name="STA_Nov_2019", cadence_obj=60, remakeCSV=False)
         R_body = (spc.df["R"].mean() * u.au).to(u.km)
         # R_body is the one further from Sun
         R = R - R_body
 
     elif ObjBody == "solo" or ObjBody == "psp":
         trajName = "Solar Orbiter" if ObjBody == "solo" else "SPP"
+        if trajName == "SPP":
+            # Changes the originTime
+            originTime = datetime.datetime(2020, 9, 27, 4, 0, 0)
         if firstLoad:
             spicedata.get_kernel(ObjBody)
         body_traj = spice.Trajectory(trajName)
@@ -1615,6 +1618,7 @@ class SignalFunctions(Signal):
         ax2.set_ylabel("Highest corr. found")
 
         if showSpeed:
+            # TODO: Use only a 'highlighted time' if it exists, to calculate speed
             # Extract the Velocities
             vSWAxis = transformTimeAxistoVelocity(
                 longTime_axis,

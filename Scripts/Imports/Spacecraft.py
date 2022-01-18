@@ -47,7 +47,7 @@ params = {
     "axes.titlesize": "x-large",
     "xtick.labelsize": "x-large",
     "ytick.labelsize": "x-large",
-    "axes.prop_cycle": cycler(color="krgby"),
+    "axes.prop_cycle": cycler(color=["b", "g", "y", "k"]),
 }
 matplotlib.rcParams.update(params)
 
@@ -444,7 +444,7 @@ class Spacecraft:
 
             self.df171 = df_171
             self.df193 = df_193
-            self.df = "Use df_171, df_193"
+            self.df = "Use df_171, df_193, out of object"
 
         else:
             raise NotImplementedError(f"{self.name} not implemented")
@@ -754,22 +754,6 @@ class Spacecraft:
             index=t2,
         )
 
-        # Reduce the datasets
-        farFromTimes, closeToTimes = [], []
-        for time in pd.date_range(
-            farFromSun.df.index[0].to_pydatetime(),
-            farFromSun.df.index[-1].to_pydatetime(),
-            freq=f"{plotRate}",
-        ):
-            farFromTimes.append(time.to_pydatetime())
-
-        for time in pd.date_range(
-            closetoSun.df.index[0].to_pydatetime(),
-            closetoSun.df.index[-1].to_pydatetime(),
-            freq=f"{plotRate}",
-        ):
-            closeToTimes.append(time.to_pydatetime())
-
         df_farFromSun = df_farFromSun.resample(f"{plotRate}", origin=farTime).mean()
         df_nextToSun = df_nextToSun.resample(f"{plotRate}", origin=closeTime).mean()
 
@@ -825,7 +809,7 @@ class Spacecraft:
         }
 
         # ANNOTATION
-        # Annotate dates in PSP
+        # Next to Sun
         pspiralIndex = (
             df_nextToSun.index.get_loc(pspiralHlight, method="nearest")
             if pspiralHlight
@@ -875,8 +859,7 @@ class Spacecraft:
             df_farFromSun["Y"],
             c=mdates.date2num(df_farFromSun.index),
             cmap="binary",
-            s=40,
-            edgecolors="black",
+            s=200,
         )
 
         cax = ax.inset_axes([1.07, 0.50, 0.05, 0.45])
@@ -893,8 +876,7 @@ class Spacecraft:
             df_nextToSun["Y"],
             c=mdates.date2num(df_nextToSun.index),
             cmap="OrRd",
-            s=40,
-            edgecolors="black",
+            s=200,
         )
         cax2 = ax.inset_axes([1.07, 0, 0.05, 0.45])
         cb2 = plt.colorbar(smap2, cax=cax2, orientation="vertical", shrink=0.45)
@@ -905,6 +887,7 @@ class Spacecraft:
         cb2.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc2))
 
         # Annotate dates in closetoSun
+        plt.gca().set_prop_cycle(None)
         for i, txt in enumerate(df_nextToSun.index):
             # If within the list
             if i in list(set([*hlightIndices["PSPIndices"], pspiralIndex])):
@@ -913,10 +896,12 @@ class Spacecraft:
                     df_nextToSun["X"][i],
                     df_nextToSun["Y"][i],
                     # color="red" if i != pspiralIndex else "green",
-                    s=100,
+                    s=300,
                     alpha=1,
                     label=_lab if i != pspiralIndex else f"Parker Alignment: {_lab}",
                 )
+
+        plt.gca().set_prop_cycle(None)
 
         # Annotate dates in farFromSun (Which are highlighted)
         # Keep in red because we only use radial propagation here, not Parker Spiral???
@@ -927,9 +912,9 @@ class Spacecraft:
                     df_farFromSun["X"][i],
                     df_farFromSun["Y"][i],
                     # color="red",
-                    s=200,
+                    s=350,
                     label=_lab,
-                    marker="+",
+                    marker="X",
                 )
 
         # Need to add labels correctly
@@ -973,6 +958,19 @@ class Spacecraft:
             # Generate a dataframe that matches in cadence the orbital data
             self.df_orbit_match = self.df.resample(f"{stepMinutes}min").mean()[
                 self.sp_traj.times.datetime[0] : self.sp_traj.times.datetime[-1]
+            ]
+
+        # Update the dfUnits
+        if self.dfUnits is not None:
+            try:
+                self.df.index.get_loc(self.end_time)
+                endIndex = self.end_time
+            except KeyError:
+                endIndex = self.df.index[-1]
+
+            self.dfUnits = self.dfUnits[
+                self.df.index.get_loc(self.start_time) : self.df.index.get_loc(endIndex)
+                + 1
             ]
 
         # Cut down the dataframe and maintain higher cadence
@@ -1109,7 +1107,7 @@ class PSPSolO_e6(Spacecraft):
 
         # Magnetic field components
         axsBt = axs[2]
-        axsBt.set_ylabel(r"Scaled $\hat{B}_{TOTAL}$[nT]")
+        axsBt.set_ylabel(r"S.$\hat{B}_{TOTAL}$[nT]")
         axsBt.plot(
             ts,
             BtScaled,
@@ -1553,7 +1551,7 @@ class EarthApril2020(Spacecraft):
             remakeCSV=remakeCSV,
         )
 
-    def plot_solo_earth_df(self, other, zones=[]):
+    def plot_solo_earth_df(self, other, zones=[], colourWIND="k-", colourSOLO="r-"):
         assert "earth" in self.name.lower(), "Please ensure Earth is object with f call"
 
         ts = self.df.index
@@ -1573,39 +1571,32 @@ class EarthApril2020(Spacecraft):
             5, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
         )
 
-        # # Plots
-        # axs[0].set_ylabel("R (AU)")
-        # axs[0].plot(ts, R * u.m.to(u.AU), label="WIND")
-        # axs[0].plot(ots, oR * u.m.to(u.AU), label="SolO")
-        # axs[0].grid(True)
-        # axs[0].set_ylim(0.7, 1.1)
-        # axs[0].legend()
-
+        # Plots
         # Bx
         # V
         axs[0].set_ylabel(r"$\hat{V}_R$ [km/s]")
-        axs[0].plot(ts, self.df["V_R"], label="WIND")
+        axs[0].plot(ts, self.df["V_R"], colourWIND, label="WIND")
         axs[0].legend()
 
         axs[1].set_ylabel(r"$\hat{B}_{R}$ [nT]")
-        axs[1].plot(ts, Bx, label="WIND")
-        axs[1].plot(ots, oBx, label="SolO")
+        axs[1].plot(ts, Bx, colourWIND, label="WIND")
+        axs[1].plot(ots, oBx, colourSOLO, label="SolO")
         axs[1].legend()
 
         # By
         axs[2].set_ylabel(r"$\hat{B}_{T}$ [nT]")
-        axs[2].plot(ts, By)
-        axs[2].plot(ots, oBy)
+        axs[2].plot(ts, By, colourWIND)
+        axs[2].plot(ots, oBy, colourSOLO)
 
         # Bz
         axs[3].set_ylabel(r"$\hat{B}_{N}$ [nT]")
-        axs[3].plot(ts, Bz)
-        axs[3].plot(ots, oBz)
+        axs[3].plot(ts, Bz, colourWIND)
+        axs[3].plot(ots, oBz, colourSOLO)
 
         # Bt0tal
         axs[4].set_ylabel(r"$\hat{B}_{TOTAL}$ [nT]")
-        axs[4].plot(ts, Bt)
-        axs[4].plot(ots, oBt)
+        axs[4].plot(ts, Bt, colourWIND)
+        axs[4].plot(ots, oBt, colourSOLO)
 
         # # Plot the relevant columns
         for ax in axs:
@@ -1619,10 +1610,6 @@ class EarthApril2020(Spacecraft):
                     zone["start_time"], zone["end_time"], color=zone["color"], alpha=0.3
                 )
 
-        # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
-        # print(f"Saving to {self}")
-        # plt.savefig(f"{save_folder}B_Br_V_sb_matrix_highlighted.pdf")
-        # TODO: Add orbit plots
         if self.show:
             plt.show()
         else:

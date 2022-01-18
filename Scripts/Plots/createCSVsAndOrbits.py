@@ -1,3 +1,4 @@
+from tracemalloc import start
 from astropy.table import QTable
 from astropy.coordinates import spherical_to_cartesian
 from datetime import datetime
@@ -16,9 +17,8 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
     Additional encounter possibly currently. Check data
     """
     OBJ_CADENCE = 60  # To one minute resolution
-    PLOT_ORBITS = plot_orbit
-    SHOW_PLOTS = show
     orbitStepMin = 90
+    SHOW_PLOTS = show
 
     psp_e6_overview = {
         "name": "PSPpriv_e6",
@@ -82,7 +82,7 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
     makedirs(orbit_case_path, exist_ok=True)
 
     # Spacecraft object calling the function is where the solar wind is being mapped from
-    if PLOT_ORBITS:
+    if plot_orbit:
 
         # Create a set of radial separations
         for minSteps in [
@@ -98,19 +98,15 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
                 psp,
                 objFolder=f"{orbit_case_path}",
                 plotRate=f"{minSteps}min",
-                farTime="22:00",
-                closeTime="04:00",
-                # pspiralHlight=datetime(
-                #     2020,
-                #     9,
-                #     28,
-                #     23,
-                # ),
+                # These times ensure that it will center around these numbers
+                farTime="2020 10 1 04:00",
+                closeTime="2020 9 27 21:19",
                 radialTolerance=radialTolerance,
                 selfName="SolO",
                 otherName="PSP",
                 legendLoc="best",
                 plot_spirals=False,
+                vSW=320,
             )
 
 
@@ -152,8 +148,8 @@ def solo_Earth_April_2020(show=False, plot_orbit=False):
                 solo,
                 objFolder=f"{orbit_case_path}",
                 plotRate=f"{minSteps}min",
-                # farTime="22:00",
-                # closeTime="04:00",
+                farTime="2020 4 20 01:34",
+                closeTime="2020 4 19 05:06",
                 pspiralHlight=None,
                 radialTolerance=radialTolerance,
                 plot_spirals=False,
@@ -179,7 +175,21 @@ def sta_psp(show=False, plot_orbit=False):
     sta.dfUnits["R"] = sta.dfUnits["R"].value * u.AU
     psp = STA_psp(name="PSP_Nov_2019", cadence_obj=cadence_obj, show=show)
 
-    sta.plot_sta_psp_df(psp)
+    sta.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 10))
+    psp.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 10))
+
+    # These are zones and therefore have colours (black for far, red for close)
+    pspZone = {
+        "start_time": datetime(2019, 11, 2, 21, 30),
+        "end_time": datetime(2019, 11, 3, 22, 30),
+        "color": "red",
+    }
+    staZone = {
+        "start_time": datetime(2019, 11, 3, 1),
+        "end_time": datetime(2019, 11, 4, 2),
+        "color": "black",
+    }
+    sta.plot_sta_psp_df(psp, zones=[staZone, pspZone])
     # Remove all blanks
     sta.df.fillna(method="pad")
     psp.df.fillna(method="pad")
@@ -207,11 +217,9 @@ def sta_psp(show=False, plot_orbit=False):
                 psp,
                 objFolder=f"{orbit_case_path}",
                 plotRate=f"{minSteps}min",
-                # farTime="22:00",
-                # closeTime="04:00",
                 pspiralHlight=None,
                 radialTolerance=radialTolerance,
-                zoomRegion=((0.65, 0.95), (-0.75, -0.2)),
+                zoomRegion=((0.65, 0.82), (-0.75, -0.5)),
                 vSW=int(sta.df["V_R"].mean()),
                 selfName="STEREO-A",
                 otherName="PSP",
@@ -225,11 +233,7 @@ def sta_psp(show=False, plot_orbit=False):
 if __name__ == "__main__":
     # Do twice so it saves with Radius hopefully
     show = False
+    # From far to close encounter
+    # psp_e6(show=show, plot_orbit=True)
+    # solo_Earth_April_2020(show=show, plot_orbit=True)
     sta_psp(show=show, plot_orbit=True)
-    try:
-        psp_e6(show=show, plot_orbit=True)
-        solo_Earth_April_2020(show=show, plot_orbit=True)
-
-    except AttributeError or ValueError:
-        psp_e6(show=show)
-        solo_Earth_April_2020(show=show)
