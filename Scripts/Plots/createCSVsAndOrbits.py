@@ -85,14 +85,7 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
     if plot_orbit:
 
         # Create a set of radial separations
-        for minSteps in [
-            orbitStepMin,
-            orbitStepMin * 3,
-            orbitStepMin * 4,
-            orbitStepMin * 6,
-            orbitStepMin * 12,
-            orbitStepMin * 24,
-        ]:
+        for minSteps in [orbitStepMin * i for i in [1, 2, 3, 6, 12, 24]]:
             # Highlight one of the parker spirals
             solo.plotOrbit_x_y(
                 psp,
@@ -111,14 +104,15 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
 
 
 def solo_Earth_April_2020(show=False, plot_orbit=False):
-    orbitStepMin = 90
-    radialTolerance = 4.4
+    orbitStepMin = 60 * 24
+    radialTolerance = 5
     solo = EarthApril2020(
         name="SolO_April_2020", cadence_obj=92, show=show, remakeCSV=False
     )
     earth = EarthApril2020(
         name="Earth_April_2020", cadence_obj=92, show=show, remakeCSV=False
     )
+
     solo.extract_orbit_data(from_data=True, stepMinutes=60)
     earth.extract_orbit_data(from_data=True, stepMinutes=60)
 
@@ -168,25 +162,25 @@ def sta_psp(show=False, plot_orbit=False):
     import astropy.units as u
 
     cadence_obj = 60
-    orbitStepMin = 300
-    radialTolerance = 0.1
+    orbitStepMin = 90
+    radialTolerance = 1.5
 
     sta = STA_psp(name="STA_Nov_2019", cadence_obj=cadence_obj, show=show)
     sta.dfUnits["R"] = sta.dfUnits["R"].value * u.AU
     psp = STA_psp(name="PSP_Nov_2019", cadence_obj=cadence_obj, show=show)
 
-    sta.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 10))
-    psp.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 10))
+    sta.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 20))
+    psp.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 20))
 
     # These are zones and therefore have colours (black for far, red for close)
     pspZone = {
-        "start_time": datetime(2019, 11, 2, 21, 30),
-        "end_time": datetime(2019, 11, 3, 22, 30),
+        "start_time": datetime(2019, 11, 5, 7, 30),
+        "end_time": datetime(2019, 11, 6, 1, 30),
         "color": "red",
     }
     staZone = {
-        "start_time": datetime(2019, 11, 3, 1),
-        "end_time": datetime(2019, 11, 4, 2),
+        "start_time": datetime(2019, 11, 5, 11),
+        "end_time": datetime(2019, 11, 6, 5, 0),
         "color": "black",
     }
     sta.plot_sta_psp_df(psp, zones=[staZone, pspZone])
@@ -219,7 +213,7 @@ def sta_psp(show=False, plot_orbit=False):
                 plotRate=f"{minSteps}min",
                 pspiralHlight=None,
                 radialTolerance=radialTolerance,
-                zoomRegion=((0.65, 0.82), (-0.75, -0.5)),
+                zoomRegion=((0.7, 0.9), (-0.65, -0.35)),
                 vSW=int(sta.df["V_R"].mean()),
                 selfName="STEREO-A",
                 otherName="PSP",

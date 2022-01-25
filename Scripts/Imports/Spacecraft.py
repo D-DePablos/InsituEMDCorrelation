@@ -607,9 +607,9 @@ class Spacecraft:
         self.df["B_T"] = t
         self.df["B_N"] = n
 
-        del self.df["B_GSE_0"]
-        del self.df["B_GSE_1"]
-        del self.df["B_GSE_2"]
+        # del self.df["B_GSE_0"]
+        # del self.df["B_GSE_1"]
+        # del self.df["B_GSE_2"]
 
         return None
 
@@ -859,16 +859,15 @@ class Spacecraft:
             df_farFromSun["Y"],
             c=mdates.date2num(df_farFromSun.index),
             cmap="binary",
-            s=200,
+            s=250,
         )
 
         cax = ax.inset_axes([1.07, 0.50, 0.05, 0.45])
         cb = plt.colorbar(smap, cax=cax, orientation="vertical", shrink=0.45)
         cb.ax.yaxis.set_label_position("left")
         cb.ax.set_ylabel(f"{selfName}")
+
         loc = mdates.DayLocator()
-        # cb.ax.yaxis.set_major_locator(loc)
-        # cb.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
         cb.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
 
         smap2 = plt.scatter(
@@ -876,7 +875,7 @@ class Spacecraft:
             df_nextToSun["Y"],
             c=mdates.date2num(df_nextToSun.index),
             cmap="OrRd",
-            s=200,
+            s=250,
         )
         cax2 = ax.inset_axes([1.07, 0, 0.05, 0.45])
         cb2 = plt.colorbar(smap2, cax=cax2, orientation="vertical", shrink=0.45)
@@ -895,8 +894,9 @@ class Spacecraft:
                 plt.scatter(
                     df_nextToSun["X"][i],
                     df_nextToSun["Y"][i],
+                    marker="d",
                     # color="red" if i != pspiralIndex else "green",
-                    s=300,
+                    s=125,
                     alpha=1,
                     label=_lab if i != pspiralIndex else f"Parker Alignment: {_lab}",
                 )
@@ -912,7 +912,7 @@ class Spacecraft:
                     df_farFromSun["X"][i],
                     df_farFromSun["Y"][i],
                     # color="red",
-                    s=350,
+                    s=125,
                     label=_lab,
                     marker="X",
                 )
@@ -969,7 +969,9 @@ class Spacecraft:
                 endIndex = self.df.index[-1]
 
             self.dfUnits = self.dfUnits[
-                self.df.index.get_loc(self.start_time) : self.df.index.get_loc(endIndex)
+                self.df.index.get_loc(
+                    self.start_time, method="nearest"
+                ) : self.df.index.get_loc(endIndex, method="nearest")
                 + 1
             ]
 
@@ -1561,8 +1563,10 @@ class EarthApril2020(Spacecraft):
         oR = (other.dfUnits["R"].to(u.m) - const.R_sun).value
 
         Bx, By, Bz = self.df["B_R"], self.df["B_T"], self.df["B_N"]
+        Bgse0, Bgse1, Bgse2 = self.df["B_GSE_0"], self.df["B_GSE_1"], self.df["B_GSE_2"]
         oBx, oBy, oBz = other.df["B_R"], other.df["B_T"], other.df["B_N"]
-        Bt = np.sqrt(Bx ** 2 + By ** 2 + Bz ** 2)
+        # Bt = np.sqrt(Bx ** 2 + By ** 2 + Bz ** 2)
+        Bt = np.sqrt(Bgse0 ** 2 + Bgse1 ** 2 + Bgse2 ** 2)
         oBt = np.sqrt(oBx ** 2 + oBy ** 2 + oBz ** 2)
 
         # Figure
@@ -1572,7 +1576,6 @@ class EarthApril2020(Spacecraft):
         )
 
         # Plots
-        # Bx
         # V
         axs[0].set_ylabel(r"$\hat{V}_R$ [km/s]")
         axs[0].plot(ts, self.df["V_R"], colourWIND, label="WIND")

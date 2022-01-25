@@ -1,4 +1,5 @@
 """Helper functions"""
+from git import base
 from pyparsing import WordEnd
 from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
 import astropy.units as u
@@ -93,6 +94,10 @@ titleDic = {
     "N": "#p",
     "T": "Tp",
     "Mf": "Mass Flux",
+    "WIND_Btotal": r"$B_{\rm TOTAL}$",
+    "WIND_B_R": r"$B_{\rm R}$",
+    "WIND_B_T": r"$B_{\rm T}$",
+    "WIND_B_N": r"$B_{\rm N}$",
     "PSP_V_R": "Vsw",
     "PSP_T": "Tp",
     "PSP_Np": "#p",
@@ -100,8 +105,11 @@ titleDic = {
     "PSP_Mf": "Mass Flux",
     "PSP_Br": "Br",
     "PSP_B_R": "Br",
-    "PSP_Btotal": "Bt",
-    "B_R": "Br",
+    "PSP_Btotal": r"B$_{tot}$",
+    "Btotal": r"B$_{Total}$",
+    "B_R": r"B$_{R}$",
+    "B_T": r"B$_{T}$",
+    "B_N": r"B$_{N}$",
     "plume": "PL",
     "cbpoint": "BP",
     "chole": "CH",
@@ -666,6 +674,8 @@ def superSummaryPlotGeneric(
     yTickFrequency=[0],
     xTickFrequency=[0],
     legendLocForce="upper right",
+    onlySomeLegends=[],
+    relSpeeds=None,
 ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -754,6 +764,8 @@ def superSummaryPlotGeneric(
             yTickFrequency=yTickFrequency,
             xTickFrequency=xTickFrequency,
             legendLocForce=legendLocForce,
+            onlySomeLegends=onlySomeLegends,
+            relSpeeds=relSpeeds,
         )
 
 
@@ -907,6 +919,8 @@ def plot_super_summary(
     yTickFrequency=[0],
     xTickFrequency=[0],
     legendLocForce="upper right",
+    onlySomeLegends=[],
+    relSpeeds=None,
 ):
     """Plots a "super" summary with info about all selected regions
     Does not take dataframes as input, instead finds the data through
@@ -925,7 +939,7 @@ def plot_super_summary(
         showBox = ([X0, XF], [Y0, YF]) - in datetime
     """
     highSpeed, lowSpeed, _ = speedSet
-    figSavePath = f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary.pdf"
+    figSavePath = f"{unsafeEMDDataPath}{figName}_{longObjectParam}_Summary_{highSpeed}to{lowSpeed}kms.pdf"
     from matplotlib.lines import Line2D
     from os.path import isfile
 
@@ -936,7 +950,6 @@ def plot_super_summary(
         return
 
     shortDuration = allCasesList[0].shortTimes[1] - allCasesList[0].shortTimes[0]
-
     # Gapless subplots figure
     # import matplotlib.pyplot as plt
 
@@ -949,6 +962,7 @@ def plot_super_summary(
     #     a.set_aspect('equal')
 
     # In some cases, need to auto-grid
+    figSize = (7, 7)
     if gridRegions == True:
         # This way makes sure there is space
         nrowsCols = np.sqrt(len(regions))
@@ -961,7 +975,7 @@ def plot_super_summary(
         fig, axs = plt.subplots(
             nrows,
             ncols,
-            figsize=(16, 12),
+            figsize=figSize,
             sharex=True,
             sharey=True,
             constrained_layout=True,
@@ -974,7 +988,7 @@ def plot_super_summary(
             ncols=ncols,
             sharex=gridRegions[2],
             sharey=gridRegions[3],
-            figsize=(16, 12),
+            figsize=figSize,
             constrained_layout=True,
         )
 
@@ -996,9 +1010,21 @@ def plot_super_summary(
         except AttributeError:
             ax = axs
         used_ax.append(ax)
+
+        # Set the limits within the plot
+        shdf = baseEMDObject.shortDFDics[0].df
+        shdf_margin = shdf.index[len(shdf) // 20] - shdf.index[0]
+        lodf = baseEMDObject.longDFDic.df
+        lodf_margin = lodf.index[len(lodf) // 20] - lodf.index[0]
+
         ax.set_ylim(
-            allCasesList[0].shortTimes[0] - timedelta(hours=3),
-            allCasesList[-1].shortTimes[0] + timedelta(hours=3),
+            baseEMDObject.shortDFDics[0].df.index[0] - shdf_margin,
+            baseEMDObject.shortDFDics[0].df.index[-1] + shdf_margin,
+        )
+
+        ax.set_xlim(
+            baseEMDObject.longDFDic.df.index[0] - lodf_margin,
+            baseEMDObject.longDFDic.df.index[-1] + lodf_margin,
         )
 
         # Take the starting point for AIA Times
@@ -1115,7 +1141,7 @@ def plot_super_summary(
 
             # Get an arbitrary list of valuable speeds
             # Get the relevant speeds every 100 kms
-            relSpeeds = range(100, 501, 100)
+            relSpeeds = range(100, 501, 100) if relSpeeds == None else relSpeeds
 
             for relSpeed in relSpeeds:
                 _close_idx = (np.abs(Vaxis - relSpeed)).argmin()
@@ -1218,19 +1244,21 @@ def plot_super_summary(
 
     # Custom legend to show circle sizes and colouring
     legend_elements = []
-    for j, corrThr in enumerate(corrThrPlotList):
-        _mkrsize = 12 + j * 8
-        _legendElement = Line2D(
-            [listTimesSameSpeed_LOW[0]],
-            [TshortDF],
-            marker="o",
-            color="w",
-            label=f"{corrThr:.02f}",
-            markerfacecolor="k",
-            markersize=_mkrsize,
-        )
+    if longObjectParam.split("_", 1)[1] in onlySomeLegends or onlySomeLegends == []:
+        for j, corrThr in enumerate(corrThrPlotList):
+            _mkrsize = 12 + j * 8
+            _legendElement = Line2D(
+                [listTimesSameSpeed_LOW[0]],
+                [TshortDF],
+                marker="o",
+                color="w",
+                label=f"{corrThr:.02f}",
+                markerfacecolor="k",
+                markersize=_mkrsize,
+                linewidth=0,
+            )
 
-        legend_elements.append(_legendElement)
+            legend_elements.append(_legendElement)
 
     # Plot all of the dots from the dataframe
     for j, var in enumerate(dfDots.columns):
@@ -1240,9 +1268,10 @@ def plot_super_summary(
             [TshortDF],
             marker="o",
             color="w",
-            label=f"{var}",
+            label=f"{titleDic[var]}",
             markerfacecolor=ColumnColours[var],
             markersize=_mkrsize,
+            linewidth=0,
         )
 
         legend_elements.append(_legendElement)
@@ -1263,15 +1292,21 @@ def plot_super_summary(
 
     except AttributeError:
         if legendLocForce == "upper right":
-            BBOX_anchor = (1, 1)
+            BBOX_anchor = (0.95, 0.90)
         elif legendLocForce == "lower right":
-            BBOX_anchor = (1, 0.4)
+            BBOX_anchor = (1, 0.45)
         elif legendLocForce == "lower left":
             BBOX_anchor = (0, 0)
         elif legendLocForce == "upper left":
             BBOX_anchor = (0, 1)
 
-    fig.legend(handles=legend_elements, prop={"size": 25}, bbox_to_anchor=BBOX_anchor)
+        # Sometimes we only want one parameter to have legend
+
+    fig.legend(
+        handles=legend_elements,
+        prop={"size": 18},
+        bbox_to_anchor=BBOX_anchor,
+    )
     longParamLegible = (
         longObjectParam
         if longObjectParam not in titleDic
@@ -1279,11 +1314,12 @@ def plot_super_summary(
     )
 
     # We now indicate necessary SW speed in all lines
-    fig.suptitle(
-        f" X-axis: {longParamLegible} | In yellow Measured: {highSpeed} - {lowSpeed} km/s | Allowed IMF Periods: {period[0]} - {period[1]} min.",
-        y=1.02,
-        fontsize=18,
-    )
+    if not inKind:
+        fig.suptitle(
+            f" {longParamLegible} | Measured: {highSpeed} - {lowSpeed} km/s | P: {period[0]} - {period[1]} min.",
+            y=1.04,
+            fontsize=18,
+        )
 
     # Plot the datasets if inKind:
     # If data is inKind, overplot
@@ -1294,18 +1330,25 @@ def plot_super_summary(
         shortDataSet = baseEMDObject.shortDFDics[0].df[longObjectParam.split("_", 1)[1]]
         longDataSet = baseEMDObject.longDFDic.df[longObjectParam]
 
+        # Fix the length of the lightcurves
+        shortTSStart, shortTSEnd = baseEMDObject.shortTimes
+        longTSStart, longTSEnd = baseEMDObject.longTimes
+
+        shortDataSet = shortDataSet[shortTSStart:shortTSEnd]
+        longDataSet = longDataSet[longTSStart:longTSEnd]
+
         # inset axes along bottom
         x_axis_df = inset_axes(
             axs,
             width="100%",  # width = 30% of parent_bbox
-            height=1,  # height : 1 inch
+            height=0.5,  # height : 1 inch
             loc="lower center",
         )
         plt.axis("off")
 
         y_axis_df = inset_axes(
             axs,
-            width=1,
+            width=0.5,
             height="100%",
             loc="center left",
         )
@@ -1314,13 +1357,15 @@ def plot_super_summary(
         # duplicate x axis
         x_axis_df.plot(
             longDataSet.values,
-            color="k"
+            color="k",
+            alpha=0.6
             # color=ColumnColours[longObjectParam.split("_", 1)[1]]
         )
         y_axis_df.plot(
             -shortDataSet.values,
             shortDataSet.index,
             color=ColumnColours[longObjectParam.split("_", 1)[1]],
+            alpha=0.6,
         )
 
     plt.savefig(figSavePath, bbox_inches="tight")

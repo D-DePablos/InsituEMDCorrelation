@@ -1,13 +1,14 @@
 # This file should be used for routines and information that can be shared accross test cases
 BASE_PATH = "/Users/ddp/Documents/PhD/solo_sdo/"
 
+from os import makedirs
 from sys import path
 import time
 
 path.append("{BASE_PATH}Scripts/")
 path.append(f"/Users/ddp/Documents/PhD/inEMD_Github/Scripts/")
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from EMD.importsProj3.signalAPI import (
     emdAndCompareCases,
     caseCreation,
@@ -57,6 +58,7 @@ class baseEMD:
         windDispParam: int = 1,  # How many measurements to move by
         accelerated=1,
         equal=False,
+        relSpeeds=None,
     ):
 
         # The job of the init should be to get to a standardised format
@@ -73,6 +75,11 @@ class baseEMD:
         self.windDispParam = windDispParam
         self.accelerated = accelerated
         self.equal = equal
+        self.relSpeeds = relSpeeds
+
+        self.caseSpecificName = (
+            f"{self.shortDuration}_By_{self.shortDisplacement}_Hours"
+        )
 
         possibleCaseNames = [
             "ISSIcasesAIA",
@@ -91,17 +98,19 @@ class baseEMD:
             self.saveFolder = _unsFolder + "ISSIcasesAIA/"
             objCadenceSeconds = 60
 
+            self.shortTimes = (
+                datetime(2018, 10, 29, 16),
+                datetime(2018, 10, 30, 23, 50),
+            )
+            self.longTimes = (datetime(2018, 10, 31, 8), datetime(2018, 11, 2, 8))
             # Get the cases and put them together with respective AIA observations in Dic
             AIACases = {
-                "shortTimes": (
-                    datetime(2018, 10, 29, 16),
-                    datetime(2018, 10, 30, 23, 50),
-                ),
-                "longTimes": (datetime(2018, 10, 31, 8), datetime(2018, 11, 2, 8)),
+                "shortTimes": self.shortTimes,
+                "longTimes": self.longTimes,
                 "shortDuration": self.shortDuration,
-                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/AIA",
+                "caseName": f"{self.caseSpecificName}/AIA",
                 "shortDisplacement": self.shortDisplacement,
-                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/data/AIAcases.pickle",
+                "savePicklePath": f"{self.saveFolder}{self.caseSpecificName}.pickle",
                 "forceCreate": True,
                 # "firstRelevantLongTime": datetime(2018, 10, 31, 8) + timedelta(hours=MARGIN),
                 "MARGIN": MARGIN,
@@ -137,6 +146,15 @@ class baseEMD:
         elif caseName == "ISSIcasesHMI":
             from Imports.Spacecraft import ISSISpc
 
+            self.shortTimes = (
+                datetime(2018, 10, 28, 0, 0),
+                datetime(2018, 10, 30, 7, 48),
+            )
+            self.longTimes = (
+                datetime(2018, 10, 31, 8),
+                datetime(2018, 11, 2, 8),
+            )
+
             # Short = HMI
             # Long = PSP
 
@@ -144,15 +162,12 @@ class baseEMD:
             self.saveFolder = _unsFolder + "ISSIcasesHMI/"
             objCadenceSeconds = 60 * 12  # Get to HMI cadence
             HMICases = {
-                "shortTimes": (
-                    datetime(2018, 10, 28, 0, 0),
-                    datetime(2018, 10, 30, 7, 48),
-                ),
-                "longTimes": (datetime(2018, 10, 31, 8), datetime(2018, 11, 2, 8)),
+                "shortTimes": self.shortTimes,
+                "longTimes": self.longTimes,
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
-                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/HMI",
-                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/ISSIwork/data/HMIcases.pickle",
+                "caseName": f"{self.caseSpecificName}/HMI",
+                "savePicklePath": f"{self.saveFolder}{self.caseSpecificName}.pickle",
                 "forceCreate": True,
                 "MARGIN": MARGIN,
             }
@@ -163,19 +178,22 @@ class baseEMD:
             longDFParams = longParams if longParams != None else long_SPC.df.columns
             df_is = long_SPC.df[longDFParams]
             self.long_SPC = long_SPC
-            self.longDFDic = longDFDic(
-                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet
-            )
 
             # HMI is the short data
             short_SPC = ISSISpc(
                 "ISSI_HMI_e1", cadence_obj=objCadenceSeconds, remakeCSV=True
             )
+            long_SPC.zoom_in(self.longTimes[0], self.longTimes[1])
+            short_SPC.zoom_in(self.shortTimes[0], self.shortTimes[1])
             df_hmi = short_SPC.df
             shortDFParams = shortParams if shortParams != None else df_hmi.columns
             self.shortDFDics = [
                 shortDFDic(df_hmi.copy(), "HMI", cases, ["HMI"], shortDFParams, "sun")
             ]
+
+            self.longDFDic = longDFDic(
+                df_is.copy(), "PSP", "psp", self.accelerated, self.speedSet
+            )
 
         elif caseName == "PSP_SolO_e6":
             # PSP is long and SolO is short
@@ -184,15 +202,17 @@ class baseEMD:
             self.saveFolder = "/Users/ddp/Documents/PhD/inEMD_Github/unsafe/EMD_Results/encounter6_Parker_1_5/"
             objCadenceSeconds = 60
 
+            self.shortTimes = (datetime(2020, 10, 1), datetime(2020, 10, 3))
+            self.longTimes = (datetime(2020, 9, 25, 0), datetime(2020, 9, 29))
+
             # Create or read existing cases
             PSPSolO_e6_cases = {
-                # TODO: Check that happy with short, long Times
-                "shortTimes": (datetime(2020, 10, 1), datetime(2020, 10, 3)),
-                "longTimes": (datetime(2020, 9, 25, 0), datetime(2020, 9, 29)),
+                "shortTimes": self.shortTimes,
+                "longTimes": self.longTimes,
                 "shortDuration": shortDuration,
                 "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
                 "shortDisplacement": shortDisplacement,
-                "savePicklePath": "/Users/ddp/Documents/PhD/inEMD_Github/Scripts/EMD/cases/cases_1-5.pickle",
+                "savePicklePath": f"{self.saveFolder}{self.caseSpecificName}.pickle",
                 "forceCreate": True,
                 "equal": self.equal,
                 "MARGIN": MARGIN,
@@ -213,6 +233,8 @@ class baseEMD:
             # Change N to N_old and N_RPW column to N in short_SPC
             short_SPC.df.rename(columns={"N": "N_old", "N_RPW": "N"}, inplace=True)
 
+            long_SPC.zoom_in(self.longTimes[0], self.longTimes[1])
+            short_SPC.zoom_in(self.shortTimes[0], self.shortTimes[1])
             long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
             short_SPC.df = (
                 short_SPC.df[shortParams] if shortParams != None else short_SPC.df
@@ -232,19 +254,25 @@ class baseEMD:
         elif caseName == "April2020_SolO_WIND":
             from Imports.Spacecraft import Spacecraft
 
-            self.saveFolder = "/Users/ddp/Documents/PhD/solo_sdo/unsafe/EMD_Data/SolO_Earth_April_2020/"
+            # Long is WIND, short is SolO
+
+            self.saveFolder = "/Users/ddp/Documents/PhD/inEMD_Github/unsafe/EMD_Results/SolO_Earth_April_2020/"
+            makedirs(self.saveFolder, exist_ok=True)
             objCadenceSeconds = 92
 
+            self.longTimes = ((datetime(2020, 4, 18)), datetime(2020, 4, 22))
+            self.shortTimes = ((datetime(2020, 4, 17)), datetime(2020, 4, 21))
             # Create or read existing cases
             soloEarthcases = {
-                "longTimes": (datetime(2020, 4, 15), datetime(2020, 4, 23)),
-                "shortTimes": (datetime(2020, 4, 15), datetime(2020, 4, 20, 23, 58)),
+                "longTimes": self.longTimes,
+                "shortTimes": self.shortTimes,
                 "shortDuration": self.shortDuration,
-                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/SolO",
+                "caseName": f"{self.caseSpecificName}/SolO",
                 "shortDisplacement": self.shortDisplacement,
-                "savePicklePath": "/Users/ddp/Documents/PhD/solo_sdo/Scripts/EMDComparison/pickleCases/cases_April_2020_SolO.pickle",
+                "savePicklePath": f"{self.saveFolder}{self.caseSpecificName}.pickle",
                 "forceCreate": True,
-                "firstRelevantLongTime": datetime(2020, 4, 15, 20),
+                # "firstRelevantLongTime": self.longTimes[0]
+                # + timedelta(hours=self.shortDuration),
                 "MARGIN": MARGIN,
                 "equal": self.equal,
             }
@@ -259,6 +287,21 @@ class baseEMD:
             short_SPC = Spacecraft(
                 name="SolO_April_2020",
                 cadence_obj=objCadenceSeconds,
+            )
+
+            long_SPC.zoom_in(self.longTimes[0], self.longTimes[1])
+            short_SPC.zoom_in(self.shortTimes[0], self.shortTimes[1])
+
+            long_SPC.df["Btotal"] = np.sqrt(
+                long_SPC.df["B_GSE_0"] ** 2
+                + long_SPC.df["B_GSE_1"] ** 2
+                + long_SPC.df["B_GSE_2"] ** 2
+            )
+
+            short_SPC.df["Btotal"] = np.sqrt(
+                short_SPC.df["B_R"] ** 2
+                + short_SPC.df["B_T"] ** 2
+                + short_SPC.df["B_N"] ** 2
             )
 
             long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
@@ -282,33 +325,45 @@ class baseEMD:
 
             _unsFolder = "/Users/ddp/Documents/PhD/inEMD_Github/"
             self.saveFolder = f"{_unsFolder}unsafe/EMD_Results/STA_PSP/"
+            makedirs(self.saveFolder, exist_ok=True)
             # Long = STA
             # Short = PSP
-
+            self.longTimes = datetime(2019, 11, 5, 12), datetime(2019, 11, 10)
+            self.shortTimes = datetime(2019, 11, 5, 12), datetime(2019, 11, 10)
             objCadenceSeconds = 60
             staPSPCases = {
-                "longTimes": (datetime(2019, 11, 15), datetime(2019, 12, 1)),
-                "shortTimes": (datetime(2019, 11, 15), datetime(2019, 12, 1)),
+                "longTimes": self.longTimes,
+                "shortTimes": self.shortTimes,
                 "shortDuration": self.shortDuration,
                 "shortDisplacement": self.shortDisplacement,
-                "caseName": f"{self.shortDuration}_By_{self.shortDisplacement}_Hours/PSP",
-                "savePicklePath": f"{_unsFolder}Scripts/EMD/cases/cases_STA_PSP.pickle",
+                "caseName": f"{self.caseSpecificName}/PSP",
+                "savePicklePath": f"{self.saveFolder}{self.caseSpecificName}.pickle",
                 "forceCreate": True,
-                "firstRelevantLongTime": datetime(2019, 11, 16, 1),
                 "MARGIN": MARGIN,
                 "equal": self.equal,
             }
             cases = caseCreation(**staPSPCases)
 
+            # Long spacecraft is STA
             long_SPC = Spacecraft(
                 name="STA_Nov_2019", cadence_obj=objCadenceSeconds, remakeCSV=False
             )
             short_SPC = Spacecraft(name="PSP_Nov_2019", cadence_obj=objCadenceSeconds)
+            long_SPC.zoom_in(self.longTimes[0], self.longTimes[1])
+            short_SPC.zoom_in(self.shortTimes[0], self.shortTimes[1])
 
-            long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
+            short_SPC.df["Btotal"] = np.sqrt(
+                short_SPC.df["B_R"] ** 2
+                + short_SPC.df["B_T"] ** 2
+                + short_SPC.df["B_N"] ** 2
+            )
+
+            long_SPC.df.rename(columns={"B_TOTAL": "Btotal"}, inplace=True)
+
             short_SPC.df = (
                 short_SPC.df[shortParams] if shortParams != None else short_SPC.df
             )
+            long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
 
             for _df in (long_SPC.df, short_SPC.df):
                 _df = _df.interpolate()
@@ -366,6 +421,7 @@ class baseEMD:
         yTickFrequency=[0],
         xTickFrequency=[0],
         legendLocForce="upper right",
+        onlySomeLegends=[],
     ):
         superSummaryPlotGeneric(
             shortDFDic=self.shortDFDics,
@@ -386,16 +442,19 @@ class baseEMD:
             yTickFrequency=yTickFrequency,
             xTickFrequency=xTickFrequency,
             legendLocForce=legendLocForce,
+            onlySomeLegends=onlySomeLegends,
+            relSpeeds=self.relSpeeds,
         )
 
 
 def PSPSolOCase(show=False):
-    # TODO: Add labels in bottom of plot like in other cases
     MARGIN = 0
     PSP_SolOVars = {
         "caseName": "PSP_SolO_e6",
-        "shortParams": ["Btotal", "B_R", "V_R", "Mf", "N"],  # Does N break?
-        "longParams": ["Btotal", "B_R", "V_R", "Mf", "N"],
+        # "shortParams": ["Btotal", "B_R", "V_R", "Mf", "N"],  # Does N break?
+        # "longParams": ["Btotal", "B_R", "V_R", "Mf", "N"],
+        "shortParams": ["Btotal", "B_R", "V_R", "N"],  # Does N break?
+        "longParams": ["Btotal", "B_R", "V_R", "N"],
         "PeriodMinMax": [5, 22],
         "showFig": show,
         "detrendBoxWidth": None,
@@ -448,9 +507,13 @@ def PSPSolOCase(show=False):
 
     pspSolOe6EMD = baseEMD(**PSP_SolOVars)
     pspSolOe6EMD.plotSeparately()
-    pspSolOe6EMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
+    pspSolOe6EMD.corrThrPlotList = np.arange(0.8, 0.91, 0.05)
     pspSolOe6EMD.plotTogether(
-        showBox=box, gridRegions=True, legendLocForce="lower right"
+        showBox=box,
+        gridRegions=True,
+        legendLocForce="upper right",
+        longName="PSP",
+        onlySomeLegends=["B_R"],
     )
 
 
@@ -459,36 +522,39 @@ def STAPSPCase(show=True):
     MARGIN = 0
     Kwargs = {
         "caseName": "STA_PSP",
-        "shortParams": ["B_R", "B_T", "B_N"],
-        "longParams": ["B_R", "B_T", "B_N", "V_R"],
-        "PeriodMinMax": [60, 720],  # Very long periods
+        # "shortParams": ["B_R", "B_T", "B_N"],
+        # "longParams": ["B_R", "B_T", "B_N", "V_R"],
+        "shortParams": ["Btotal"],
+        "longParams": ["Btotal", "V_R"],
+        "PeriodMinMax": [20, 40],  # Very long periods
         "showFig": show,
         "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 7,
+        "corrThrPlotList": np.arange(0.80, 1, 0.1),
+        "multiCPU": 8,
         # "speedSet": (100, 1000, 500),  # Low, high, mid
-        "shortDuration": 25,  # In hours
-        "shortDisplacement": 10,  # In hours
+        "shortDuration": 3,  # In hours
+        "shortDisplacement": 1,  # In hours
         "MARGIN": MARGIN,
         "inKind": True,
         "windDispParam": 1,
+        "relSpeeds": [300],
     }
 
     box = [
-        boxTuple(
-            longData=(datetime(2019, 11, 2, 23, 0), datetime(2019, 11, 3, 4, 0)),
-            shortData=(
-                datetime(
-                    2019,
-                    11,
-                    2,
-                    19,
-                    30,
-                ),
-                datetime(2019, 11, 3, 0, 30),
-            ),
-            color="blue",
-        ),
+        # boxTuple(
+        #     longData=(datetime(2019, 11, 2, 23, 0), datetime(2019, 11, 3, 4, 0)),
+        #     shortData=(
+        #         datetime(
+        #             2019,
+        #             11,
+        #             2,
+        #             19,
+        #             30,
+        #         ),
+        #         datetime(2019, 11, 3, 0, 30),
+        #     ),
+        #     color="blue",
+        # ),
     ]
     mData = None
 
@@ -499,9 +565,10 @@ def STAPSPCase(show=True):
         showBox=box,
         gridRegions=True,
         missingData=mData,
-        shortName="PSP (~0.95A.U.)",
-        longName="ST-A (0.95A.U.)",
+        shortName="ST-A",
+        longName="PSP",
         skipParams=["STA_V_R"],
+        legendLocForce="lower right",
     )
 
 
@@ -511,45 +578,49 @@ def SolOEarth2020Case(show=True):
     MARGIN = 0
     Vars = {
         "caseName": "April2020_SolO_WIND",
-        "shortParams": ["B_R", "B_T", "B_N"],
-        "longParams": ["B_R", "B_T", "B_N", "V_R"],
-        "PeriodMinMax": [60, 720],  # 1 to 12 hours
+        # "shortParams": ["B_R", "B_T", "B_N", "Btotal"],
+        # "longParams": ["B_R", "B_T", "B_N", "Btotal", "V_R"],
+        "shortParams": ["B_R", "B_T", "B_N", "Btotal"],
+        "longParams": ["B_R", "B_T", "B_N", "Btotal", "V_R"],
+        "PeriodMinMax": [60, 60 * 6],  # 1 to 6 hours
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 7,
+        "multiCPU": 6,
         "speedSet": None,
-        "shortDuration": 20,  # In hours
-        "shortDisplacement": 1,
+        "shortDuration": 18,  # In hours
+        "shortDisplacement": 2,
         "MARGIN": MARGIN,
         "equal": True if MARGIN == 0 else False,
         "inKind": True,
         "windDispParam": 1,
+        "relSpeeds": [300, 900],  # Speeds which are plotted
     }
 
-    # showBox = ([X0, XF], [Y0, YF]) - in datetime
-
     # Box for orbital match (reference)
-    box = [
-        boxTuple(
-            shortData=(datetime(2020, 4, 20, 18, 30), datetime(2020, 4, 20, 21, 30)),
-            longData=(datetime(2020, 4, 21, 18, 0), datetime(2020, 4, 21, 21, 0)),
-        ),
-    ]
+    box = []
+    # box = [
+    #     boxTuple(
+    #         shortData=(datetime(2020, 4, 19, 2), datetime(2020, 4, 20, 4, 30)),
+    #         longData=(datetime(2020, 4, 20, 0, 0), datetime(2020, 4, 21, 12, 0)),
+    #     ),
+    # ]
     # For SolO - Earth there is no missing data essentially
     mData = None
 
     soloAprilEMD = baseEMD(**Vars)
     soloAprilEMD.plotSeparately()
     soloAprilEMD.fixDFNames("WIND")
+    soloAprilEMD.corrThrPlotList = np.arange(0.85, 1, 0.1)
     soloAprilEMD.plotTogether(
         showBox=box,
         gridRegions=True,
-        shortName="SolO (0.8 A.U.)",
-        longName="WIND (1 A.U.)",
+        shortName="SolO",
+        longName="WIND",
         missingData=mData,
         skipParams=["WIND_V_R"],
-        legendLocForce="upper left",
+        legendLocForce="lower right",
+        onlySomeLegends=["B_T"],
     )
     print(
         f"Done April2020_SOLO_WIND with {soloAprilEMD.multiCPU} CPUs and {soloAprilEMD.windDispParam} minutes of window displacement"
@@ -633,22 +704,7 @@ if __name__ == "__main__":
     # ISSICase(show=show)
     # ISSIHMICase(show=show)
 
-    # TODO: If we use a MARGIN, we will not have as many useless results!
     # In situ
-    PSPSolOCase(show=show)
+    # PSPSolOCase(show=show)
     # SolOEarth2020Case(show=show)
-    # STAPSPCase(show=show)
-
-    """
-    - PSP Solo: First case (easiest, mostly working, kernels good) -> Imports from /Users/ddp/Documents/PhD/inEMD_Github/Scripts/Plots/createCSVsAndOrbits.py
-        - Should get a results plot, for 1.5 hours.
-        - What is their sliding window?
-
-    - SoloEarth2020: Second case (harder, kernels bad)
-        - Should get a results plot, use CME scale to get a better grasp of the results.
-        - Can I check scale of a CME??
-
-    - STAPSP: Literally did it over a couple of days. I wonder how much of it works?
-        - Just do everything lol
-
-    """
+    STAPSPCase(show=show)
