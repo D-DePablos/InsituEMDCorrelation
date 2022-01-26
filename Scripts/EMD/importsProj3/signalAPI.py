@@ -1,4 +1,5 @@
 """Helper functions"""
+from multiprocessing.sharedctypes import Value
 from git import base
 from pyparsing import WordEnd
 from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
@@ -261,6 +262,7 @@ def caseCreation(
 
     # Attempt to load the file first
     if not forceCreate:
+        print("Loading up")
         try:
             with open(f"{savePicklePath}", "rb") as f:
                 print("Loaded test cases.")
@@ -953,14 +955,6 @@ def plot_super_summary(
     # Gapless subplots figure
     # import matplotlib.pyplot as plt
 
-    # fig = plt.figure(figsize=(8,8)) # Notice the equal aspect ratio
-    # ax = [fig.add_subplot(2,2,i+1) for i in range(4)]
-
-    # for a in ax:
-    #     a.set_xticklabels([])
-    #     a.set_yticklabels([])
-    #     a.set_aspect('equal')
-
     # In some cases, need to auto-grid
     figSize = (7, 7)
     if gridRegions == True:
@@ -1204,13 +1198,17 @@ def plot_super_summary(
                 if len(corrThrPlotList) == 1:
                     _msize = 100
 
-                ax.scatter(
-                    x=dfDots.index,
-                    y=np.repeat(TshortDF, len(dfDots.index)),
-                    s=_msize,
-                    alpha=alphaList,
-                    c=ColumnColours[f"{_shortVar}"],
-                )
+                try:
+                    ax.scatter(
+                        x=dfDots.index,
+                        y=np.repeat(TshortDF, len(dfDots.index)),
+                        s=_msize,
+                        alpha=alphaList,
+                        c=ColumnColours[f"{_shortVar}"],
+                    )
+                except ValueError as v:
+                    # Sometimes there is a valueError as dfDots.index is empty
+                    print(f"Skipped {TshortDF} Due to {v}")
 
         # After all of the cases are done, use the last cases info
         # Compared to plotting lines, this does not plot outside of necessary area
@@ -1298,7 +1296,7 @@ def plot_super_summary(
         elif legendLocForce == "lower left":
             BBOX_anchor = (0, 0)
         elif legendLocForce == "upper left":
-            BBOX_anchor = (0, 1)
+            BBOX_anchor = (0.10, 0.90)
 
         # Sometimes we only want one parameter to have legend
 

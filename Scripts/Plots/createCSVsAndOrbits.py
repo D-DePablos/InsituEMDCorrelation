@@ -162,31 +162,39 @@ def sta_psp(show=False, plot_orbit=False):
     import astropy.units as u
 
     cadence_obj = 60
-    orbitStepMin = 90
-    radialTolerance = 1.5
+    orbitStepMin = 60
+    radialTolerance = 0.1
 
     sta = STA_psp(name="STA_Nov_2019", cadence_obj=cadence_obj, show=show)
     sta.dfUnits["R"] = sta.dfUnits["R"].value * u.AU
     psp = STA_psp(name="PSP_Nov_2019", cadence_obj=cadence_obj, show=show)
 
-    sta.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 20))
-    psp.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 20))
+    sta.zoom_in(start_time=datetime(2019, 11, 1, 3), end_time=datetime(2019, 11, 8))
+    psp.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 8))
 
     # These are zones and therefore have colours (black for far, red for close)
+    from datetime import timedelta
+
     pspZone = {
-        "start_time": datetime(2019, 11, 5, 7, 30),
-        "end_time": datetime(2019, 11, 6, 1, 30),
+        "start_time": datetime(2019, 11, 2, 21),
+        "end_time": datetime(2019, 11, 3),
         "color": "red",
     }
     staZone = {
-        "start_time": datetime(2019, 11, 5, 11),
-        "end_time": datetime(2019, 11, 6, 5, 0),
+        "start_time": datetime(2019, 11, 3),
+        "end_time": datetime(2019, 11, 3, 3),
         "color": "black",
     }
+
+    # Remove SOME blanks
+    sta.df.interpolate(method="pad", limit=120, inplace=True)
+    psp.df.interpolate(method="pad", limit=120, inplace=True)
+
     sta.plot_sta_psp_df(psp, zones=[staZone, pspZone])
-    # Remove all blanks
-    sta.df.fillna(method="pad")
-    psp.df.fillna(method="pad")
+
+    # Remove ALL blanks
+    sta.df.fillna(method="pad", inplace=True)
+    psp.df.fillna(method="pad", inplace=True)
 
     sta.extract_orbit_data(from_data=True, stepMinutes=60)
     psp.extract_orbit_data(from_data=True, stepMinutes=60)
@@ -200,6 +208,7 @@ def sta_psp(show=False, plot_orbit=False):
         # Create a set of radial separations
         for minSteps in [
             orbitStepMin,
+            orbitStepMin * 2,
             orbitStepMin * 3,
             orbitStepMin * 4,
             orbitStepMin * 6,
@@ -213,7 +222,7 @@ def sta_psp(show=False, plot_orbit=False):
                 plotRate=f"{minSteps}min",
                 pspiralHlight=None,
                 radialTolerance=radialTolerance,
-                zoomRegion=((0.7, 0.9), (-0.65, -0.35)),
+                zoomRegion=((0.67, 0.78), (-0.655, -0.555)),
                 vSW=int(sta.df["V_R"].mean()),
                 selfName="STEREO-A",
                 otherName="PSP",

@@ -130,7 +130,6 @@ def emd_and_save(s, t, saveFolder, save_name, plot=False):
         pass
     except ValueError:
         TERMINATE
-        pass
 
     # Will always use EMD. Will always get imfs and residue separately
     imfs = emd.emd(S=s, T=t, max_imf=10)

@@ -694,8 +694,8 @@ class Spacecraft:
         legendLoc,
         objFolder=f"{BASE_PATH}Figures/Orbit_3d/",
         plotRate="12h",
-        farTime="22:00",
-        closeTime="3:30",
+        farTime="00:00",
+        closeTime="00:00",
         pspiralHlight=None,
         radialTolerance=1.5,
         zoomRegion=((-0.79, 0.07), (-0.16, 0.8)),
@@ -1468,44 +1468,45 @@ class STA_psp(Spacecraft):
         # Figure
         # Width and marker size
         _, axs = plt.subplots(
-            6, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
+            5, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
         )
 
         # Plots
-        axR = axs[0]
-        axR.set_ylabel(r"R [AU]")
-        axR.plot(ts, R * u.m.to(u.AU), colourSTA, label="ST-A")
-        axR.plot(ots, oR * u.m.to(u.AU), colourPSP, label="PSP")
-        axR.grid(True)
-        axR.set_ylim(0.9, 0.97)
-        axR.legend()
+        # axR = axs[0]
+        # axR.set_ylabel(r"R [AU]")
+        # axR.plot(ts, R * u.m.to(u.AU), colourSTA, label="ST-A")
+        # axR.plot(ots, oR * u.m.to(u.AU), colourPSP, label="PSP")
+        # axR.grid(True)
+        # axR.set_ylim(0.9, 0.97)
+        # axR.legend()
 
         # V
-        axV = axs[1]
+        axV = axs[0]
         axV.set_ylabel(r"$\hat{V}_R [km/s]$")
-        axV.plot(ts, self.df["V_R"], colourSTA, label="ST-A", alpha=0.7)
+        axV.plot(ts, self.df["V_R"], colourSTA, alpha=0.7, label="ST-A")
         axV.legend()
 
         # Bx
-        axBR = axs[2]
+        axBR = axs[1]
         axBR.set_ylabel(r"$\hat{B}_{R} [nT]$")
-        axBR.plot(ts, Bx, colourSTA, alpha=0.7)
-        axBR.plot(ots, oBx, colourPSP, alpha=0.6)
+        axBR.plot(ts, Bx, colourSTA, alpha=0.7, label="ST-A")
+        axBR.plot(ots, oBx, colourPSP, alpha=0.6, label="PSP")
+        axBR.legend()
 
         # By
-        axBT = axs[3]
+        axBT = axs[2]
         axBT.set_ylabel(r"$\hat{B}_{T} [nT]$")
         axBT.plot(ts, By, colourSTA, alpha=0.7)
         axBT.plot(ots, oBy, colourPSP, alpha=0.6)
 
         # Bz
-        axBN = axs[4]
+        axBN = axs[3]
         axBN.set_ylabel(r"$\hat{B}_{N} [nT]$")
         axBN.plot(ts, Bz, colourSTA, alpha=0.7)
         axBN.plot(ots, oBz, colourPSP, alpha=0.6)
 
         # Btotal
-        axBTOTAL = axs[5]
+        axBTOTAL = axs[4]
         axBTOTAL.set_ylabel(r"$\hat{B}_{TOTAL} [nT]$")
         axBTOTAL.plot(ts, Bt, colourSTA, alpha=0.7)
         axBTOTAL.plot(ots, oBt, colourPSP, alpha=0.6)
@@ -1519,7 +1520,12 @@ class STA_psp(Spacecraft):
         for zone in zones:
             for ax in axs:
                 ax.axvspan(
-                    zone["start_time"], zone["end_time"], color=zone["color"], alpha=0.3
+                    zone["start_time"],
+                    zone["end_time"],
+                    color=zone["color"],
+                    alpha=0.3,
+                    ymin=0,
+                    ymax=0.15,
                 )
 
         # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,

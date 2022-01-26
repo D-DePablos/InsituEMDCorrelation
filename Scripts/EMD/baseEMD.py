@@ -271,8 +271,9 @@ class baseEMD:
                 "shortDisplacement": self.shortDisplacement,
                 "savePicklePath": f"{self.saveFolder}{self.caseSpecificName}.pickle",
                 "forceCreate": True,
-                # "firstRelevantLongTime": self.longTimes[0]
-                # + timedelta(hours=self.shortDuration),
+                # First relevant long time is important as otherwise margin does not work
+                "firstRelevantLongTime": self.longTimes[0]
+                + timedelta(hours=MARGIN / 2),
                 "MARGIN": MARGIN,
                 "equal": self.equal,
             }
@@ -328,8 +329,10 @@ class baseEMD:
             makedirs(self.saveFolder, exist_ok=True)
             # Long = STA
             # Short = PSP
-            self.longTimes = datetime(2019, 11, 5, 12), datetime(2019, 11, 10)
-            self.shortTimes = datetime(2019, 11, 5, 12), datetime(2019, 11, 10)
+            # self.longTimes = datetime(2019, 11, 1), datetime(2019, 11, 10)
+            # self.shortTimes = datetime(2019, 11, 1), datetime(2019, 11, 10)
+            self.longTimes = datetime(2019, 11, 1, 3), datetime(2019, 11, 8)
+            self.shortTimes = datetime(2019, 11, 1), datetime(2019, 11, 8)
             objCadenceSeconds = 60
             staPSPCases = {
                 "longTimes": self.longTimes,
@@ -341,6 +344,8 @@ class baseEMD:
                 "forceCreate": True,
                 "MARGIN": MARGIN,
                 "equal": self.equal,
+                "firstRelevantLongTime": self.longTimes[0]
+                + timedelta(hours=MARGIN / 2),
             }
             cases = caseCreation(**staPSPCases)
 
@@ -366,7 +371,7 @@ class baseEMD:
             long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
 
             for _df in (long_SPC.df, short_SPC.df):
-                _df = _df.interpolate()
+                _df = _df.interpolate(method="pad", limit=120)
 
             self.shortDFDics = [
                 shortDFDic(short_SPC.df, "PSP", cases, shortParams, ["PSP"], "psp")
@@ -522,22 +527,21 @@ def STAPSPCase(show=True):
     MARGIN = 0
     Kwargs = {
         "caseName": "STA_PSP",
-        # "shortParams": ["B_R", "B_T", "B_N"],
-        # "longParams": ["B_R", "B_T", "B_N", "V_R"],
-        "shortParams": ["Btotal"],
-        "longParams": ["Btotal", "V_R"],
-        "PeriodMinMax": [20, 40],  # Very long periods
+        "shortParams": ["B_R", "B_T", "B_N", "Btotal"],
+        "longParams": ["B_R", "B_T", "B_N", "V_R", "Btotal"],
+        "PeriodMinMax": [5, 60],
         "showFig": show,
         "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.80, 1, 0.1),
-        "multiCPU": 8,
+        "corrThrPlotList": np.arange(0.75, 1, 0.1),
+        "multiCPU": 6,
         # "speedSet": (100, 1000, 500),  # Low, high, mid
-        "shortDuration": 3,  # In hours
+        "shortDuration": 2.5,  # In hours
         "shortDisplacement": 1,  # In hours
         "MARGIN": MARGIN,
         "inKind": True,
         "windDispParam": 1,
         "relSpeeds": [300],
+        "equal": True if MARGIN == 0 else False,
     }
 
     box = [
@@ -561,21 +565,23 @@ def STAPSPCase(show=True):
     stapspEMD = baseEMD(**Kwargs)
     stapspEMD.plotSeparately()
     stapspEMD.fixDFNames("STA")
+    stapspEMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
     stapspEMD.plotTogether(
         showBox=box,
         gridRegions=True,
         missingData=mData,
-        shortName="ST-A",
-        longName="PSP",
+        shortName="PSP",
+        longName="ST-A",
         skipParams=["STA_V_R"],
-        legendLocForce="lower right",
+        legendLocForce="upper right",
+        onlySomeLegends=["B_R"],
     )
 
 
 # @timer
 def SolOEarth2020Case(show=True):
     # Short is SolO, long is Earth
-    MARGIN = 0
+    MARGIN = 48
     Vars = {
         "caseName": "April2020_SolO_WIND",
         # "shortParams": ["B_R", "B_T", "B_N", "Btotal"],
@@ -594,7 +600,7 @@ def SolOEarth2020Case(show=True):
         "equal": True if MARGIN == 0 else False,
         "inKind": True,
         "windDispParam": 1,
-        "relSpeeds": [300, 900],  # Speeds which are plotted
+        "relSpeeds": [300, 200, 100],  # Speeds which are plotted
     }
 
     # Box for orbital match (reference)
