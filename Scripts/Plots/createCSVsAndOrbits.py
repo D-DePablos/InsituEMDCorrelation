@@ -1,6 +1,4 @@
-from tracemalloc import start
-from astropy.table import QTable
-from astropy.coordinates import spherical_to_cartesian
+from turtle import color
 from datetime import datetime
 from os import makedirs
 from sys import path
@@ -169,33 +167,32 @@ def sta_psp(show=False, plot_orbit=False):
     sta.dfUnits["R"] = sta.dfUnits["R"].value * u.AU
     psp = STA_psp(name="PSP_Nov_2019", cadence_obj=cadence_obj, show=show)
 
-    sta.zoom_in(start_time=datetime(2019, 11, 1, 3), end_time=datetime(2019, 11, 8))
-    psp.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 8))
+    sta.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 6, 0, 1))
+    psp.zoom_in(start_time=datetime(2019, 11, 1), end_time=datetime(2019, 11, 6, 0, 1))
 
-    # These are zones and therefore have colours (black for far, red for close)
-    from datetime import timedelta
+    # pspZone = {
+    #     "start_time": datetime(2019, 11, 2, 21),
+    #     "end_time": datetime(2019, 11, 3),
+    #     "color": "red",
+    # }
+    # staZone = {
+    #     "start_time": datetime(2019, 11, 3),
+    #     "end_time": datetime(2019, 11, 3, 3),
+    #     "color": "black",
+    # }
 
-    pspZone = {
-        "start_time": datetime(2019, 11, 2, 21),
-        "end_time": datetime(2019, 11, 3),
-        "color": "red",
-    }
-    staZone = {
-        "start_time": datetime(2019, 11, 3),
-        "end_time": datetime(2019, 11, 3, 3),
-        "color": "black",
-    }
+    pspZone = None
+    staZone = None
 
-    # Remove SOME blanks
-    sta.df.interpolate(method="pad", limit=120, inplace=True)
-    psp.df.interpolate(method="pad", limit=120, inplace=True)
+    # Shift PSP by 3 hours
+    psp.df = psp.df.shift(periods=180, axis=0)
 
-    sta.plot_sta_psp_df(psp, zones=[staZone, pspZone])
-
-    # Remove ALL blanks
+    # Fill NA
     sta.df.fillna(method="pad", inplace=True)
     psp.df.fillna(method="pad", inplace=True)
+    sta.plot_sta_psp_df(psp, zones=[staZone, pspZone])
 
+    # Extract orbit data (Always 1 hr res, then downsample from it)
     sta.extract_orbit_data(from_data=True, stepMinutes=60)
     psp.extract_orbit_data(from_data=True, stepMinutes=60)
 
@@ -230,6 +227,9 @@ def sta_psp(show=False, plot_orbit=False):
                 otherSpiralRadii=(0.8, 0.9),
                 legendLoc="upper left",
                 plot_spirals=False,
+                plotZ=True,
+                zoomRegionZ=((-0.66, -0.54), (-0.09, 0.04)),
+                zLabelLoc="lower right",
             )
 
 

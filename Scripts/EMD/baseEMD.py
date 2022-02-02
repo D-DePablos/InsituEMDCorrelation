@@ -33,7 +33,7 @@ def timer(func):
         value = func(*args, **kwargs)
         toc = time.perf_counter()
         elapsed_time = toc - tic
-        print(f"Elapsed time: {elapsed_time:0.4f} seconds")
+        print(f"Elapsed time: {elapsed_time / 3600} hours")
         return value
 
     return wrapper_timer
@@ -58,7 +58,8 @@ class baseEMD:
         windDispParam: int = 1,  # How many measurements to move by
         accelerated=1,
         equal=False,
-        relSpeeds=None,
+        relSpeeds=range(100, 501, 100),
+        plot_allResults=False,
     ):
 
         # The job of the init should be to get to a standardised format
@@ -76,6 +77,7 @@ class baseEMD:
         self.accelerated = accelerated
         self.equal = equal
         self.relSpeeds = relSpeeds
+        self.plot_allResults = plot_allResults
 
         self.caseSpecificName = (
             f"{self.shortDuration}_By_{self.shortDisplacement}_Hours"
@@ -272,8 +274,8 @@ class baseEMD:
                 "savePicklePath": f"{self.saveFolder}{self.caseSpecificName}.pickle",
                 "forceCreate": True,
                 # First relevant long time is important as otherwise margin does not work
-                "firstRelevantLongTime": self.longTimes[0]
-                + timedelta(hours=MARGIN / 2),
+                # "firstRelevantLongTime": self.longTimes[0]
+                # + timedelta(hours=MARGIN / 2),
                 "MARGIN": MARGIN,
                 "equal": self.equal,
             }
@@ -331,8 +333,8 @@ class baseEMD:
             # Short = PSP
             # self.longTimes = datetime(2019, 11, 1), datetime(2019, 11, 10)
             # self.shortTimes = datetime(2019, 11, 1), datetime(2019, 11, 10)
-            self.longTimes = datetime(2019, 11, 1, 3), datetime(2019, 11, 8)
-            self.shortTimes = datetime(2019, 11, 1), datetime(2019, 11, 8)
+            self.longTimes = datetime(2019, 11, 1), datetime(2019, 11, 6, 0, 1)
+            self.shortTimes = datetime(2019, 11, 1), datetime(2019, 11, 6, 0, 1)
             objCadenceSeconds = 60
             staPSPCases = {
                 "longTimes": self.longTimes,
@@ -356,6 +358,8 @@ class baseEMD:
             short_SPC = Spacecraft(name="PSP_Nov_2019", cadence_obj=objCadenceSeconds)
             long_SPC.zoom_in(self.longTimes[0], self.longTimes[1])
             short_SPC.zoom_in(self.shortTimes[0], self.shortTimes[1])
+            short_SPC.df.fillna(method="ffill", inplace=True)
+            long_SPC.df.fillna(method="ffill", inplace=True)
 
             short_SPC.df["Btotal"] = np.sqrt(
                 short_SPC.df["B_R"] ** 2
@@ -369,9 +373,6 @@ class baseEMD:
                 short_SPC.df[shortParams] if shortParams != None else short_SPC.df
             )
             long_SPC.df = long_SPC.df[longParams] if longParams != None else long_SPC.df
-
-            for _df in (long_SPC.df, short_SPC.df):
-                _df = _df.interpolate(method="pad", limit=120)
 
             self.shortDFDics = [
                 shortDFDic(short_SPC.df, "PSP", cases, shortParams, ["PSP"], "psp")
@@ -412,6 +413,7 @@ class baseEMD:
             multiCPU=self.multiCPU,
             inKind=self.inKind,
             windDispParam=self.windDispParam,
+            plot_allResults=self.plot_allResults,
         )
 
     def plotTogether(
@@ -464,7 +466,7 @@ def PSPSolOCase(show=False):
         "showFig": show,
         "detrendBoxWidth": None,
         "corrThrPlotList": np.arange(0.75, 1, 0.05),
-        "multiCPU": 7,
+        "multiCPU": 8,
         "caseName": "PSP_SolO_e6",
         "speedSet": (320, 200, 250),  # High - low - mid
         "shortDuration": 1.5,
@@ -522,66 +524,79 @@ def PSPSolOCase(show=False):
     )
 
 
+@timer
 def STAPSPCase(show=True):
     # Short is PSP, Long is STA
     MARGIN = 0
-    Kwargs = {
-        "caseName": "STA_PSP",
-        "shortParams": ["B_R", "B_T", "B_N", "Btotal"],
-        "longParams": ["B_R", "B_T", "B_N", "V_R", "Btotal"],
-        "PeriodMinMax": [5, 60],
-        "showFig": show,
-        "detrendBoxWidth": None,
-        "corrThrPlotList": np.arange(0.75, 1, 0.1),
-        "multiCPU": 6,
-        # "speedSet": (100, 1000, 500),  # Low, high, mid
-        "shortDuration": 2.5,  # In hours
-        "shortDisplacement": 1,  # In hours
-        "MARGIN": MARGIN,
-        "inKind": True,
-        "windDispParam": 1,
-        "relSpeeds": [300],
-        "equal": True if MARGIN == 0 else False,
-    }
+    BOX_WIDTH = 200
+    SHORTDURN = 30
+    SHORTDISPL = 2
 
-    box = [
-        # boxTuple(
-        #     longData=(datetime(2019, 11, 2, 23, 0), datetime(2019, 11, 3, 4, 0)),
-        #     shortData=(
-        #         datetime(
-        #             2019,
-        #             11,
-        #             2,
-        #             19,
-        #             30,
-        #         ),
-        #         datetime(2019, 11, 3, 0, 30),
-        #     ),
-        #     color="blue",
-        # ),
-    ]
-    mData = None
+    # periodList = [[60, 180], [60, 240], [120, 240]]
+    periodList = [[30, 60 * 4], [30, 60 * 6], [60, 60 * 6]]
+    for p in periodList:
+        Kwargs = {
+            "caseName": "STA_PSP",
+            "shortParams": ["B_R", "B_T", "B_N", "Btotal"],
+            "longParams": ["B_R", "B_T", "B_N", "V_R", "Btotal"],
+            "PeriodMinMax": p,
+            "showFig": show,
+            "detrendBoxWidth": BOX_WIDTH,
+            "corrThrPlotList": np.arange(0.7, 1, 0.05),
+            "multiCPU": 8,
+            "shortDuration": SHORTDURN,  # In hours
+            "shortDisplacement": SHORTDISPL,  # In hours
+            "MARGIN": MARGIN,
+            "inKind": True,
+            "windDispParam": SHORTDURN / 2,
+            "relSpeeds": [],
+            "equal": True if MARGIN == 0 else False,
+        }
 
-    stapspEMD = baseEMD(**Kwargs)
-    stapspEMD.plotSeparately()
-    stapspEMD.fixDFNames("STA")
-    stapspEMD.corrThrPlotList = np.arange(0.75, 1, 0.1)
-    stapspEMD.plotTogether(
-        showBox=box,
-        gridRegions=True,
-        missingData=mData,
-        shortName="PSP",
-        longName="ST-A",
-        skipParams=["STA_V_R"],
-        legendLocForce="upper right",
-        onlySomeLegends=["B_R"],
-    )
+        # Box is moved from middle to start
+        box = [
+            boxTuple(
+                longData=(
+                    datetime(2019, 11, 3, 0) - timedelta(hours=SHORTDURN) / 2,
+                    datetime(2019, 11, 3, 12, 0) - timedelta(hours=SHORTDURN) / 2,
+                ),
+                shortData=(
+                    datetime(
+                        2019,
+                        11,
+                        2,
+                        21,
+                    )
+                    - timedelta(hours=SHORTDURN) / 2,
+                    datetime(2019, 11, 3, 9) - timedelta(hours=SHORTDURN) / 2,
+                ),
+                color="blue",
+            ),
+        ]
+        mData = None
+
+        stapspEMD = baseEMD(**Kwargs)
+        stapspEMD.plotSeparately()
+        stapspEMD.fixDFNames("STA")
+        stapspEMD.corrThrPlotList = np.arange(0.85, 1, 0.1)
+        stapspEMD.plotTogether(
+            showBox=box,
+            gridRegions=True,
+            missingData=mData,
+            shortName="PSP",
+            longName="ST-A",
+            skipParams=["STA_V_R"],
+            legendLocForce="lower right",
+            onlySomeLegends=["B_R"],
+        )
+
+    print("Done summary plots STA_PSP")
 
 
 # @timer
 def SolOEarth2020Case(show=True):
     # Short is SolO, long is Earth
-    MARGIN = 48
+    MARGIN = 0
     Vars = {
         "caseName": "April2020_SolO_WIND",
         # "shortParams": ["B_R", "B_T", "B_N", "Btotal"],

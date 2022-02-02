@@ -502,6 +502,7 @@ def multiEMD(
     windDispParam,
     inKind,
     splitLongTimes=None,
+    plot_allResults=False,
 ):
     """EMD for a set of splitTimes and Indices
     Optimised for multiprocessing
@@ -557,6 +558,7 @@ def multiEMD(
             showSpeed=False,
             shortKernelName=longDF.name.lower(),  # Should ensure that using SPC name
             inKind=inKind,
+            plot_allResults=plot_allResults,
         )
 
 
@@ -571,6 +573,7 @@ def emdAndCompareCases(
     multiCPU=1,
     inKind=False,
     windDispParam=10,
+    plot_allResults=False,
 ):
     """
     Perform EMD and Compare a short and a Long dataframe
@@ -642,6 +645,7 @@ def emdAndCompareCases(
                     windDispParam,
                     inKind,
                     _splitLongTimes,
+                    plot_allResults,
                 ),
             )
             procs.append(proc)
@@ -677,7 +681,7 @@ def superSummaryPlotGeneric(
     xTickFrequency=[0],
     legendLocForce="upper right",
     onlySomeLegends=[],
-    relSpeeds=None,
+    relSpeeds=range(100, 501, 100),
 ):
     """
     Calculates and plots a superSummaryPlot (shows all short params,
@@ -793,6 +797,7 @@ def compareTS(
     shortKernelName=None,
     corrThrPlotList=np.arange(0.75, 0.901, 0.05),
     inKind=False,
+    plot_allResults=False,
 ):
     """
     Takes two dataframes sampled at same cadence
@@ -878,6 +883,7 @@ def compareTS(
                         filterPeriods=filterPeriods,
                         renormalize=renormalize,
                     )
+
                     selfSigFunc.plot_all_results(
                         other=otherSigFunc,
                         Label_long_ts=varOther,
@@ -892,6 +898,7 @@ def compareTS(
                         shortKernelName=shortKernelName,
                         LOSPEED=LOSPEED,
                         HISPEED=HISPEED,
+                        plot_allResults=plot_allResults,
                         # ffactor=4 / 3,
                     )
 
@@ -922,7 +929,7 @@ def plot_super_summary(
     xTickFrequency=[0],
     legendLocForce="upper right",
     onlySomeLegends=[],
-    relSpeeds=None,
+    relSpeeds=range(100, 501, 100),
 ):
     """Plots a "super" summary with info about all selected regions
     Does not take dataframes as input, instead finds the data through
@@ -1115,7 +1122,7 @@ def plot_super_summary(
             # After all shortVars Set the index of the Dots dataframe to midPoints
             dfDots.index = midpointTimes
 
-            # Plot inside each of the squares
+            # Plot horizontal line inside each square
             ax.plot(
                 longARRAY,
                 np.repeat(TshortDF, len(longARRAY)),
@@ -1135,8 +1142,6 @@ def plot_super_summary(
 
             # Get an arbitrary list of valuable speeds
             # Get the relevant speeds every 100 kms
-            relSpeeds = range(100, 501, 100) if relSpeeds == None else relSpeeds
-
             for relSpeed in relSpeeds:
                 _close_idx = (np.abs(Vaxis - relSpeed)).argmin()
                 closest_time = longARRAY[_close_idx]
@@ -1189,26 +1194,36 @@ def plot_super_summary(
 
             # For each of the variables in the dots array
             for _shortVar in dfDots.columns:
-                alphaList = [
-                    alphaWVL[_shortVar] if x > 0 else 0
-                    for x in dfDots[_shortVar].values
-                ]
-                _msize = 100 * (dfDots[_shortVar].values) ** 2
-                # In the case where we only use one of the correlation thresholds
-                if len(corrThrPlotList) == 1:
-                    _msize = 100
-
-                try:
-                    ax.scatter(
-                        x=dfDots.index,
-                        y=np.repeat(TshortDF, len(dfDots.index)),
-                        s=_msize,
-                        alpha=alphaList,
-                        c=ColumnColours[f"{_shortVar}"],
+                if set(dfDots[_shortVar].values) != {0}:
+                    alphaList = np.array(
+                        [
+                            alphaWVL[_shortVar] if x > 0 else 0
+                            for x in dfDots[_shortVar].values
+                        ]
                     )
-                except ValueError as v:
-                    # Sometimes there is a valueError as dfDots.index is empty
-                    print(f"Skipped {TshortDF} Due to {v}")
+                    _msize = 100 * (dfDots[_shortVar].values) ** 2
+
+                    # In the case where we only use one of the correlation thresholds
+                    if len(corrThrPlotList) == 1:
+                        _msize = 100
+
+                    try:
+                        x = dfDots.index
+                        y = np.repeat(TshortDF, len(x))
+                        s = _msize
+                        col = ColumnColours[_shortVar]
+
+                        ax.scatter(
+                            x=x[alphaList > 0],
+                            y=y[alphaList > 0],
+                            s=s[alphaList > 0],
+                            alpha=alphaList[alphaList > 0],
+                            c=col,
+                        )
+
+                    except ValueError as v:
+                        # Sometimes there is a valueError as dfDots.index is empty
+                        print(f"Skipped {TshortDF} Due to {v}")
 
         # After all of the cases are done, use the last cases info
         # Compared to plotting lines, this does not plot outside of necessary area

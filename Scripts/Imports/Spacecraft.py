@@ -705,6 +705,9 @@ class Spacecraft:
         selfSpiralRadii=(0.15, 1.3),
         otherSpiralRadii=(0.05, 1.3),
         plot_spirals=True,
+        plotZ=False,
+        zoomRegionZ=None,
+        zLabelLoc="best",
     ):
         """
         Plots the longitude and latitude of a given spacecraft object
@@ -757,6 +760,11 @@ class Spacecraft:
         df_farFromSun = df_farFromSun.resample(f"{plotRate}", origin=farTime).mean()
         df_nextToSun = df_nextToSun.resample(f"{plotRate}", origin=closeTime).mean()
 
+        MAXTICKS = round(
+            (df_farFromSun.index[-1] - df_farFromSun.index[0]).total_seconds()
+            / (24 * 3600)
+        )
+
         farFromSunTimesList, tPSPList, lonDistList = [], [], []
         lonDistDF = pd.DataFrame({})
 
@@ -787,11 +795,6 @@ class Spacecraft:
             m, b = lineCalc(P1, P2)
             slopeIntList.append(slopeInt(m, b))
 
-        # Figure of the two orbits with field lines
-        fig = plt.figure(figsize=(11, 10), constrained_layout=True)
-        ax = plt.gca()
-        plt.scatter([0], [0], s=300, color="orange", marker="*")
-
         soloIndices = []
         for _t in pd.to_datetime(closestRows["farFromSunTime"].values).to_pydatetime():
             soloIndex = df_farFromSun.index.get_loc(_t, method="nearest")
@@ -815,6 +818,107 @@ class Spacecraft:
             if pspiralHlight
             else None
         )
+
+        def plot_orbit_z():
+            """
+            Take the measurements from next to Sun and far from Sun
+            and plot on the X/Z direction
+            """
+            fig = plt.figure(figsize=(11, 10), constrained_layout=True)
+            ax = plt.gca()
+            plt.scatter([0], [0], s=300, color="orange", marker="*")
+
+            smap = plt.scatter(
+                df_farFromSun["Y"],
+                df_farFromSun["Z"],
+                c=mdates.date2num(df_farFromSun.index),
+                cmap="binary",
+                s=250,
+            )
+            cax = ax.inset_axes([1.07, 0.50, 0.05, 0.45])
+            cb = plt.colorbar(smap, cax=cax, orientation="vertical", shrink=0.45)
+            cb.ax.yaxis.set_label_position("left")
+            cb.ax.set_ylabel(f"{selfName}")
+            loc = mdates.AutoDateLocator(minticks=3, maxticks=MAXTICKS)
+            form = mdates.ConciseDateFormatter(loc)
+            cb.ax.yaxis.set_major_formatter(form)
+
+            # Plot the PSP orbit
+            smap2 = plt.scatter(
+                df_nextToSun["Y"],
+                df_nextToSun["Z"],
+                c=mdates.date2num(df_nextToSun.index),
+                cmap="OrRd",
+                s=250,
+            )
+            cax2 = ax.inset_axes([1.07, 0, 0.05, 0.45])
+            cb2 = plt.colorbar(smap2, cax=cax2, orientation="vertical", shrink=0.45)
+            cb2.ax.yaxis.set_label_position("left")
+            cb2.ax.set_ylabel(f"{otherName}")
+            loc2 = mdates.AutoDateLocator(minticks=3, maxticks=MAXTICKS)
+            form2 = mdates.ConciseDateFormatter(loc2)
+            cb2.ax.yaxis.set_major_formatter(form2)
+
+            # Annotate dates in closetoSun
+            plt.gca().set_prop_cycle(None)
+            for i, txt in enumerate(df_nextToSun.index):
+                # If within the list
+                if i in list(set([*hlightIndices["PSPIndices"], pspiralIndex])):
+                    _lab = f'{otherName} {datetime.strftime(txt, "%Y-%m-%d %H:%M")}'
+                    plt.scatter(
+                        df_nextToSun["Y"][i],
+                        df_nextToSun["Z"][i],
+                        marker="d",
+                        # color="red" if i != pspiralIndex else "green",
+                        s=125,
+                        alpha=1,
+                        label=_lab
+                        if i != pspiralIndex
+                        else f"Parker Alignment: {_lab}",
+                    )
+
+            plt.gca().set_prop_cycle(None)
+
+            # Annotate dates in farFromSun (Which are highlighted)
+            # Keep in red because we only use radial propagation here, not Parker Spiral???
+            for i, txt in enumerate(df_farFromSun.index):
+                if i in hlightIndices["farFromSunHighlightedIndices"]:
+                    _lab = f'{selfName}: {datetime.strftime(txt, "%Y-%m-%d %H:%M")}'
+                    plt.scatter(
+                        df_farFromSun["Y"][i],
+                        df_farFromSun["Z"][i],
+                        # color="red",
+                        s=125,
+                        label=_lab,
+                        marker="X",
+                    )
+
+            plt.grid(True, which="both", ls="-", alpha=0.5)
+            plt.xlabel("Cartesian Y (AU)")
+            plt.ylabel("Cartesian Z (AU)")
+
+            plt.xlim(*zoomRegionZ[0])
+            plt.ylim(*zoomRegionZ[1])
+
+            plt.legend(loc=zLabelLoc)
+
+            plt.savefig(
+                f"{objFolder}Z-Axis_rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf"
+            )
+            print("Saved Z figure in {}".format(objFolder))
+            if farFromSun.show:
+                plt.show()
+
+            plt.close()
+
+        if plotZ and zoomRegionZ != None:
+            plot_orbit_z()
+
+        # Figure of the two orbits with field lines
+        fig = plt.figure(figsize=(11, 10), constrained_layout=True)
+        ax = plt.gca()
+        plt.scatter([0], [0], s=300, color="orange", marker="*")
+
         # RADIAL
         # plot radial
         for i, line in enumerate(slopeIntList):
@@ -867,7 +971,7 @@ class Spacecraft:
         cb.ax.yaxis.set_label_position("left")
         cb.ax.set_ylabel(f"{selfName}")
 
-        loc = mdates.DayLocator()
+        loc = mdates.AutoDateLocator(minticks=3, maxticks=MAXTICKS)
         cb.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
 
         smap2 = plt.scatter(
@@ -881,7 +985,7 @@ class Spacecraft:
         cb2 = plt.colorbar(smap2, cax=cax2, orientation="vertical", shrink=0.45)
         cb2.ax.yaxis.set_label_position("left")
         cb2.ax.set_ylabel(f"{otherName}")
-        loc2 = mdates.DayLocator()
+        loc2 = mdates.AutoDateLocator(minticks=3, maxticks=MAXTICKS)
         # cb2.ax.yaxis.set_major_locator(loc)
         cb2.ax.yaxis.set_major_formatter(mdates.ConciseDateFormatter(loc2))
 
@@ -931,7 +1035,7 @@ class Spacecraft:
         # Plot the Parker Spiral lines
         plt.savefig(f"{objFolder}rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf")
         print(f"Saved to {objFolder}rate_{plotRate}_Tolerance_{radialTolerance}deg.pdf")
-        if farFromSun.show == True:
+        if farFromSun.show:
             plt.show()
 
         plt.close()
@@ -1471,15 +1575,6 @@ class STA_psp(Spacecraft):
             5, 1, figsize=(14, 2 * 5), sharex=True, constrained_layout=True
         )
 
-        # Plots
-        # axR = axs[0]
-        # axR.set_ylabel(r"R [AU]")
-        # axR.plot(ts, R * u.m.to(u.AU), colourSTA, label="ST-A")
-        # axR.plot(ots, oR * u.m.to(u.AU), colourPSP, label="PSP")
-        # axR.grid(True)
-        # axR.set_ylim(0.9, 0.97)
-        # axR.legend()
-
         # V
         axV = axs[0]
         axV.set_ylabel(r"$\hat{V}_R [km/s]$")
@@ -1490,7 +1585,7 @@ class STA_psp(Spacecraft):
         axBR = axs[1]
         axBR.set_ylabel(r"$\hat{B}_{R} [nT]$")
         axBR.plot(ts, Bx, colourSTA, alpha=0.7, label="ST-A")
-        axBR.plot(ots, oBx, colourPSP, alpha=0.6, label="PSP")
+        axBR.plot(ots, oBx, colourPSP, alpha=0.6, label="PSP [+3hr]")
         axBR.legend()
 
         # By
@@ -1518,15 +1613,16 @@ class STA_psp(Spacecraft):
 
         # Plot the zones being considered
         for zone in zones:
-            for ax in axs:
-                ax.axvspan(
-                    zone["start_time"],
-                    zone["end_time"],
-                    color=zone["color"],
-                    alpha=0.3,
-                    ymin=0,
-                    ymax=0.15,
-                )
+            if zone != None:
+                for ax in axs:
+                    ax.axvspan(
+                        zone["start_time"],
+                        zone["end_time"],
+                        color=zone["color"],
+                        alpha=0.3,
+                        ymin=0,
+                        ymax=0.15,
+                    )
 
         # total magnetic field strength, proton number density, solarwind bulk flow velocity and mass flux,
         # print(f"Saving to {self}")

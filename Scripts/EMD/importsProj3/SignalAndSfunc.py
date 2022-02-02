@@ -1162,6 +1162,7 @@ class SignalFunctions(Signal):
         HISPEED=285,
         showLocationList=False,
         ffactor=1,
+        plot_allResults=False,
     ):
         """
         This function plots the number of IMFs with high correlation for all heights
@@ -1417,261 +1418,268 @@ class SignalFunctions(Signal):
 
                 create_ts_plot()
 
-        # Establish relevant signal Objects
-        # SHORT
-        short_signal = self
-        short_values = short_signal.s
-        short_time = short_signal.t
+        if plot_allResults:
+            # Establish relevant signal Objects
+            # SHORT
+            short_signal = self
+            short_values = short_signal.s
+            short_time = short_signal.t
 
-        # LONG
-        long_signal = other
-        # long_values = long_signal.s
-        long_true_values = long_signal.base_signal
-        # long_true_values
+            # LONG
+            long_signal = other
+            # long_values = long_signal.s
+            long_true_values = long_signal.base_signal
+            # long_true_values
 
-        # window_width = max(short_time) * 12 / 60
-
-        if useRealTime:
-            short_duration = short_signal.true_time[-1] - short_signal.true_time[0]
-            longTime_axis = long_signal.true_time
-        else:
-            short_duration = (short_signal.t[-1] - short_signal.t[0]) / 60
-            longTime_axis = long_signal.t / 60
-
-        region_string = self.name
-        #######################################
-        # Figure
-        fig, axs = plt.subplots(2, figsize=(20, 10), sharex=True)
-
-        # First plot
-        ax = axs[0]
-        ax.plot(
-            longTime_axis, long_true_values, color="black", label=Label_long_ts, alpha=1
-        )
-
-        if filterPeriods:
-            ax.set_title(f"{self.pmin} < {r'$P_{IMF}$'} < {self.pmax} min")
-
-        elif not filterPeriods:
-            ax.set_title(f"Noise {self.signalObject.noise_perc}%")
-
-        else:
-            raise ValueError("Please determine whether using period or not")
-
-        ax.set_ylabel(f"{Label_long_ts}")
-        if useRealTime:
-            ax.set_xlim(
-                longTime_axis[0] - timedelta(hours=margin_hours),
-                longTime_axis[-1] + timedelta(hours=margin_hours),
-            )
-            ax.xaxis.set_major_formatter(formatter)
-            ax.xaxis.set_major_locator(locator)
-
-        else:
-            # Set xticks every hour
-            xticks = np.arange(longTime_axis[0], longTime_axis[-1] + 1, step=180)
-            plt.xticks(xticks)
-
-        ax.xaxis.grid(True)
-
-        if useRealTime:
-            # Plot the columns which show correlation
-            try:
-                # Saved only sometimes!
-                true_time_secs = corr_matrix[0, 0, :, 3]
-            except IndexError as ind_err:
-                raise IndexError("Please ensure that the true timeseries is saved!")
-
-            ttindex = (true_time_secs / long_signal.cadence).astype(int)
-            true_time_datetime = long_signal.true_time[ttindex]
-            time_mid_min = true_time_datetime
-            bar_width = short_duration
-
-        else:
-            time_mid_min = corr_locations[:, 0, 0]
-            bar_width = short_duration
-
-        ###################################################
-        # BOTTOM PLOT
-        ax2 = axs[1]
-
-        #######################################
-        # INSET AXIS
-        # displays short signal
-
-        # if Label_long_ts == 'Mf': --> Just /inset and change to if True
-        in_ax = inset_axes(
-            ax2,
-            width="15%",  # width = 30% of parent_bbox
-            height=1,  # height : 1 inch
-            loc="upper left",
-        )
-        in_ax.plot(short_time, short_values, color="black")
-        in_ax.set_title(f"{region_string}")
-        plt.xticks([])
-        plt.yticks([])
-
-        # Adding specific colormap for pairs
-        possibleColors = {"1": "green", "2": "magenta", "3": "yellow"}
-
-        for height in range(len(time_mid_min)):
-            # Open up pearson and spearman IMF pair list
-            pearson_array = corr_locations[height, :, 1]
-            # spearman_array = corr_locations[height, :, 2]
+            # window_width = max(short_time) * 12 / 60
 
             if useRealTime:
-                midpoint = corr_matrix[0, 0, height, 3]
-                midpoint_time = other.true_time[0] + timedelta(seconds=midpoint)
-                time = midpoint_time
-                barchart_time = time.to_pydatetime()
+                short_duration = short_signal.true_time[-1] - short_signal.true_time[0]
+                longTime_axis = long_signal.true_time
+            else:
+                short_duration = (short_signal.t[-1] - short_signal.t[0]) / 60
+                longTime_axis = long_signal.t / 60
+
+            region_string = self.name
+            #######################################
+            # Figure
+            fig, axs = plt.subplots(2, figsize=(20, 10), sharex=True)
+
+            # First plot
+            ax = axs[0]
+            ax.plot(
+                longTime_axis,
+                long_true_values,
+                color="black",
+                label=Label_long_ts,
+                alpha=1,
+            )
+
+            if filterPeriods:
+                ax.set_title(f"{self.pmin} < {r'$P_{IMF}$'} < {self.pmax} min")
+
+            elif not filterPeriods:
+                ax.set_title(f"Noise {self.signalObject.noise_perc}%")
 
             else:
-                midpoint = self.t[int(len(self.t) / 2)]
-                time = other.t[0] + midpoint + (self.windowDisp * height)
-                barchart_time = time / 60
-                # NUMPY INT64
+                raise ValueError("Please determine whether using period or not")
 
-            # Bar charts for each of the heights
-            for index, corr_label in enumerate(self.corrThrPlotList):
-                if pearson_array[index] != 0:  # If some pairs are found
+            ax.set_ylabel(f"{Label_long_ts}")
+            if useRealTime:
+                ax.set_xlim(
+                    longTime_axis[0] - timedelta(hours=margin_hours),
+                    longTime_axis[-1] + timedelta(hours=margin_hours),
+                )
+                ax.xaxis.set_major_formatter(formatter)
+                ax.xaxis.set_major_locator(locator)
 
-                    try:
-                        _color = possibleColors[f"{int(pearson_array[index])}"]
-                    except KeyError:
-                        _color = "red"
+            else:
+                # Set xticks every hour
+                xticks = np.arange(longTime_axis[0], longTime_axis[-1] + 1, step=180)
+                plt.xticks(xticks)
 
-                    # Bug with periodicity calculation. WTF
-                    _alpha = 0.35
-                    ax2.bar(
-                        barchart_time,
-                        corr_label,
-                        width=bar_width,
-                        color=_color,
-                        edgecolor="white",
-                        alpha=_alpha,
-                        zorder=1,
-                    )
+            ax.xaxis.grid(True)
 
-                # if spearman_array[index] != 0:
-                #     try:
-                #         _color = possibleColors[
-                #             f"{int(spearman_array[index])}"]
-                #     except KeyError:
-                #         _color = "red"
-                #     _alpha = 0.35 if spearman_array[index] > 0 else 0
-                #     ax2.bar(
-                #         barchart_time,
-                #         corr_label,
-                #         width=bar_width,
-                #         color=_color,
-                #         edgecolor="white",
-                #         alpha=_alpha,
-                #         zorder=2,
-                #     )
+            if useRealTime:
+                # Plot the columns which show correlation
+                try:
+                    # Saved only sometimes!
+                    true_time_secs = corr_matrix[0, 0, :, 3]
+                except IndexError as ind_err:
+                    raise IndexError("Please ensure that the true timeseries is saved!")
 
-        # Columns on bottom plot
-        if useRealTime:
-            ax2.xaxis.set_major_locator(locator)
-            ax2.xaxis.set_major_formatter(formatter)
-            # Set the x limits
-            ax2.set_xlim(
-                longTime_axis[0] - timedelta(hours=margin_hours),
-                longTime_axis[-1] + timedelta(hours=margin_hours),
+                ttindex = (true_time_secs / long_signal.cadence).astype(int)
+                true_time_datetime = long_signal.true_time[ttindex]
+                time_mid_min = true_time_datetime
+                bar_width = short_duration
+
+            else:
+                time_mid_min = corr_locations[:, 0, 0]
+                bar_width = short_duration
+
+            ###################################################
+            # BOTTOM PLOT
+            ax2 = axs[1]
+
+            #######################################
+            # INSET AXIS
+            # displays short signal
+
+            # if Label_long_ts == 'Mf': --> Just /inset and change to if True
+            in_ax = inset_axes(
+                ax2,
+                width="15%",  # width = 30% of parent_bbox
+                height=1,  # height : 1 inch
+                loc="upper left",
             )
+            in_ax.plot(short_time, short_values, color="black")
+            in_ax.set_title(f"{region_string}")
+            plt.xticks([])
+            plt.yticks([])
 
-            # If using some expected location dictionary add here
-            if showLocationList is not False:
-                for expected_location in expectedLocationList:
-                    start_expected = expected_location["start"]
-                    end_expected = expected_location["end"]
-                    color = expected_location["color"]
-                    label = expected_location["label"]
+            # Adding specific colormap for pairs
+            possibleColors = {"1": "green", "2": "magenta", "3": "yellow"}
 
-                    ax2.axvspan(
-                        xmin=start_expected,
-                        xmax=end_expected,
-                        ymin=0,
-                        ymax=1,
-                        alpha=0.3,
-                        color=color,
-                    )
+            for height in range(len(time_mid_min)):
+                # Open up pearson and spearman IMF pair list
+                pearson_array = corr_locations[height, :, 1]
+                # spearman_array = corr_locations[height, :, 2]
 
-                    ax2.text(
-                        x=start_expected + timedelta(minutes=15),
-                        y=0.95,
-                        s=f"{label}",
-                    )
+                if useRealTime:
+                    midpoint = corr_matrix[0, 0, height, 3]
+                    midpoint_time = other.true_time[0] + timedelta(seconds=midpoint)
+                    time = midpoint_time
+                    barchart_time = time.to_pydatetime()
 
-        else:
-            ax2.xaxis.set_tick_params(rotation=25)
+                else:
+                    midpoint = self.t[int(len(self.t) / 2)]
+                    time = other.t[0] + midpoint + (self.windowDisp * height)
+                    barchart_time = time / 60
+                    # NUMPY INT64
 
-        # Divide by 2 number of ticks and add 1 as highest Corr
-        corrThrLimits = []
-        for i, value in enumerate(self.corrThrPlotList):
-            if np.mod(i, 2) == 0:
-                corrThrLimits.append(value)
+                # Bar charts for each of the heights
+                for index, corr_label in enumerate(self.corrThrPlotList):
+                    if pearson_array[index] != 0:  # If some pairs are found
 
-        ax2.set_yticks(corrThrLimits)  # Ensure ticks are good
-        # Allows for any correlation
-        ax2.set_ylim(self.corrThrPlotList[0], 1.01)
-        ax2.set_ylabel("Highest corr. found")
+                        try:
+                            _color = possibleColors[f"{int(pearson_array[index])}"]
+                        except KeyError:
+                            _color = "red"
 
-        if showSpeed:
-            # TODO: Use only a 'highlighted time' if it exists, to calculate speed
-            # Extract the Velocities
-            vSWAxis = transformTimeAxistoVelocity(
-                longTime_axis,
-                originTime=short_signal.true_time[0].to_pydatetime(),
-                shortKernelName=shortKernelName,
-                ObjBody="psp" if "psp" in other.name.lower() else "Sun",
-                firstLoad=True if height == 0 else False,
+                        # Bug with periodicity calculation. WTF
+                        _alpha = 0.35
+                        ax2.bar(
+                            barchart_time,
+                            corr_label,
+                            width=bar_width,
+                            color=_color,
+                            edgecolor="white",
+                            alpha=_alpha,
+                            zorder=1,
+                        )
+
+                    # if spearman_array[index] != 0:
+                    #     try:
+                    #         _color = possibleColors[
+                    #             f"{int(spearman_array[index])}"]
+                    #     except KeyError:
+                    #         _color = "red"
+                    #     _alpha = 0.35 if spearman_array[index] > 0 else 0
+                    #     ax2.bar(
+                    #         barchart_time,
+                    #         corr_label,
+                    #         width=bar_width,
+                    #         color=_color,
+                    #         edgecolor="white",
+                    #         alpha=_alpha,
+                    #         zorder=2,
+                    #     )
+
+            # Columns on bottom plot
+            if useRealTime:
+                ax2.xaxis.set_major_locator(locator)
+                ax2.xaxis.set_major_formatter(formatter)
+                # Set the x limits
+                ax2.set_xlim(
+                    longTime_axis[0] - timedelta(hours=margin_hours),
+                    longTime_axis[-1] + timedelta(hours=margin_hours),
+                )
+
+                # If using some expected location dictionary add here
+                if showLocationList is not False:
+                    for expected_location in expectedLocationList:
+                        start_expected = expected_location["start"]
+                        end_expected = expected_location["end"]
+                        color = expected_location["color"]
+                        label = expected_location["label"]
+
+                        ax2.axvspan(
+                            xmin=start_expected,
+                            xmax=end_expected,
+                            ymin=0,
+                            ymax=1,
+                            alpha=0.3,
+                            color=color,
+                        )
+
+                        ax2.text(
+                            x=start_expected + timedelta(minutes=15),
+                            y=0.95,
+                            s=f"{label}",
+                        )
+
+            else:
+                ax2.xaxis.set_tick_params(rotation=25)
+
+            # Divide by 2 number of ticks and add 1 as highest Corr
+            corrThrLimits = []
+            for i, value in enumerate(self.corrThrPlotList):
+                if np.mod(i, 2) == 0:
+                    corrThrLimits.append(value)
+
+            ax2.set_yticks(corrThrLimits)  # Ensure ticks are good
+            # Allows for any correlation
+            ax2.set_ylim(self.corrThrPlotList[0], 1.01)
+            ax2.set_ylabel("Highest corr. found")
+
+            if showSpeed:
+                # Extract the Velocities
+                vSWAxis = transformTimeAxistoVelocity(
+                    longTime_axis,
+                    originTime=short_signal.true_time[0].to_pydatetime(),
+                    shortKernelName=shortKernelName,
+                    ObjBody="psp" if "psp" in other.name.lower() else "Sun",
+                    firstLoad=True if height == 0 else False,
+                )
+
+                axV = ax2.twiny()
+                axV.xaxis.set_major_locator(locator)
+                axV.xaxis.set_major_formatter(formatter)
+
+                axV.plot(vSWAxis, np.repeat(0.99, len(vSWAxis)), alpha=0)
+                axV.invert_xaxis()
+                # Add a span between low and high values
+                axV.axvspan(
+                    xmin=LOSPEED,
+                    xmax=HISPEED,
+                    ymin=0,
+                    ymax=1,
+                    alpha=0.3,
+                    color="orange",
+                )
+
+                # When we have a Fudge factor, add a column with it
+                if ffactor != 1:
+                    accLO, accHI = [x / ffactor for x in (LOSPEED, HISPEED)]
+
+                    if (
+                        vSWAxis[0] < accLO < vSWAxis[-1]
+                        and vSWAxis[0] < accHI < vSWAxis[1]
+                    ):
+
+                        axV.axvspan(
+                            xmin=accLO,
+                            xmax=accHI,
+                            ymin=0,
+                            ymax=1,
+                            alpha=0.3,
+                            color="blue",
+                        )
+
+                axV.set_title("Implied avg. Vsw (km/s)")
+
+            ax2.grid(True)
+
+            # Save, show and close
+            plt.tight_layout()
+            plt.savefig(
+                savedSummaryPNG,
+                dpi=300,
+                bbox_inches="tight",
             )
-
-            axV = ax2.twiny()
-            axV.xaxis.set_major_locator(locator)
-            axV.xaxis.set_major_formatter(formatter)
-
-            axV.plot(vSWAxis, np.repeat(0.99, len(vSWAxis)), alpha=0)
-            axV.invert_xaxis()
-            # Add a span between low and high values
-            axV.axvspan(
-                xmin=LOSPEED,
-                xmax=HISPEED,
-                ymin=0,
-                ymax=1,
-                alpha=0.3,
-                color="orange",
-            )
-
-            # When we have a Fudge factor, add a column with it
-            if ffactor != 1:
-                accLO, accHI = [x / ffactor for x in (LOSPEED, HISPEED)]
-
-                if vSWAxis[0] < accLO < vSWAxis[-1] and vSWAxis[0] < accHI < vSWAxis[1]:
-
-                    axV.axvspan(
-                        xmin=accLO,
-                        xmax=accHI,
-                        ymin=0,
-                        ymax=1,
-                        alpha=0.3,
-                        color="blue",
-                    )
-
-            axV.set_title("Implied avg. Vsw (km/s)")
-
-        ax2.grid(True)
-
-        # Save, show and close
-        plt.tight_layout()
-        plt.savefig(
-            savedSummaryPNG,
-            dpi=300,
-            bbox_inches="tight",
-        )
-        if showFig:
-            plt.show()
-        plt.close()
+            if showFig:
+                plt.show()
+            plt.close()
 
     def calculate_hitrate(self, save=False):
         """
