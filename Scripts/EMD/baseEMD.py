@@ -129,6 +129,19 @@ class baseEMD:
             df_171 = short_SPC.df171
             df_193 = short_SPC.df193
 
+            for df in (df_171, df_193):
+                # Rename by referring specifically, more consistent
+                df.rename({
+                    "plume": "PL",
+                    "cbpoint": "BP",
+                    "chplume": "CHPL",
+                    "chole": "CH",
+                    "qsun": "QS",
+                }, axis=1, inplace=True)
+
+                # Unsafe renaming is cool but not necessary
+                # df.set_axis("PL BP CHPL CH QS".split(), axis=1, inplace=True)
+
             # Store the shortDFDics and longDFDic
             shortDFParams = (
                 (df_171.columns, df_193.columns)
@@ -596,6 +609,7 @@ def STAPSPCase(show=True):
 def SolOEarth2020Case(show=True):
     # Short is SolO, long is Earth
     MARGIN = 0
+
     Vars = {
         "caseName": "April2020_SolO_WIND",
         # "shortParams": ["B_R", "B_T", "B_N", "Btotal"],
@@ -685,6 +699,7 @@ def ISSICase(show=False):
     )
 
 
+
 # @timer
 def ISSIHMICase(show=False):
     WINDDISP = 1
@@ -702,6 +717,7 @@ def ISSIHMICase(show=False):
         "MARGIN": 0,
         "windDispParam": WINDDISP,
         "accelerated": 1,
+
     }
 
     hmiEMD = baseEMD(**ISSI_HMIVars)
