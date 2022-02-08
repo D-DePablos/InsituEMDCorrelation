@@ -136,6 +136,8 @@ dmypy.json
 **.png
 **.vscode
 **EMD_Results
+**.DS*
+**Figures*
 Resources/flagNames.txt
 Resources/PSP_SolO_Oct2020/PSP_Data/FIELDS/psp_fld_l2_mag_rtn_1min_20200924_v02.cdf
 Resources/PSP_SolO_Oct2020/PSP_Data/FIELDS/psp_fld_l2_mag_rtn_1min_20200925_v02.cdf
@@ -230,3 +232,4 @@ Resources/SolO_April_2020/SOlO_Data/L2/Mag/solo_L2_mag-rtn-normal-1-minute_20200
 Resources/SolO_April_2020/SOlO_Data/L2/Mag/solo_L2_mag-rtn-normal-1-minute_20200418_V01.cdf
 Resources/SolO_April_2020/SOlO_Data/L2/Mag/solo_L2_mag-rtn-normal-1-minute_20200419_V01.cdf
 Resources/SolO_April_2020/SOlO_Data/L2/Mag/solo_L2_mag-rtn-normal-1-minute_20200420_V01.cdf
+
