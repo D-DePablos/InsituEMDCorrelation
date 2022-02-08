@@ -118,6 +118,8 @@ titleDic = {
     "qsun": "QS",
     "ch_open_flux": "Open UMF",
     "ch_bpoint_flux": "Bipole UMF",
+    "171": "AIA 171",
+    "193": "AIA 193",
 }
 
 import matplotlib
@@ -963,7 +965,7 @@ def plot_super_summary(
     # import matplotlib.pyplot as plt
 
     # In some cases, need to auto-grid
-    figSize = (7, 7)
+    figSize = (12, 8)
     if gridRegions == True:
         # This way makes sure there is space
         nrowsCols = np.sqrt(len(regions))
@@ -1029,9 +1031,9 @@ def plot_super_summary(
         )
 
         # Take the starting point for AIA Times
-        shortStartTimes, longTimes = [], []
+        shortMIDTimes, longTimes = [], []
         for case in allCasesList:
-            shortStartTimes.append(case.shortTimes[0])
+            shortMIDTimes.append(case.shortTimes[0] + shortDuration / 2)
             longTimes.append(case.longTimes)
 
         listTimesSameSpeed = []
@@ -1039,11 +1041,15 @@ def plot_super_summary(
         firstLoad = True
 
         # Define a function which allows for multiprocessing call
-        # Use some of the shortStartTimes
-        for index, (TshortDF) in enumerate(shortStartTimes):
+        # Use some of the shortMIDTimes
+        for index, (TshortDF) in enumerate(shortMIDTimes):
 
-            insituStTime, insituEndTime = longTimes[index]
-            longARRAY = pd.date_range(insituStTime, insituEndTime, freq=insituArrayFreq)
+            longStTime, longEndTime = longTimes[index]
+            longARRAY = pd.date_range(
+                longStTime + shortDuration / 2,
+                longEndTime - shortDuration / 2,
+                freq=insituArrayFreq,
+            )
             base_path = f"{unsafeEMDDataPath}{allCasesList[index].dirExtension}/"
 
             # Dataframe with all times, all dotSizes, for each wavelength
@@ -1074,12 +1080,12 @@ def plot_super_summary(
                     # Smallest dot is 0, when correlation does not reach 0.70.
                     # Does not grow more if multiple matches at same corr thr.
                     dotSizeList = []
-                    midpoint_time = insituStTime
+                    midpoint_time = longStTime
                     midpointTimes = []
 
                     # Find time and necessary size of dots
                     for height in range(len(corr_matrix[0, 0, :, 0])):
-                        if midpoint_time > insituEndTime:
+                        if midpoint_time > longEndTime:
                             break
 
                         pearson = corr_matrix[:, :, height, 0]
@@ -1089,7 +1095,7 @@ def plot_super_summary(
 
                         # Create the midpointTimes list to act as index
                         midpoint = corr_matrix[0, 0, height, 3]
-                        midpoint_time = insituStTime + timedelta(seconds=midpoint)
+                        midpoint_time = longStTime + timedelta(seconds=midpoint)
                         midpointTimes.append(midpoint_time)
 
                         # Transform to real time
@@ -1114,7 +1120,9 @@ def plot_super_summary(
 
                         dotSizeList.append(dotSize)
 
-                    dfDots[f"{_shortVar}"] = dotSizeList
+                    dfDots[
+                        f"{_shortVar}"
+                    ] = dotSizeList  # Each of the times has a dotSizes for the given variable
 
             assert (
                 worked is True
@@ -1161,7 +1169,7 @@ def plot_super_summary(
                     )
 
                     # plot text with velocity above highest line
-                    if index == len(shortStartTimes) - 1:
+                    if index == len(shortMIDTimes) - 1:
                         ax.text(
                             x=closest_time,
                             y=TshortDF + timedelta(hours=1),
@@ -1228,7 +1236,7 @@ def plot_super_summary(
         # After all of the cases are done, use the last cases info
         # Compared to plotting lines, this does not plot outside of necessary area
         ax.fill_betweenx(
-            shortStartTimes,
+            shortMIDTimes,
             listTimesSameSpeed,
             listTimesSameSpeed_LOW,
             color="orange",

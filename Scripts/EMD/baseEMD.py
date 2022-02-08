@@ -528,12 +528,12 @@ def PSPSolOCase(show=False):
 def STAPSPCase(show=True):
     # Short is PSP, Long is STA
     MARGIN = 0
-    BOX_WIDTH = 200
+    BOX_WIDTH = 600
     SHORTDURN = 30
     SHORTDISPL = 2
 
     # periodList = [[60, 180], [60, 240], [120, 240]]
-    periodList = [[30, 60 * 4], [30, 60 * 6], [60, 60 * 6]]
+    periodList = [[60, 720], [60, 1400]]
     for p in periodList:
         Kwargs = {
             "caseName": "STA_PSP",
@@ -557,8 +557,8 @@ def STAPSPCase(show=True):
         box = [
             boxTuple(
                 longData=(
-                    datetime(2019, 11, 3, 0) - timedelta(hours=SHORTDURN) / 2,
-                    datetime(2019, 11, 3, 12, 0) - timedelta(hours=SHORTDURN) / 2,
+                    datetime(2019, 11, 3, 0),
+                    datetime(2019, 11, 3, 12, 0),
                 ),
                 shortData=(
                     datetime(
@@ -566,9 +566,8 @@ def STAPSPCase(show=True):
                         11,
                         2,
                         21,
-                    )
-                    - timedelta(hours=SHORTDURN) / 2,
-                    datetime(2019, 11, 3, 9) - timedelta(hours=SHORTDURN) / 2,
+                    ),
+                    datetime(2019, 11, 3, 9),
                 ),
                 color="blue",
             ),
@@ -615,7 +614,7 @@ def SolOEarth2020Case(show=True):
         "equal": True if MARGIN == 0 else False,
         "inKind": True,
         "windDispParam": 1,
-        "relSpeeds": [300, 200, 100],  # Speeds which are plotted
+        "relSpeeds": [450],  # Speeds which are plotted
     }
 
     # Box for orbital match (reference)
@@ -722,10 +721,10 @@ def ISSIHMICase(show=False):
 
 if __name__ == "__main__":
     show = False
-    # ISSICase(show=show)
+    ISSICase(show=show)
     # ISSIHMICase(show=show)
 
     # In situ
     # PSPSolOCase(show=show)
     # SolOEarth2020Case(show=show)
-    STAPSPCase(show=show)
+    # STAPSPCase(show=show)

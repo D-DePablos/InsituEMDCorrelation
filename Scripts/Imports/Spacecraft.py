@@ -1,6 +1,7 @@
 from sys import path
 from os import makedirs
 from copy import deepcopy
+from turtle import color
 import matplotlib
 import pandas as pd
 import numpy as np
@@ -1755,37 +1756,32 @@ class ISSISpc(Spacecraft):
 
         # Figure
         _, axs = plt.subplots(
-            6, 1, figsize=(14, 10), sharex=True, constrained_layout=True
+            6, 1, figsize=(14, 12), sharex=True, constrained_layout=True
         )
 
         # Plots
         axs[0].set_ylabel(r"R [AU]")
-        axs[0].plot(ts, R * u.m.to(u.AU))
+        axs[0].plot(ts, R * u.m.to(u.AU), color="k")
         axs[0].grid(True)
         axs[0].set_ylim(0.1, 0.3)
 
         # Bx
         axs[1].set_ylabel(r"$\hat{B}_{R}$ R$^2$ [nT AU$^2$]")
-        axs[1].plot(ts, Br, label="PSP")
+        axs[1].plot(ts, Br, label="PSP", color="k")
         # Horizontal bar at 0
         axs[1].axhline(0, color="black", linestyle="--")
 
         # V
         axs[2].set_ylabel(r"$\hat{V}_R$ [km/s]")
-        axs[2].plot(ts, self.df["V_R"])
+        axs[2].plot(ts, self.df["V_R"], color="k")
 
         axs[3].set_ylabel("Tp [K]")
-        axs[3].plot(ts, self.df["T"])
+        axs[3].plot(ts, self.df["T"], color="k")
 
         axs[4].set_ylabel(r"Np [#]")
-        axs[4].plot(ts, self.df["N"])
+        axs[4].plot(ts, self.df["N"], color="k")
 
-        axs[5].semilogy(
-            ts,
-            Mf,
-            label="Mass Flux",
-            linewidth=1,
-        )
+        axs[5].semilogy(ts, Mf, label="Mass Flux", linewidth=1, color="k")
         axs[5].set_ylabel("Mf [kg km/s]")
 
         # # Plot the relevant columns
@@ -1796,7 +1792,7 @@ class ISSISpc(Spacecraft):
         if self.show:
             plt.show()
         else:
-            plotPath = f"{BASE_PATH}Figures/Timeseries/"
+            plotPath = f"{BASE_PATH}Figures/ISSI/"
             makedirs(plotPath, exist_ok=True)
             print(f"Saving to {plotPath}")
             plt.savefig(f"{plotPath}summaryPlot_{self.name}.pdf")
