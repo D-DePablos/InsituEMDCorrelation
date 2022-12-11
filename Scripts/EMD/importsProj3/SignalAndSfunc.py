@@ -1,8 +1,5 @@
 """Helper functions"""
 from multiprocessing.pool import TERMINATE
-from multiprocessing.sharedctypes import Value
-from time import time
-from matplotlib import rc
 from os import makedirs
 import warnings
 import datetime
@@ -23,7 +20,6 @@ import matplotlib.dates as mdates
 from datetime import timedelta
 from copy import deepcopy
 from glob import glob
-from collections import namedtuple
 import astropy.units as u
 
 locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
@@ -780,8 +776,6 @@ class SignalFunctions(Signal):
     def plot_norm(
         self, save_to=None, labels=("Time (s)", "Data (arb.units)"), show=True
     ):
-
-        from matplotlib import rc
 
         title = f"{self.name} signal sampled at {self.cadence}s cad"
         _ = plt.figure(figsize=(10, 8))

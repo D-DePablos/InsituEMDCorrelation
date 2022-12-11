@@ -1,7 +1,5 @@
 """Helper functions"""
 from multiprocessing.sharedctypes import Value
-from git import base
-from pyparsing import WordEnd
 from .SignalAndSfunc import Signal, SignalFunctions, transformTimeAxistoVelocity
 import astropy.units as u
 from collections import namedtuple
@@ -539,6 +537,8 @@ def multiEMD(
         _specificFolder = f"{saveFolder}{dirName}/"
 
         _expectedLocationList = False
+        print(f"Short is {_dfShortCut}")
+        print(f"Long is {_dfLongCut}")
 
         compareTS(
             dfSelf=_dfShortCut,

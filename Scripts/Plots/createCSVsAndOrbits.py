@@ -62,7 +62,11 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
 
     # Here we save the scaled DF
     solo.plot_solo_psp_df_onlyScaled(
-        psp, zones=[solo_paper, psp_paper], saveScaledDF=True, case="orbit6"
+        psp,
+        zones=[solo_paper, psp_paper],
+        saveScaledDF=True,
+        case="orbit6",
+        colourPSP="r-.",
     )
 
     solo.zoom_in(**solo_zoomed)
@@ -114,7 +118,7 @@ def solo_Earth_April_2020(show=False, plot_orbit=False):
     solo.extract_orbit_data(from_data=True, stepMinutes=60)
     earth.extract_orbit_data(from_data=True, stepMinutes=60)
 
-    earth.plot_solo_earth_df(solo)
+    earth.plot_solo_earth_df(solo, colourSOLO="r-.")
 
     # Remove all blanks
     solo.df.fillna(method="pad")
@@ -190,7 +194,7 @@ def sta_psp(show=False, plot_orbit=False):
     # Fill NA
     sta.df.fillna(method="pad", inplace=True)
     psp.df.fillna(method="pad", inplace=True)
-    sta.plot_sta_psp_df(psp, zones=[staZone, pspZone])
+    sta.plot_sta_psp_df(psp, zones=[staZone, pspZone], colourPSP="r-.")
 
     # Extract orbit data (Always 1 hr res, then downsample from it)
     sta.extract_orbit_data(from_data=True, stepMinutes=60)
@@ -236,7 +240,8 @@ def sta_psp(show=False, plot_orbit=False):
 if __name__ == "__main__":
     # Do twice so it saves with Radius hopefully
     show = False
+    PLOT_ORB = False
     # From far to close encounter
-    # psp_e6(show=show, plot_orbit=True)
-    # solo_Earth_April_2020(show=show, plot_orbit=True)
-    sta_psp(show=show, plot_orbit=True)
+    psp_e6(show=show, plot_orbit=PLOT_ORB)
+    solo_Earth_April_2020(show=show, plot_orbit=PLOT_ORB)
+    sta_psp(show=show, plot_orbit=PLOT_ORB)

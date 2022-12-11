@@ -1,3 +1,4 @@
+from tokenize import PlainToken
 import pandas as pd
 import cdflib
 from glob import glob
@@ -33,7 +34,12 @@ def extractDF(CDFfolder, dfVars, timeIndex="Epoch", info=False, resample=False):
                 for i, subVar in enumerate(["V_R", "V_T", "V_N"]):
                     varDic[subVar] = _cdf[var][:, i]
 
-            elif var == "psp_fld_l2_mag_RTN_1min" or var == "B_RTN" or var == "BFIELDRTN" or var == "BFIELD":
+            elif (
+                var == "psp_fld_l2_mag_RTN_1min"
+                or var == "B_RTN"
+                or var == "BFIELDRTN"
+                or var == "BFIELD"
+            ):
                 for i, subVar in enumerate(["B_R", "B_T", "B_N"]):
                     # Breaks here with psp_fld taking name
                     varDic[subVar] = _cdf[var][:, i]
@@ -47,6 +53,7 @@ def extractDF(CDFfolder, dfVars, timeIndex="Epoch", info=False, resample=False):
     if resample != False:
         _df = _df.resample(resample).mean()
     return _df
+
 
 # Functions to explore some specific cdfs
 
@@ -65,14 +72,25 @@ def openSDAplasma():
 
 
 def openSDAMag():
-    """['Epoch', 'BFIELD', 'MAGFLAGUC', 'CART_LABL_1', 'FILTER_VALUE']
-    """
+    """['Epoch', 'BFIELD', 'MAGFLAGUC', 'CART_LABL_1', 'FILTER_VALUE']"""
     path = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/unsafe/Resources/STA_Data/mag/"
     sdaVars = ["BFIELD"]
     df = extractDF(CDFfolder=path, dfVars=sdaVars)
     print(df)
 
 
+def openSOLOMag():
+    """['Epoch', 'BFIELD', 'MAGFLAGUC', 'CART_LABL_1', 'FILTER_VALUE']"""
+    import matplotlib.pyplot as plt
+
+    path = "/Users/ddp/Downloads/"
+    sdaVars = ["B_RTN"]
+    df = extractDF(CDFfolder=path, dfVars=sdaVars)
+    print(df)
+    df["B_R"].plot()
+    plt.show()
+
+
 if __name__ == "__main__":
     pass
-    # openSDAMag()
+    openSOLOMag()
