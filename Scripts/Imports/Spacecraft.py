@@ -1,7 +1,6 @@
 from sys import path
 from os import makedirs
 from copy import deepcopy
-from turtle import color
 import matplotlib
 import pandas as pd
 import numpy as np
@@ -18,8 +17,8 @@ warnings.filterwarnings("ignore")
 
 from pyparsing import col
 
-BASE_PATH = "/Users/ddp/Documents/PhD/inEMD_Github/"
 
+BASE_PATH = "/Users/ddp/Documents/PhD/inEMD_Github/"
 path.append(f"{BASE_PATH}Scripts/")
 
 from Plots.cdfReader import extractDF
@@ -191,7 +190,6 @@ class Spacecraft:
 
             # Functions that process the cdfs, change cdf_path to be input if required
             def RPW_prep(cdf_path=f"{BASE_PATH}unsafe/Resources/Solo_Data/L3/RPW/"):
-
                 _rpw_df = extractDF(
                     cdf_path,
                     dfVars=["DENSITY"],
@@ -452,7 +450,6 @@ class Spacecraft:
 
         # When we need to combine plasmadf and magdf
         if self.df is None:
-
             try:
                 # We need to use the Time column
                 # For PSP data, for SWEAP only cleaning
@@ -1048,7 +1045,6 @@ class Spacecraft:
         stepMinutes=30,
         extractOrbit=True,
     ):
-
         """
         Zoom into a specific part of the signal and store new self.df in memory
         Uses start_time and end_time to define limits
@@ -1121,19 +1117,19 @@ class PSPSolO_e6(Spacecraft):
             + self.dfUnits["B_T"] ** 2
             + self.dfUnits["B_N"] ** 2
         )
-        BrScaled = (self.dfUnits["B_R"].to(u.T)) * R ** 2
+        BrScaled = (self.dfUnits["B_R"].to(u.T)) * R**2
         BtScaled = np.sqrt(
-            BrScaled ** 2
+            BrScaled**2
             + self.dfUnits["B_T"].to(u.T) ** 2
             + self.dfUnits["B_N"].to(u.T) ** 2
         ).to(u.nT)
 
         Vx = np.abs(self.dfUnits["V_R"])
         Np = self.dfUnits["N"]  # In protons per cm3
-        NpScaled = (Np.to(u.m ** (-3)) * R ** 2).to(u.cm ** (-3))  # To 1/m**3
+        NpScaled = (Np.to(u.m ** (-3)) * R**2).to(u.cm ** (-3))  # To 1/m**3
 
         NpRPW = self.dfUnits["N_RPW"]
-        NpRPWScaled = (NpRPW.to(u.m ** (-3)) * R ** 2).to(u.cm ** (-3))
+        NpRPWScaled = (NpRPW.to(u.m ** (-3)) * R**2).to(u.cm ** (-3))
         T = self.df["T"]
 
         # m_p is in kg
@@ -1148,15 +1144,15 @@ class PSPSolO_e6(Spacecraft):
         oBTUnscaled = np.sqrt(
             other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
         )
-        oBrScaled = other.dfUnits["B_R"].to(u.T) * oR ** 2
+        oBrScaled = other.dfUnits["B_R"].to(u.T) * oR**2
         oBtScaled = np.sqrt(
-            oBrScaled ** 2
+            oBrScaled**2
             + other.dfUnits["B_T"].to(u.T) ** 2
             + other.dfUnits["B_N"].to(u.T) ** 2
         ).to(u.nT)
         oVx = np.abs(other.dfUnits["V_R"])
         oNp = other.dfUnits["N"]
-        oNpScaled = (oNp.to(u.m ** (-3)) * oR ** 2).to(u.cm ** (-3))
+        oNpScaled = (oNp.to(u.m ** (-3)) * oR**2).to(u.cm ** (-3))
         oT = other.df["T"]
         oMf = const.m_p * oNpScaled.to(u.m ** (-3)) * np.abs(oVx).to(u.m / u.s)
         oMfScaled = oMf
@@ -1324,19 +1320,19 @@ class PSPSolO_e6(Spacecraft):
             + self.dfUnits["B_T"] ** 2
             + self.dfUnits["B_N"] ** 2
         )
-        BrScaled = (self.dfUnits["B_R"].to(u.T)) * R ** 2
+        BrScaled = (self.dfUnits["B_R"].to(u.T)) * R**2
         BtScaled = np.sqrt(
-            BrScaled ** 2
+            BrScaled**2
             + self.dfUnits["B_T"].to(u.T) ** 2
             + self.dfUnits["B_N"].to(u.T) ** 2
         ).to(u.nT)
 
         Vx = np.abs(self.dfUnits["V_R"])
         Np = self.dfUnits["N"]  # In protons per cm3
-        NpScaled = (Np.to(u.m ** (-3)) * R ** 2).to(u.cm ** (-3))  # To 1/m**3
+        NpScaled = (Np.to(u.m ** (-3)) * R**2).to(u.cm ** (-3))  # To 1/m**3
 
         NpRPW = self.dfUnits["N_RPW"]
-        NpRPWScaled = (NpRPW.to(u.m ** (-3)) * R ** 2).to(u.cm ** (-3))
+        NpRPWScaled = (NpRPW.to(u.m ** (-3)) * R**2).to(u.cm ** (-3))
         T = self.df["T"]
 
         # m_p is in kg
@@ -1351,15 +1347,15 @@ class PSPSolO_e6(Spacecraft):
         oBTUnscaled = np.sqrt(
             other.df["B_R"] ** 2 + other.df["B_T"] ** 2 + other.df["B_N"] ** 2
         )
-        oBrScaled = other.dfUnits["B_R"].to(u.T) * oR ** 2
+        oBrScaled = other.dfUnits["B_R"].to(u.T) * oR**2
         oBtScaled = np.sqrt(
-            oBrScaled ** 2
+            oBrScaled**2
             + other.dfUnits["B_T"].to(u.T) ** 2
             + other.dfUnits["B_N"].to(u.T) ** 2
         ).to(u.nT)
         oVx = np.abs(other.dfUnits["V_R"])
         oNp = other.dfUnits["N"]
-        oNpScaled = (oNp.to(u.m ** (-3)) * oR ** 2).to(u.cm ** (-3))
+        oNpScaled = (oNp.to(u.m ** (-3)) * oR**2).to(u.cm ** (-3))
         oT = other.df["T"]
         oMf = const.m_p.value * oNpScaled.to(u.m ** (-3)) * np.abs(oVx).to(u.m / u.s)
         oMfScaled = oMf
@@ -1567,8 +1563,8 @@ class STA_psp(Spacecraft):
 
         Bx, By, Bz = self.df["B_R"], self.df["B_T"], self.df["B_N"]
         oBx, oBy, oBz = other.df["B_R"], other.df["B_T"], other.df["B_N"]
-        Bt = np.sqrt(Bx ** 2 + By ** 2 + Bz ** 2)
-        oBt = np.sqrt(oBx ** 2 + oBy ** 2 + oBz ** 2)
+        Bt = np.sqrt(Bx**2 + By**2 + Bz**2)
+        oBt = np.sqrt(oBx**2 + oBy**2 + oBz**2)
 
         # Figure
         # Width and marker size
@@ -1669,8 +1665,8 @@ class EarthApril2020(Spacecraft):
         Bgse0, Bgse1, Bgse2 = self.df["B_GSE_0"], self.df["B_GSE_1"], self.df["B_GSE_2"]
         oBx, oBy, oBz = other.df["B_R"], other.df["B_T"], other.df["B_N"]
         # Bt = np.sqrt(Bx ** 2 + By ** 2 + Bz ** 2)
-        Bt = np.sqrt(Bgse0 ** 2 + Bgse1 ** 2 + Bgse2 ** 2)
-        oBt = np.sqrt(oBx ** 2 + oBy ** 2 + oBz ** 2)
+        Bt = np.sqrt(Bgse0**2 + Bgse1**2 + Bgse2**2)
+        oBt = np.sqrt(oBx**2 + oBy**2 + oBz**2)
 
         # Figure
         # Width and marker size
@@ -1750,7 +1746,7 @@ class ISSISpc(Spacecraft):
 
         ts = self.df.index
         R = (self.dfUnits["R"].to(u.m) - const.R_sun).value
-        Br = self.df["B_R"] * R ** 2
+        Br = self.df["B_R"] * R**2
         Mf = self.df["Mf"]
         hour = pd.to_timedelta(ts.hour, unit="H")
 

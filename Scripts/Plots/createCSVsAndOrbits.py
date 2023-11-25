@@ -85,7 +85,6 @@ def psp_e6(show=False, plot_orbit=False, radialTolerance=1.5):
 
     # Spacecraft object calling the function is where the solar wind is being mapped from
     if plot_orbit:
-
         # Create a set of radial separations
         for minSteps in [orbitStepMin * i for i in [1, 2, 3, 6, 12, 24]]:
             # Highlight one of the parker spirals
@@ -129,7 +128,6 @@ def solo_Earth_April_2020(show=False, plot_orbit=False):
 
     # Spacecraft object calling the function is where the solar wind is being mapped from
     if plot_orbit:
-
         # Create a set of radial separations
         for minSteps in [
             orbitStepMin,
@@ -205,7 +203,6 @@ def sta_psp(show=False, plot_orbit=False):
 
     # Spacecraft object calling the function is where the solar wind is being mapped from
     if plot_orbit:
-
         # Create a set of radial separations
         for minSteps in [
             orbitStepMin,

@@ -448,7 +448,6 @@ class Signal:
                 self.true_time = None
 
             elif type(custom_data) == pd.DataFrame or type(custom_data) == pd.Series:
-
                 if type(custom_data.index) == pd.DatetimeIndex:
                     self.true_time = pd.to_datetime(custom_data.index)
 
@@ -598,7 +597,6 @@ class Signal:
             return gaussian
         else:
             for key in alter_mode:
-
                 # These would have to be applied multiple times
                 if key == "stretch":
                     # Stretch the signal by ... Duplicating or repeating values n times?
@@ -622,11 +620,9 @@ class Signal:
 
                     gaussian = np.array(temp_gaussian)
                 elif key == "height_mod":
-
                     temp_gaussian = []
 
                     for i in range(len(gaussian)):
-
                         # Find gradient at each point by subtracting next to current
                         dy = gaussian[i + 1] - gaussian[i]
                         dx = (i + 1) - i
@@ -641,7 +637,6 @@ class Signal:
 
                     gaussian = np.array(temp_gaussian)
                 elif key == "multiply":
-
                     temp_gaussian = gaussian * alter_mode[key]
 
                     return temp_gaussian
@@ -776,7 +771,6 @@ class SignalFunctions(Signal):
     def plot_norm(
         self, save_to=None, labels=("Time (s)", "Data (arb.units)"), show=True
     ):
-
         title = f"{self.name} signal sampled at {self.cadence}s cad"
         _ = plt.figure(figsize=(10, 8))
         plt.plot(self.t, self.s, color="black")
@@ -1041,7 +1035,6 @@ class SignalFunctions(Signal):
         norm=False,
         with_residue=False,
     ):
-
         # Begin by generating relevant IMFs
         s = self.s if norm else self.base_signal
         t = self.t
@@ -1092,7 +1085,6 @@ class SignalFunctions(Signal):
             zip(self.imfs, self.period_valid, self.inst_freq)
         ):
             if self.filtered and flag or not self.filtered:
-
                 ax = axs[plot_index][0]
 
                 if self.with_residue:
@@ -1534,7 +1526,6 @@ class SignalFunctions(Signal):
                 # Bar charts for each of the heights
                 for index, corr_label in enumerate(self.corrThrPlotList):
                     if pearson_array[index] != 0:  # If some pairs are found
-
                         try:
                             _color = possibleColors[f"{int(pearson_array[index])}"]
                         except KeyError:
@@ -1650,7 +1641,6 @@ class SignalFunctions(Signal):
                         vSWAxis[0] < accLO < vSWAxis[-1]
                         and vSWAxis[0] < accHI < vSWAxis[1]
                     ):
-
                         axV.axvspan(
                             xmin=accLO,
                             xmax=accHI,
@@ -1691,7 +1681,6 @@ class SignalFunctions(Signal):
 
             # For the different correlation thresholds
             for _, corr_thr in enumerate(df_hrate):
-
                 # Reset hit-rate to ensure working well
                 _hit_rate = 0
 

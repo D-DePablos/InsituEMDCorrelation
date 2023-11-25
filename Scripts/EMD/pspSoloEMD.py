@@ -3,6 +3,7 @@ from multiprocessing.managers import ValueProxy
 from sys import path
 
 from pandas import to_datetime
+
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 path.append(f"{BASE_PATH}Scripts/")
 
@@ -50,12 +51,22 @@ FILTERP = True
 PLOT_ALL_TOGETHER = False
 
 # Box that's shown above the plots
-SHOWBOX = ((datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
-           (datetime(2020, 10, 1, 20, ), datetime(2020, 10, 2, 0, 13)))
+SHOWBOX = (
+    (datetime(2020, 9, 27, 0), datetime(2020, 9, 27, 5)),
+    (
+        datetime(
+            2020,
+            10,
+            1,
+            20,
+        ),
+        datetime(2020, 10, 2, 0, 13),
+    ),
+)
 # Plot summary? should be done after plotting together
 SUPER_SUMMARY_PLOT = True
 # Whether to accelerate speed (relevant for backmapping, coloured columns)
-accelerated = (1)
+accelerated = 1
 
 # Open 1.5 hours cases
 with open(
@@ -135,9 +146,9 @@ def comparePSPtoSOLO(
     dfLong.columns = [f"{longName}_{i}" for i in longVars]
 
     # Cut down the self and other dataseries
-    dfShort = dfShort[shortTimes[0]: shortTimes[1]]
+    dfShort = dfShort[shortTimes[0] : shortTimes[1]]
     if longTimes != None:
-        dfLong = dfLong[longTimes[0]: longTimes[1]]
+        dfLong = dfLong[longTimes[0] : longTimes[1]]
     cadSelf = shortCad
     cadOther = longCad
 
@@ -216,7 +227,6 @@ def deriveAndPlotSeparatelyPSPE6(
     )
 
     for index, shortTimes in enumerate(shortTimesList):
-
         # Minimise number of prints
         dirName = f"""{caseNamesList[index]}"""
         print(f"Creating and Saving to {dirName}")
@@ -304,7 +314,6 @@ def pspSoloCombinedPlot(
 
     # When necessary to make summary of all summaries
     if superSummaryPlot:
-
         # Possibly this is not great
         soloStendTotal = (
             longObject.df.index[0].to_pydatetime(),
@@ -313,18 +322,15 @@ def pspSoloCombinedPlot(
 
         allCases = []
         for index, _shortTimes in enumerate(shortTimesList):
-            _isT = (longObject.df.index[0].to_pydatetime(
-            ), longObject.df.index[-1].to_pydatetime())
-            _dirExtension = f"{caseNamesList[index]}"
-            allCases.append(
-                caseTuple(
-                    _dirExtension, (_shortTimes)
-                )
+            _isT = (
+                longObject.df.index[0].to_pydatetime(),
+                longObject.df.index[-1].to_pydatetime(),
             )
+            _dirExtension = f"{caseNamesList[index]}"
+            allCases.append(caseTuple(_dirExtension, (_shortTimes)))
 
         # Figure out whether to show yellow bar - DONE
-        longObject.df.columns = [
-            "PSP_" + param for param in longObject.df.columns]
+        longObject.df.columns = ["PSP_" + param for param in longObject.df.columns]
 
         for longObjectParam in longObject.df.columns:
             plot_super_summary(
@@ -348,15 +354,17 @@ def pspSoloCombinedPlot(
     else:
         for index, shortTimes in enumerate(shortTimesList):
             # No longer splitting long dataframe, instead using full range of values
-            isTimes = (longObject.df.index[0].to_pydatetime(
-            ), longObject.df.index[-1].to_pydatetime())
-            dfLongCut = longObject.df[isTimes[0]: isTimes[1]]
+            isTimes = (
+                longObject.df.index[0].to_pydatetime(),
+                longObject.df.index[-1].to_pydatetime(),
+            )
+            dfLongCut = longObject.df[isTimes[0] : isTimes[1]]
             dfLongCut = dfLongCut[longObjectVars]
 
             shortDFDicCut = {}
             for _shortParam in shortDFDic:
                 shortDFDicCut[f"{_shortParam}"] = (
-                    shortDFDic[_shortParam].df[shortTimes[0]: shortTimes[1]].copy()
+                    shortDFDic[_shortParam].df[shortTimes[0] : shortTimes[1]].copy()
                 )
 
             dirExtension = f"{caseNamesList[index]}"

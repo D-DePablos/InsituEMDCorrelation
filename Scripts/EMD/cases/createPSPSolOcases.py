@@ -4,6 +4,7 @@ Generate the cases for all possible SolO - SHORT times (every hour)
 from datetime import datetime, timedelta
 import pickle
 from sys import path
+
 BASE_PATH = "/home/diegodp/Documents/PhD/Paper_2/InsituEMDCorrelation/"
 path.append(f"{BASE_PATH}Scripts/")
 

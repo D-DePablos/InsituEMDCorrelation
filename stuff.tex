@@ -1,0 +1,180 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Developer CV
+% LaTeX Template
+% Version 1.0 (28/1/19)
+%
+% This template originates from:
+% http://www.LaTeXTemplates.com
+%
+% Authors:
+% Jan Vorisek (jan@vorisek.me)
+% Based on a template by Jan Küster (info@jankuester.com)
+% Modified for LaTeX Templates by Vel (vel@LaTeXTemplates.com)
+%
+% License:
+% The MIT License (see included LICENSE file)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[9pt]{developercv} % Default font size, values from 8-12pt are recommended
+
+%----------------------------------------------------------------------------------------
+
+\begin{document}
+
+%----------------------------------------------------------------------------------------
+%	TITLE AND CONTACT INFORMATION
+%----------------------------------------------------------------------------------------
+
+\begin{minipage}[t]{0.45\textwidth} % 45% of the page width for name
+	\vspace{-\baselineskip} % Required for vertically aligning minipages
+	
+	% If your name is very short, use just one of the lines below
+	% If your name is very long, reduce the font size or make the minipage wider and reduce the others proportionately
+	\colorbox{black}{{\HUGE\textcolor{white}{\textbf{\MakeUppercase{Dr. Diego}}}}} % First name
+	
+	\colorbox{black}{{\HUGE\textcolor{white}{\textbf{\MakeUppercase{de Pablos}}}}} % Last name
+	
+	\vspace{6pt}
+	
+	{\huge Software Developer} % Career or current job title
+\end{minipage}
+\begin{minipage}[t]{0.37\textwidth} % 27.5% of the page width for the first row of icons
+	\vspace{-\baselineskip} % Required for vertically aligning minipages
+	
+	% The first parameter is the FontAwesome icon name, the second is the box size and the third is the text
+	% Other icons can be found by referring to fontawesome.pdf (supplied with the template) and using the word after \fa in the command for the icon you want
+	\icon{MapMarker}{12}{London, UK}\\
+	\icon{Phone}{12}{+ 44 (0) 7784 78 69 81}\\
+	\icon{At}{12}{\href{mailto:d.depablosaguero@gmail.com}{d.depablosaguero@gmail.com}}\\	
+\end{minipage}
+\begin{minipage}[t]{0.2\textwidth} % 27.5% of the page width for the second row of icons
+	\vspace{-\baselineskip} % Required for vertically aligning minipages
+	
+	% The first parameter is the FontAwesome icon name, the second is the box size and the third is the text
+	% Other icons can be found by referring to fontawesome.pdf (supplied with the template) and using the word after \fa in the command for the icon you want
+	\icon{Github}{12}{\href{https://github.com/D-DePablos}{D-DePablos}}\\
+    \icon{LinkedinSquare}{12}{\href{https://www.linkedin.com/in/diego-de-pablos-545a84220/}{Diego de Pablos}}\\
+    \icon{NewspaperO}{12}{\href{https://www.researchgate.net/profile/Diego_De_Pablos2/research}{Published Papers}}
+\end{minipage}
+
+\vspace{0.5cm}
+
+%----------------------------------------------------------------------------------------
+%	EXPERIENCE
+%----------------------------------------------------------------------------------------
+
+\cvsect{Experience}
+
+\begin{entrylist}
+\entry
+		{2022 -- 2023\\\footnotesize{Ongoing}}
+		{Fullstack Software Engineer}
+		{Urban Jungle}
+		{
+  - Contributed meaningfully to the engineering team by taking ownership of an external party implementation to provide our car insurance prices for more customers.\\
+  - Currently Exploring DevOps through developer enablement, CICD speed-ups, Kubernetes exploitation, and observability work.\\
+  - Doubled speed of CICD pipelines to enable faster release rate.\\
+  \texttt{Python}\slashsep\texttt{Typescript}\slashsep\texttt{Docker}\slashsep\texttt{Linux}\slashsep\texttt{Mentoring}}
+	\entry
+		{2022\\\footnotesize{May to September}}
+		{Developer Intern}
+		{Nethermind}
+		{
+  - Developed open source blockchain-adjacent applications as part of diverse teams. \\
+  - Mentored new joiners on team practices and team members on DevOps technologies. \\
+  - Helped document software for more user-friendly resources. \\
+  - Contributed to the first release of the Juno StarkNet client (\href{https://gojuno.xyz}{https://gojuno.xyz}).\\
+  - Collaborated with other teams to improve development processes.\\\texttt{Github}\slashsep\texttt{Github Actions}\slashsep\texttt{Docusaurus}\slashsep\texttt{Golang}\slashsep\texttt{AWS}\slashsep\texttt{Terraform}\slashsep\texttt{Docker}\slashsep\texttt{TDD}\slashsep\texttt{Pair Programming}}
+	\entry
+		{2018 -- 2022\\\footnotesize{Seasonal}}
+		{Python Mentor}
+		{UCL (MSSL)}
+		{
+  - Created and delivered resources to teach at several MSSL Work Experience events.\\
+  - Collaborated with students in programming tasks.\\
+  - Presented what being a solar physics researcher looked like on the numerical side.
+  \\ \texttt{Python}\slashsep\texttt{Jupyter Notebook}\slashsep\texttt{Public Speaking}\slashsep\texttt{Linux}\slashsep\texttt{Mentoring}}
+\end{entrylist}
+
+%----------------------------------------------------------------------------------------
+%	EDUCATION
+%----------------------------------------------------------------------------------------
+
+\cvsect{Education}
+
+\begin{entrylist}
+	\entry
+		{2018 -- 2022}
+		{Ph.D in Heliospheric Physics}
+		{University College London}
+		{Studied the origin of the Solar Wind through a signal analysis algorithm programmed in Python that was created during the project. Collaborated internationally and coordinated several papers to successful publishing.}
+	\entry
+		{2015 -- 2018}
+		{BSc. Environmental Physics}
+		{University of Reading}
+		{Achieved First class honors in a degree that combined meterology and classical physics. Completed a study of variability of the Earth's radiation belts using publicly available spacecraft data.}
+\end{entrylist}
+
+\cvsect{Extracurricular}
+
+\begin{entrylist}
+	\entry
+		{2022}
+		{StarkNet Hackathon}
+		{Remote}
+		{Won first prize with the most creative DeFi application that allowed for sustainable fixed rate yields.\\ \texttt{React}\slashsep\texttt{NPM}\slashsep\texttt{Cairo} \slashsep\texttt{Python}}
+	\entry
+		{2018}
+		{Hex Hackathon}
+		{Eindhoven}
+		{Won one of the track challenges, posed by Bloomberg, on peer-to-peer philanthropy.\\ \texttt{JavaScript}\slashsep\texttt{HTML}\slashsep\texttt{CSS} \slashsep\texttt{Public Speaking}}
+  \entry
+		{2017}
+		{UROP Summer Internship}
+		{University of Reading}
+		{Investigated whether measurements taken from cars were useful for weather forecasting. Findings were presented as part of a presentation and poster competition, and shared with the UK Met Office. \\\texttt{Matlab}\slashsep\texttt{R Studio}\slashsep\texttt{Statistics}}
+\end{entrylist}
+
+%----------------------------------------------------------------------------------------
+%	ADDITIONAL INFORMATION
+%----------------------------------------------------------------------------------------
+
+\begin{minipage}[t]{0.3\textwidth}
+	\vspace{-\baselineskip} % Required for vertically aligning minipages
+
+	\cvsect{Languages}
+	
+	\textbf{English} - fluent\\
+	\textbf{Spanish} - native\\
+	\textbf{French} - elementary
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.3\textwidth}
+	\vspace{-\baselineskip} % Required for vertically aligning minipages
+	
+	\cvsect{Interests}
+ 
+    Blockchain Technology\\
+    Programming and tech trends \\
+    Travelling
+    
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.3\textwidth}
+	\vspace{-\baselineskip} % Required for vertically aligning minipages
+	
+	\cvsect{Other Skills}
+
+    \textbf{Crypto knowledge:} DeFi, OP/ZK Rollups, Ethereum Improvement Proposals.
+    \textbf{Other:} Version Control, Research Methods, Project Management, Academic Writing.
+\end{minipage}
+
+%----------------------------------------------------------------------------------------
+
+\end{document}
+

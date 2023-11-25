@@ -1,0 +1,13 @@
+# Choose a build system, such as poetry, setuptools, ...
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+# Name and version are compulsory
+[project]
+name = "inEMD_Github"
+version = "1.0.0"
+
+# You can define some scripts to run the program. (In this case __main__.py:main())
+[project.scripts]
+snakey = "baseEMD.__main__:main"

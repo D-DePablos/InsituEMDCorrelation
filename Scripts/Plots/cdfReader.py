@@ -1,4 +1,3 @@
-from tokenize import PlainToken
 import pandas as pd
 import cdflib
 from glob import glob
@@ -92,5 +91,4 @@ def openSOLOMag():
 
 
 if __name__ == "__main__":
-    pass
-    openSOLOMag()
+    openSDAMag()

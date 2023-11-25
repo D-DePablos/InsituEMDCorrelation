@@ -61,7 +61,6 @@ class baseEMD:
         relSpeeds=range(100, 501, 100),
         plot_allResults=False,
     ):
-
         # The job of the init should be to get to a standardised format
         # Not to use it!
         self.PeriodMinMax = PeriodMinMax
@@ -131,13 +130,17 @@ class baseEMD:
 
             for df in (df_171, df_193):
                 # Rename by referring specifically, more consistent
-                df.rename({
-                    "plume": "PL",
-                    "cbpoint": "BP",
-                    "chplume": "CHPL",
-                    "chole": "CH",
-                    "qsun": "QS",
-                }, axis=1, inplace=True)
+                df.rename(
+                    {
+                        "plume": "PL",
+                        "cbpoint": "BP",
+                        "chplume": "CHPL",
+                        "chole": "CH",
+                        "qsun": "QS",
+                    },
+                    axis=1,
+                    inplace=True,
+                )
 
                 # Unsafe renaming is cool but not necessary
                 # df.set_axis("PL BP CHPL CH QS".split(), axis=1, inplace=True)
@@ -699,7 +702,6 @@ def ISSICase(show=False):
     )
 
 
-
 # @timer
 def ISSIHMICase(show=False):
     WINDDISP = 1
@@ -717,7 +719,6 @@ def ISSIHMICase(show=False):
         "MARGIN": 0,
         "windDispParam": WINDDISP,
         "accelerated": 1,
-
     }
 
     hmiEMD = baseEMD(**ISSI_HMIVars)

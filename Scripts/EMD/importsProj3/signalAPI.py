@@ -443,7 +443,6 @@ def collect_dfs_npys(isDf, lcDic, region, base_folder, windDisp="60s", period="3
 
 
 def plot_imfs(time_array, vector, imfs, title, savePath, width, show):
-
     # Find optimal spacing
     spacing = 0  # Start  0 base spacing
     for curr_imf in imfs:
@@ -998,7 +997,6 @@ def plot_super_summary(
     # For each of the regions, make a plot
     used_ax = []
     for i, region in enumerate(regions):
-
         # Slight hack to not break if only 1 ax
 
         try:
@@ -1044,7 +1042,6 @@ def plot_super_summary(
         # Define a function which allows for multiprocessing call
         # Use some of the shortMIDTimes
         for index, (TshortDF) in enumerate(shortMIDTimes):
-
             longStTime, longEndTime = longTimes[index]
             longARRAY = pd.date_range(
                 longStTime + shortDuration / 2,
@@ -1428,7 +1425,6 @@ def new_plot_format(
         corr_matrix: np.ndarray,
         barColour: str,
     ):
-
         # Prepare the array with matches
         corr_locations = np.ndarray(
             (len(corr_matrix[0, 0, :, 0]), len(corrThrPlotList), 3)
@@ -1589,7 +1585,6 @@ def new_plot_format(
                     WVLValidity[f"{shortVar}"] = validIMFsMatrix[:, 0]
 
             if i == n_insitu - 1:
-
                 axIS.xaxis.set_major_locator(locator)
                 axIS.xaxis.set_major_formatter(formatter)
 
